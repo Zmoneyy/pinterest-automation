@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Products — PinBot{% endblock %}
+
+{% block head %}
+<style>
+  .product-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+
+  .product-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .product-card.inactive {
+    opacity: 0.55;
+  }
+
+  .product-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--red-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+
+  .product-info { flex: 1; min-width: 0; }
+
+  .product-name {
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--gray-800);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .product-meta {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .product-links {
+    font-size: 12px;
+    margin-top: 6px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .product-links a {
+    color: var(--red);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .product-links a:hover { text-decoration: underline; }
+
+  .product-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .add-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+  }
+
+  .add-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--gray-800);
+  }
+
+  .form-grid {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  @media (min-width: 600px) {
+    .form-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .form-span-2 { grid-column: 1 / -1; }
+
+  .category-icon {
+    font-size: 14px;
+    margin-right: 2px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+  <h1 class="page-title" style="margin-bottom:0;">Products</h1>
+  <span class="badge badge-gray">{{ products|length }} total · {{ products|selectattr('is_active')|list|length }} active</span>
+</div>
+
+{% if request.args.get('error') == 'missing_fields' %}
+  <div class="alert alert-error">Please fill in all required fields (name, Amazon URL, Benable URL).</div>
+{% endif %}
+
+{# ── Product list ── #}
+{% if products %}
+<div class="product-list">
+  {% for product in products %}
+  {% set icons = {
+    'home_decor': '🏠', 'kitchen': '☕', 'office': '💻',
+    'fashion': '👗', 'beauty': '💄', 'fitness': '🏋',
+    'travel': '✈', 'garden': '🌿', 'pets': '🐾',
+    'tech': '📱', 'art': '🎨', 'general': '🛍'
+  } %}
+  <div class="product-card {% if not product.is_active %}inactive{% endif %}">
+    <div class="product-icon">
+      {{ icons.get(product.category, '🛍') }}
+    </div>
+
+    <div class="product-info">
+      <div class="product-name">{{ product.name }}</div>
+      <div class="product-meta">
+        <span class="badge badge-{{ 'green' if product.is_active else 'gray' }}">
+          {{ 'Active' if product.is_active else 'Inactive' }}
+        </span>
+        <span class="badge badge-blue">{{ product.category|replace('_',' ')|title }}</span>
+        {% if product.price %}
+          <span style="font-weight:600;color:var(--gray-800);">${{ product.price }}</span>
+        {% endif %}
+        <span>{{ product.pins|length }} pin{{ 's' if product.pins|length != 1 else '' }}</span>
+      </div>
+      <div class="product-links">
+        <a href="{{ product.amazon_url }}" target="_blank" rel="noopener">Amazon ↗</a>
+        <a href="{{ product.benable_url }}" target="_blank" rel="noopener">Benable ↗</a>
+      </div>
+    </div>
+
+    <div class="product-actions">
+      <form method="POST" action="{{ url_for('main.toggle_product', product_id=product.id) }}">
+        <button type="submit" class="btn btn-sm {{ 'btn-gray' if product.is_active else 'btn-green' }}">
+          {{ 'Pause' if product.is_active else 'Activate' }}
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('main.delete_product', product_id=product.id) }}"
+            onsubmit="return confirm('Remove {{ product.name }}?')">
+        <button type="submit" class="btn btn-ghost btn-sm" style="color:#ccc;">✕</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty" style="margin-bottom:32px;">
+  <div class="empty-icon">📦</div>
+  <div class="empty-text">No products yet. Add your first one below!</div>
+</div>
+{% endif %}
+
+{# ── Add product form ── #}
+<div class="add-card">
+  <h2>➕ Add Product</h2>
+  <form method="POST" action="{{ url_for('main.add_product') }}">
+    <div class="form-grid">
+      <div class="form-group form-span-2">
+        <label for="name">Product Name *</label>
+        <input type="text" id="name" name="name" placeholder="e.g. Cozy Knit Throw Blanket" required>
+      </div>
+
+      <div class="form-group">
+        <label for="amazon_url">Amazon URL *</label>
+        <input type="url" id="amazon_url" name="amazon_url"
+               placeholder="https://amazon.com/dp/..." required>
+      </div>
+
+      <div class="form-group">
+        <label for="benable_url">Benable Affiliate URL *</label>
+        <input type="url" id="benable_url" name="benable_url"
+               placeholder="https://benable.com/..." required>
+      </div>
+
+      <div class="form-group">
+        <label for="category">Category</label>
+        <select id="category" name="category">
+          {% for cat in categories %}
+          <option value="{{ cat }}">
+            {{ {'home_decor':'🏠 Home Decor','kitchen':'☕ Kitchen','office':'💻 Office',
+                'fashion':'👗 Fashion','beauty':'💄 Beauty','fitness':'🏋 Fitness',
+                'travel':'✈ Travel','garden':'🌿 Garden','pets':'🐾 Pets',
+                'tech':'📱 Tech','art':'🎨 Art/DIY','general':'🛍 General'}.get(cat, cat|title) }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="price">Price (optional)</label>
+        <input type="text" id="price" name="price" placeholder="e.g. 39.99">
+      </div>
+
+      <div class="form-span-2">
+        <button type="submit" class="btn btn-red btn-full">Add Product</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

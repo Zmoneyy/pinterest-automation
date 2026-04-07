@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+
+{% block title %}Setup — PinBot{% endblock %}
+
+{% block head %}
+<style>
+  .setup-section {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px;
+    margin-bottom: 20px;
+  }
+
+  .setup-section h2 {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: var(--gray-800);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--gray-200);
+  }
+
+  .check-item.ok  { border-color: #c8f0e0; background: #f0fdf8; }
+  .check-item.bad { border-color: #ffd0d6; background: #fff5f6; }
+
+  .check-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .check-icon.ok  { background: var(--green); color: white; }
+  .check-icon.bad { background: var(--red);   color: white; }
+
+  .check-body { flex: 1; }
+
+  .check-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--gray-800);
+  }
+
+  .check-desc {
+    font-size: 13px;
+    color: var(--gray-600);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .check-desc code {
+    background: var(--gray-100);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'SFMono-Regular', Consolas, monospace;
+  }
+
+  .pinterest-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .user-info { flex: 1; }
+  .user-name { font-weight: 700; font-size: 15px; }
+  .user-meta { font-size: 13px; color: var(--gray-400); margin-top: 2px; }
+
+  .boards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .board-card {
+    background: var(--gray-50);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-800);
+  }
+
+  .board-card .pin-count {
+    font-size: 11px;
+    color: var(--gray-400);
+    font-weight: 400;
+    margin-top: 2px;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    flex: 1;
+    min-width: 100px;
+    background: var(--gray-50);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    padding: 14px;
+    text-align: center;
+  }
+
+  .stat-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--red);
+  }
+
+  .stat-label {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 2px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">⚙ Setup</h1>
+
+{% if request.args.get('success') == 'pinterest_connected' %}
+  <div class="alert alert-success">Pinterest account connected successfully!</div>
+{% endif %}
+{% if request.args.get('error') %}
+  <div class="alert alert-error">Error: {{ request.args.get('error')|replace('_',' ') }}</div>
+{% endif %}
+
+{# ── Stats ── #}
+<div class="setup-section">
+  <h2>📊 System Stats</h2>
+  <div class="stat-row">
+    <div class="stat-box">
+      <div class="stat-number">{{ trend_count }}</div>
+      <div class="stat-label">Cached Trends</div>
+    </div>
+    {% if latest_trend %}
+    <div class="stat-box">
+      <div class="stat-number" style="font-size:13px;margin-top:8px;">{{ latest_trend.cached_at.strftime('%b %d') }}</div>
+      <div class="stat-label">Last Trend Fetch</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Config checklist ── #}
+<div class="setup-section">
+  <h2>✅ Configuration Checklist</h2>
+  <div class="checklist">
+
+    <div class="check-item {{ 'ok' if config_status.dashboard_password else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.dashboard_password else 'bad' }}">
+        {{ '✓' if config_status.dashboard_password else '!' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Dashboard Password</div>
+        <div class="check-desc">
+          {% if config_status.dashboard_password %}
+            Password is set. Your dashboard is protected.
+          {% else %}
+            Set <code>DASHBOARD_PASSWORD</code> env var to protect your dashboard.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.pinterest_app else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.pinterest_app else 'bad' }}">
+        {{ '✓' if config_status.pinterest_app else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Pinterest App Credentials</div>
+        <div class="check-desc">
+          {% if config_status.pinterest_app %}
+            App ID and Secret are configured.
+          {% else %}
+            Set <code>PINTEREST_APP_ID</code> and <code>PINTEREST_APP_SECRET</code>.
+            Create an app at <a href="https://developers.pinterest.com/apps/" target="_blank" rel="noopener" style="color:var(--red);">developers.pinterest.com</a>.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.pinterest_token else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.pinterest_token else '✕' }}">
+        {{ '✓' if config_status.pinterest_token else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Pinterest Access Token</div>
+        <div class="check-desc">
+          {% if config_status.pinterest_token %}
+            Access token is set.
+          {% else %}
+            Connect your Pinterest account below, or set <code>PINTEREST_ACCESS_TOKEN</code> directly.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.pinterest_board else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.pinterest_board else '✕' }}">
+        {{ '✓' if config_status.pinterest_board else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Pinterest Board ID</div>
+        <div class="check-desc">
+          {% if config_status.pinterest_board %}
+            Board ID is configured.
+          {% else %}
+            Set <code>PINTEREST_BOARD_ID</code>. Find your board ID from the boards listed below after connecting.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.benable else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.benable else '✕' }}">
+        {{ '✓' if config_status.benable else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Benable Affiliate URL</div>
+        <div class="check-desc">
+          {% if config_status.benable %}
+            Benable URL is configured.
+          {% else %}
+            Set <code>BENABLE_URL</code> to your Benable affiliate storefront URL.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.anthropic else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.anthropic else '✕' }}">
+        {{ '✓' if config_status.anthropic else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Anthropic (Claude) API</div>
+        <div class="check-desc">
+          {% if config_status.anthropic %}
+            Claude API key is configured.
+          {% else %}
+            Set <code>ANTHROPIC_API_KEY</code>. Get a key at
+            <a href="https://console.anthropic.com/" target="_blank" rel="noopener" style="color:var(--red);">console.anthropic.com</a>.
+            Without this, template-based content will be used.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="check-item {{ 'ok' if config_status.google_vertex else 'bad' }}">
+      <div class="check-icon {{ 'ok' if config_status.google_vertex else '✕' }}">
+        {{ '✓' if config_status.google_vertex else '✕' }}
+      </div>
+      <div class="check-body">
+        <div class="check-title">Google Vertex AI (Imagen)</div>
+        <div class="check-desc">
+          {% if config_status.google_vertex %}
+            Google Project ID is configured.
+          {% else %}
+            Set <code>GOOGLE_PROJECT_ID</code> to enable AI image generation.
+            Ensure Vertex AI API is enabled and you have Application Default Credentials configured.
+            Without this, placeholder images will be generated.
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ── Pinterest connection ── #}
+<div class="setup-section">
+  <h2>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="#E60023" aria-hidden="true">
+      <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+    </svg>
+    Pinterest Account
+  </h2>
+
+  {% if pinterest_user %}
+    <div class="pinterest-status">
+      {% if pinterest_user.get('profile_image') %}
+        <img src="{{ pinterest_user['profile_image'] }}" alt="Profile" class="user-avatar">
+      {% endif %}
+      <div class="user-info">
+        <div class="user-name">{{ pinterest_user.get('username') or pinterest_user.get('business_name', 'Connected') }}</div>
+        <div class="user-meta">✅ Connected to Pinterest</div>
+      </div>
+      <a href="{{ url_for('main.pinterest_connect') }}" class="btn btn-ghost btn-sm">Reconnect</a>
+    </div>
+
+    {% if boards %}
+      <div style="margin-top:16px;">
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:8px;">Your Boards</div>
+        <div class="boards-grid">
+          {% for board in boards %}
+          <div class="board-card">
+            <div>{{ board.name }}</div>
+            <div class="pin-count">ID: {{ board.id }}</div>
+            <div class="pin-count">{{ board.pin_count }} pins</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+  {% else %}
+    <p style="font-size:14px;color:var(--gray-600);margin-bottom:16px;">
+      Connect your Pinterest account to enable trend fetching and auto-posting.
+    </p>
+    {% if config_status.pinterest_app %}
+      <a href="{{ url_for('main.pinterest_connect') }}" class="btn btn-red">
+        Connect Pinterest Account →
+      </a>
+    {% else %}
+      <div class="check-item bad">
+        <div class="check-icon bad">!</div>
+        <div class="check-body">
+          <div class="check-desc">Set up Pinterest App credentials first (see checklist above).</div>
+        </div>
+      </div>
+    {% endif %}
+  {% endif %}
+</div>
+
+{# ── Manual controls ── #}
+<div class="setup-section">
+  <h2>🔧 Manual Controls</h2>
+  <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <button class="btn btn-red" id="btn-trigger">⚡ Run Pin Generation Now</button>
+    <button class="btn btn-orange" id="btn-post">📤 Post Due Pins Now</button>
+  </div>
+  <div id="trigger-result" style="margin-top:12px;font-size:14px;"></div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function runAction(url, btnId, resultId) {
+    const btn = document.getElementById(btnId);
+    const result = document.getElementById(resultId);
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = '⏳ Running...';
+    try {
+      const resp = await fetch(url, { method: 'POST' });
+      const data = await resp.json();
+      result.textContent = data.message || (data.ok ? 'Done!' : 'Error');
+      result.style.color = data.ok ? 'var(--green)' : 'var(--red)';
+    } catch(e) {
+      result.textContent = 'Network error';
+      result.style.color = 'var(--red)';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+
+  document.getElementById('btn-trigger').addEventListener('click', () =>
+    runAction('{{ url_for("main.api_trigger") }}', 'btn-trigger', 'trigger-result'));
+
+  document.getElementById('btn-post').addEventListener('click', () =>
+    runAction('{{ url_for("main.api_post_due") }}', 'btn-post', 'trigger-result'));
+</script>
+{% endblock %}

@@ -1,0 +1,90 @@
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.env.yaml
+.env.yaml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.virtualenv/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+instance/
+
+# Generated images
+/tmp/generated_images/
+generated_images/
+
+# Logs
+*.log
+logs/
+
+# Testing
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Distribution / packaging
+*.tar.gz
+*.zip
+
+# Google credentials (never commit these!)
+*service-account*.json
+gcloud-credentials*.json
+application_default_credentials.json
+
+# Docker
+.dockerignore
+
+# Gunicorn
+gunicorn.pid

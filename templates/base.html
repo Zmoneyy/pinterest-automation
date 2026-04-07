@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="theme-color" content="#E60023">
+  <title>{% block title %}Pinterest Automation{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red: #E60023;
+      --red-dark: #ad081b;
+      --red-light: #ffeaec;
+      --green: #0fa573;
+      --green-light: #e6f9f3;
+      --orange: #f06000;
+      --orange-light: #fff3e6;
+      --gray-50: #f8f8f8;
+      --gray-100: #f0f0f0;
+      --gray-200: #e0e0e0;
+      --gray-400: #9e9e9e;
+      --gray-600: #616161;
+      --gray-800: #212121;
+      --white: #ffffff;
+      --shadow: 0 2px 8px rgba(0,0,0,0.10);
+      --shadow-lg: 0 4px 20px rgba(0,0,0,0.14);
+      --radius: 16px;
+      --radius-sm: 8px;
+      --radius-pill: 100px;
+      --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--gray-50);
+      color: var(--gray-800);
+      min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+
+    /* ── Nav ── */
+    nav {
+      background: var(--white);
+      border-bottom: 1px solid var(--gray-200);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: var(--shadow);
+    }
+
+    .nav-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      height: 56px;
+      gap: 4px;
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 18px;
+      color: var(--red);
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .nav-logo svg { width: 28px; height: 28px; }
+
+    .nav-links {
+      display: flex;
+      gap: 4px;
+      flex: 1;
+    }
+
+    .nav-link {
+      text-decoration: none;
+      color: var(--gray-600);
+      font-weight: 500;
+      font-size: 14px;
+      padding: 8px 12px;
+      border-radius: var(--radius-pill);
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .nav-link:hover { background: var(--gray-100); color: var(--gray-800); }
+    .nav-link.active { background: var(--red-light); color: var(--red); }
+
+    .nav-logout {
+      margin-left: auto;
+      text-decoration: none;
+      color: var(--gray-400);
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: var(--radius-pill);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .nav-logout:hover { background: var(--gray-100); color: var(--gray-600); }
+
+    /* ── Page layout ── */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 16px 80px;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--gray-800);
+    }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--white);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .card-body { padding: 20px; }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-family: var(--font);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 20px;
+      border-radius: var(--radius-pill);
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s, transform 0.1s;
+      min-height: 44px;
+      white-space: nowrap;
+    }
+
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-red    { background: var(--red);    color: var(--white); }
+    .btn-green  { background: var(--green);  color: var(--white); }
+    .btn-orange { background: var(--orange); color: var(--white); }
+    .btn-gray   { background: var(--gray-200); color: var(--gray-800); }
+    .btn-ghost  { background: transparent; color: var(--gray-600); border: 1.5px solid var(--gray-200); }
+
+    .btn-sm { padding: 8px 14px; font-size: 13px; min-height: 36px; }
+    .btn-full { width: 100%; }
+
+    .btn-red:hover    { opacity: 0.88; }
+    .btn-green:hover  { opacity: 0.88; }
+    .btn-orange:hover { opacity: 0.88; }
+    .btn-gray:hover   { background: var(--gray-200); }
+
+    /* ── Form elements ── */
+    input[type="text"],
+    input[type="password"],
+    input[type="url"],
+    input[type="number"],
+    input[type="datetime-local"],
+    select,
+    textarea {
+      width: 100%;
+      font-family: var(--font);
+      font-size: 15px;
+      padding: 12px 14px;
+      border: 1.5px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      background: var(--white);
+      color: var(--gray-800);
+      outline: none;
+      transition: border-color 0.15s;
+      appearance: none;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--red);
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray-600);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .form-group { margin-bottom: 16px; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .badge-red    { background: var(--red-light);   color: var(--red); }
+    .badge-green  { background: var(--green-light);  color: var(--green); }
+    .badge-orange { background: var(--orange-light); color: var(--orange); }
+    .badge-gray   { background: var(--gray-100);     color: var(--gray-600); }
+    .badge-blue   { background: #e8f0fe;             color: #1a73e8; }
+
+    /* ── Tabs ── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--gray-100);
+      padding: 4px;
+      border-radius: var(--radius-pill);
+      margin-bottom: 24px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .tab {
+      flex: 1;
+      text-align: center;
+      padding: 10px 14px;
+      border-radius: var(--radius-pill);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      color: var(--gray-600);
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .tab.active {
+      background: var(--white);
+      color: var(--gray-800);
+      box-shadow: var(--shadow);
+    }
+
+    /* ── Alert / flash ── */
+    .alert {
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 20px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .alert-success { background: var(--green-light); color: var(--green); }
+    .alert-error   { background: var(--red-light);   color: var(--red); }
+
+    /* ── Divider ── */
+    hr { border: none; border-top: 1px solid var(--gray-100); margin: 20px 0; }
+
+    /* ── Empty state ── */
+    .empty {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--gray-400);
+    }
+
+    .empty-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-text { font-size: 16px; }
+
+    /* ── Util ── */
+    .flex { display: flex; }
+    .flex-center { align-items: center; }
+    .gap-8  { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .mt-8   { margin-top: 8px; }
+    .mt-16  { margin-top: 16px; }
+    .mt-24  { margin-top: 24px; }
+    .mb-8   { margin-bottom: 8px; }
+    .mb-16  { margin-bottom: 16px; }
+    .text-sm  { font-size: 13px; }
+    .text-muted { color: var(--gray-400); }
+    .fw-bold { font-weight: 700; }
+    .text-red { color: var(--red); }
+    .text-green { color: var(--green); }
+    .w-full { width: 100%; }
+
+    @media (min-width: 600px) {
+      .page { padding: 32px 24px 80px; }
+      .page-title { font-size: 26px; }
+      .btn { font-size: 15px; }
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+{% if session.get('logged_in') %}
+<nav>
+  <div class="nav-inner">
+    <a href="{{ url_for('main.dashboard') }}" class="nav-logo">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/>
+      </svg>
+      PinBot
+    </a>
+    <div class="nav-links">
+      <a href="{{ url_for('main.dashboard') }}"
+         class="nav-link {% if request.endpoint == 'main.dashboard' %}active{% endif %}">
+        Dashboard
+      </a>
+      <a href="{{ url_for('main.products') }}"
+         class="nav-link {% if request.endpoint and 'product' in request.endpoint %}active{% endif %}">
+        Products
+      </a>
+      <a href="{{ url_for('main.setup') }}"
+         class="nav-link {% if request.endpoint == 'main.setup' %}active{% endif %}">
+        Setup
+      </a>
+    </div>
+    <a href="{{ url_for('main.logout') }}" class="nav-logout">Sign out</a>
+  </div>
+</nav>
+{% endif %}
+
+<div class="page">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'success' if category == 'success' else 'error' }}">{{ message }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</div>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

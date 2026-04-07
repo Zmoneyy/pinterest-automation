@@ -7,7 +7,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
-scheduler = BackgroundScheduler(timezone="UTC")
+_bg_scheduler = BackgroundScheduler(timezone="UTC")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -90,13 +90,13 @@ def _seed_sample_data():
 
 def _start_scheduler(app):
     """Configure and start APScheduler jobs."""
-    if scheduler.running:
+    if _bg_scheduler.running:
         return
 
     from app.scheduler import run_daily_pin_generation, schedule_approved_pins
 
     # Daily pin generation at 9 AM UTC
-    scheduler.add_job(
+    _bg_scheduler.add_job(
         func=lambda: _run_with_context(app, run_daily_pin_generation),
         trigger=CronTrigger(hour=9, minute=0),
         id="daily_pin_generation",
@@ -106,7 +106,7 @@ def _start_scheduler(app):
     )
 
     # Check for scheduled pins every 15 minutes
-    scheduler.add_job(
+    _bg_scheduler.add_job(
         func=lambda: _run_with_context(app, schedule_approved_pins),
         trigger="interval",
         minutes=15,
@@ -115,7 +115,7 @@ def _start_scheduler(app):
         replace_existing=True,
     )
 
-    scheduler.start()
+    _bg_scheduler.start()
     logger.info("APScheduler started.")
 
 
