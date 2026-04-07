@@ -11,8 +11,9 @@ class Config:
     PINTEREST_ACCESS_TOKEN = os.environ.get("PINTEREST_ACCESS_TOKEN", "")
     PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID", "")
 
-    # Affiliate
-    BENABLE_URL = os.environ.get("BENABLE_URL", "")
+    # Affiliate / Branding
+    BENABLE_URL  = os.environ.get("BENABLE_URL", "")
+    BRAND_NAME   = os.environ.get("BRAND_NAME", "")   # shown as signature on pin images
 
     # AI APIs
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -47,4 +48,5 @@ class Config:
             "anthropic": bool(cls.ANTHROPIC_API_KEY),
             "google_vertex": bool(cls.GOOGLE_PROJECT_ID),
             "dashboard_password": bool(cls.DASHBOARD_PASSWORD),
+            "brand_name": bool(cls.BRAND_NAME),
         }

@@ -50,42 +50,97 @@ def create_app(config_object=None):
 
 
 def _seed_sample_data():
-    """Add a sample product if the database is empty."""
+    """
+    Seed sample products on first run.
+    These are placeholders — replace them with your real Benable links.
+    Each product should have an image_url pointing to the Amazon product image
+    so the collage generator can download and compose it.
+    """
     from app.models import Product
 
-    if Product.query.count() == 0:
-        sample = Product(
+    if Product.query.count() > 0:
+        return
+
+    samples = [
+        Product(
             name="Cozy Knit Throw Blanket",
-            amazon_url="https://www.amazon.com/dp/B09EXAMPLE",
-            benable_url="https://benable.com/example/cozy-knit-throw-blanket",
+            amazon_url="https://www.amazon.com/dp/B09EXAMPLE1",
+            benable_url="https://benable.com/example",
             category="home_decor",
             price="39.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder1.jpg",
             is_active=True,
-        )
-        db.session.add(sample)
-
-        sample2 = Product(
+        ),
+        Product(
             name="Ceramic Pour-Over Coffee Set",
-            amazon_url="https://www.amazon.com/dp/B08EXAMPLE",
-            benable_url="https://benable.com/example/ceramic-pour-over-coffee-set",
+            amazon_url="https://www.amazon.com/dp/B08EXAMPLE2",
+            benable_url="https://benable.com/example",
             category="kitchen",
             price="54.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder2.jpg",
             is_active=True,
-        )
-        db.session.add(sample2)
-
-        sample3 = Product(
+        ),
+        Product(
             name="Minimalist Desk Organizer",
-            amazon_url="https://www.amazon.com/dp/B07EXAMPLE",
-            benable_url="https://benable.com/example/minimalist-desk-organizer",
+            amazon_url="https://www.amazon.com/dp/B07EXAMPLE3",
+            benable_url="https://benable.com/example",
             category="office",
             price="28.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder3.jpg",
             is_active=True,
-        )
-        db.session.add(sample3)
+        ),
+        Product(
+            name="Fluffy Crossband Slippers",
+            amazon_url="https://www.amazon.com/dp/B06EXAMPLE4",
+            benable_url="https://benable.com/example",
+            category="fashion",
+            price="22.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder4.jpg",
+            is_active=True,
+        ),
+        Product(
+            name="EOS Cashmere Body Oil",
+            amazon_url="https://www.amazon.com/dp/B05EXAMPLE5",
+            benable_url="https://benable.com/example",
+            category="beauty",
+            price="12.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder5.jpg",
+            is_active=True,
+        ),
+        Product(
+            name="Linen Pillow Cover Set",
+            amazon_url="https://www.amazon.com/dp/B04EXAMPLE6",
+            benable_url="https://benable.com/example",
+            category="home_decor",
+            price="24.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder6.jpg",
+            is_active=True,
+        ),
+        Product(
+            name="Marble Wireless Charger",
+            amazon_url="https://www.amazon.com/dp/B03EXAMPLE7",
+            benable_url="https://benable.com/example",
+            category="tech",
+            price="19.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder7.jpg",
+            is_active=True,
+        ),
+        Product(
+            name="Gold Acrylic Tray",
+            amazon_url="https://www.amazon.com/dp/B02EXAMPLE8",
+            benable_url="https://benable.com/example",
+            category="home_decor",
+            price="16.99",
+            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder8.jpg",
+            is_active=True,
+        ),
+    ]
 
-        db.session.commit()
-        logger.info("Seeded sample products into database.")
+    for s in samples:
+        db.session.add(s)
+
+    db.session.commit()
+    logger.info(f"Seeded {len(samples)} sample products. Replace with your real product links!")
 
 
 def _start_scheduler(app):

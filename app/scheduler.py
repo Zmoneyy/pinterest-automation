@@ -1,7 +1,7 @@
 """
-Daily automation scheduler jobs.
-- run_daily_pin_generation: Fetches trends, picks products, generates pins (runs at 9 AM UTC)
-- schedule_approved_pins: Posts approved pins that are due (runs every 15 min)
+Scheduler jobs:
+  run_daily_pin_generation  — runs daily at 9 AM UTC
+  schedule_approved_pins    — runs every 15 min, posts approved pins that are due
 """
 import json
 import logging
@@ -10,271 +10,226 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-IMAGE_STYLES = ["lifestyle", "flat_lay", "product_hero", "aesthetic_room", "outdoor"]
-
-CATEGORY_KEYWORD_MAP = {
-    "home_decor": ["home_decor", "general"],
-    "kitchen": ["kitchen", "general"],
-    "office": ["office", "general"],
-    "fashion": ["fashion", "general"],
-    "beauty": ["beauty", "general"],
-    "fitness": ["fitness", "general"],
-    "travel": ["travel", "general"],
-    "garden": ["garden", "general"],
-    "pets": ["pets", "general"],
-    "tech": ["tech", "general"],
-    "art": ["art", "diy", "general"],
-}
+MIN_PRODUCTS_PER_PIN = 5
+MAX_PRODUCTS_PER_PIN = 8
+PINS_PER_DAY = 3
 
 
 def run_daily_pin_generation():
     """
-    Main daily job: fetch trends, pick products, generate images + content,
-    and create pending Pin records for human approval.
-    Targets 3 new pins per run.
+    Generate 3 collage-style roundup pins per day.
+    Each pin features 5-8 curated products under a themed headline.
     """
     from app import db
-    from app.ai_writer import generate_pin_content
-    from app.imagen_api import generate_pin_image
+    from app.ai_writer import generate_roundup_content
+    from app.imagen_api import generate_collage_image
     from app.models import Pin, Product, TrendCache
     from app.pinterest_api import get_trending_keywords
+    from config import Config
 
-    logger.info("=== Starting daily pin generation ===")
+    logger.info("=== Daily pin generation started ===")
 
-    # 1. Fetch trending keywords and cache them
+    # 1. Fetch and cache trending keywords
     trends = get_trending_keywords()
     if trends:
         _cache_trends(trends, db, TrendCache)
 
-    # 2. Get all active products
-    active_products = Product.query.filter_by(is_active=True).all()
-    if not active_products:
-        logger.warning("No active products found. Skipping pin generation.")
+    # 2. Pull all active products
+    all_products = Product.query.filter_by(is_active=True).all()
+    if len(all_products) < 3:
+        logger.warning(
+            f"Only {len(all_products)} active products. Need at least 3. Skipping generation."
+        )
         return
 
-    # 3. Pick up to 3 products (prefer variety, avoid recently-pinned ones)
-    products_to_pin = _select_products(active_products, count=3)
-    logger.info(f"Selected {len(products_to_pin)} products for today's pins.")
-
     pins_created = 0
-    for product in products_to_pin:
+    for i in range(PINS_PER_DAY):
         try:
-            # Pick a relevant trending keyword for this product
-            trend_keyword = _pick_trend_for_product(product.category, trends)
-
-            # Pick a random image style
-            style = random.choice(IMAGE_STYLES)
-
-            # Generate image with Imagen
-            logger.info(f"Generating image for '{product.name}' (style: {style})...")
-            image_path = generate_pin_image(
-                prompt=f"{trend_keyword} inspired, featuring {product.name}",
-                product_name=product.name,
-                style=style,
-            )
-
-            # Determine pin status based on image generation success
-            pin_status = Pin.STATUS_PENDING
-            if not image_path:
-                logger.warning(f"Image generation failed for '{product.name}'. Marking needs_image.")
-                pin_status = Pin.STATUS_NEEDS_IMAGE
-
-            # Generate content with Claude
-            logger.info(f"Generating content for '{product.name}'...")
-            content = generate_pin_content(
-                product_name=product.name,
-                trend_keyword=trend_keyword,
-                category=product.category,
-                benable_url=product.benable_url,
-            )
-
-            # Create Pin record
-            pin = Pin(
-                product_id=product.id,
-                title=content["title"],
-                description=content["description"],
-                hashtags=json.dumps(content.get("hashtags", [])),
-                image_path=image_path,
-                image_url=None,  # Will be set when posted
-                status=pin_status,
-                trend_keyword=trend_keyword,
-                style_variant=content.get("style", style),
-            )
-            db.session.add(pin)
-            db.session.commit()
-
+            _generate_one_collage_pin(i, all_products, trends, db, Pin,
+                                       generate_roundup_content, generate_collage_image, Config)
             pins_created += 1
-            logger.info(f"Created pin #{pin.id} for '{product.name}' [{pin_status}]")
-
         except Exception as e:
-            logger.error(f"Failed to generate pin for '{product.name}': {e}", exc_info=True)
+            logger.error(f"Pin generation #{i + 1} failed: {e}", exc_info=True)
             db.session.rollback()
-            continue
 
-    logger.info(f"=== Daily pin generation complete: {pins_created} pins created ===")
+    logger.info(f"=== Daily generation complete: {pins_created}/{PINS_PER_DAY} pins created ===")
+
+
+def _generate_one_collage_pin(
+    index: int,
+    all_products: list,
+    trends: list,
+    db,
+    Pin,
+    generate_roundup_content,
+    generate_collage_image,
+    Config,
+):
+    """Generate a single collage pin featuring 5-8 randomly selected products."""
+    # How many products for this pin
+    count = random.randint(
+        min(MIN_PRODUCTS_PER_PIN, len(all_products)),
+        min(MAX_PRODUCTS_PER_PIN, len(all_products)),
+    )
+    products = random.sample(all_products, count)
+
+    # Pick a trending keyword relevant to the product mix
+    trend_keyword = _pick_trend_keyword(products, trends)
+    logger.info(
+        f"Pin {index + 1}: {count} products, trend='{trend_keyword}'"
+    )
+
+    # Generate content (theme title, subtitle, description, hashtags, CTA)
+    content = generate_roundup_content(
+        products=products,
+        trend_keyword=trend_keyword,
+        benable_url=Config.BENABLE_URL or "https://benable.com",
+    )
+
+    # Generate collage image
+    image_path = generate_collage_image(
+        products=products,
+        theme=content["theme"],
+        subtitle=content.get("subtitle", "on Amazon"),
+        brand_name=Config.BRAND_NAME or "",
+        cta_text=content.get("cta_text", "shop here \u2764\ufe0f"),
+    )
+
+    pin_status = Pin.STATUS_PENDING if image_path else Pin.STATUS_NEEDS_IMAGE
+
+    pin = Pin(
+        theme=content["theme"],
+        title=content["title"],
+        description=content["description"],
+        hashtags=json.dumps(content.get("hashtags", [])),
+        image_path=image_path,
+        status=pin_status,
+        trend_keyword=trend_keyword,
+        style_variant="roundup_collage",
+    )
+    pin.products = products
+    db.session.add(pin)
+    db.session.commit()
+
+    logger.info(
+        f"  → Pin #{pin.id} created: '{pin.theme}' [{pin_status}] "
+        f"({len(products)} products)"
+    )
 
 
 def schedule_approved_pins():
-    """
-    Check for approved pins with a scheduled_for time that has passed,
-    and post them to Pinterest.
-    Also posts approved pins without a schedule (immediate posting).
-    """
-    from datetime import timedelta
-
+    """Post approved pins whose scheduled_for time has arrived (or immediately if unscheduled)."""
     from app import db
     from app.models import Pin
     from app.pinterest_api import post_pin
 
     now = datetime.now(timezone.utc)
-    logger.info("Checking for pins ready to post...")
 
-    # Find approved pins that are scheduled and due
     due_pins = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for <= now,
     ).all()
 
-    # Also find approved pins with no schedule set (post immediately)
-    unscheduled_approved = Pin.query.filter(
+    immediate_pins = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for.is_(None),
     ).all()
 
-    pins_to_post = due_pins + unscheduled_approved
-
-    if not pins_to_post:
-        logger.info("No pins ready to post.")
+    to_post = due_pins + immediate_pins
+    if not to_post:
         return
 
-    logger.info(f"Found {len(pins_to_post)} pins ready to post.")
-
-    for pin in pins_to_post:
+    logger.info(f"Posting {len(to_post)} approved pins...")
+    for pin in to_post:
         try:
-            _post_single_pin(pin, db, post_pin, now)
+            _post_pin(pin, db, post_pin, now)
         except Exception as e:
             logger.error(f"Failed to post pin #{pin.id}: {e}", exc_info=True)
             db.session.rollback()
 
 
-def _post_single_pin(pin, db, post_pin_fn, now):
-    """Post a single pin to Pinterest and update its status."""
+def _post_pin(pin, db, post_pin_fn, now):
+    """Post a single pin to Pinterest and update DB status."""
     from app.imagen_api import image_path_to_url
+    from config import Config
 
-    product = pin.product
-    if not product:
-        logger.error(f"Pin #{pin.id} has no associated product. Skipping.")
-        return
-
-    # Determine the image URL to use
     image_url = pin.image_url
     if not image_url and pin.image_path:
-        # We need a publicly accessible URL — for Cloud Run, this would be a GCS URL.
-        # Here we use the Flask serve route as a fallback.
-        from config import Config
-        base_url = f"http://localhost:{Config.PORT}"
+        base_url  = f"http://localhost:{Config.PORT}"
         image_url = image_path_to_url(pin.image_path, base_url)
 
     if not image_url:
-        logger.error(f"Pin #{pin.id} has no image URL. Cannot post.")
+        logger.error(f"Pin #{pin.id} has no image URL — skipping.")
         return
 
-    # Build full description with hashtags
-    hashtags = pin.hashtags_list()
-    hashtag_str = " ".join(f"#{h}" for h in hashtags) if hashtags else ""
-    full_description = pin.description
+    # Build description with hashtags
+    hashtag_str  = " ".join(f"#{h}" for h in pin.hashtags_list())
+    full_desc    = pin.description
     if hashtag_str:
-        full_description = f"{full_description}\n\n{hashtag_str}"
+        full_desc = f"{full_desc}\n\n{hashtag_str}"
 
-    # Post to Pinterest
+    # For collage pins link to the main Benable page (multiple products)
+    link = Config.BENABLE_URL or "https://benable.com"
+
     result = post_pin_fn(
         title=pin.title,
-        description=full_description,
+        description=full_desc,
         image_url=image_url,
-        link=product.benable_url,
-        alt_text=f"{product.name} - {pin.trend_keyword or ''}".strip(" -"),
+        link=link,
+        alt_text=f"{pin.theme} — curated finds",
     )
 
-    # Update pin record
-    pin.status = Pin.STATUS_POSTED
-    pin.posted_at = now
+    pin.status          = Pin.STATUS_POSTED
+    pin.posted_at       = now
     pin.pinterest_pin_id = result.get("id", "")
-    pin.image_url = image_url
+    pin.image_url       = image_url
     db.session.commit()
-
-    logger.info(f"Pin #{pin.id} posted to Pinterest as '{result.get('id')}' ✓")
-
-
-def _select_products(products: list, count: int = 3) -> list:
-    """
-    Select products to generate pins for today.
-    Tries to pick products that haven't been pinned recently.
-    Falls back to random selection.
-    """
-    from app.models import Pin
-
-    # Find recently posted product IDs (last 7 days)
-    from datetime import timedelta
-    recent_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
-    recent_product_ids = {
-        p.product_id
-        for p in Pin.query.filter(
-            Pin.posted_at >= recent_cutoff,
-            Pin.status == Pin.STATUS_POSTED,
-        ).all()
-    }
-
-    # Prefer products not recently posted
-    fresh_products = [p for p in products if p.id not in recent_product_ids]
-    stale_products = [p for p in products if p.id in recent_product_ids]
-
-    pool = fresh_products if fresh_products else stale_products
-    selected = random.sample(pool, min(count, len(pool)))
-
-    # If we still need more, top up from stale
-    if len(selected) < count and stale_products:
-        remaining = [p for p in stale_products if p not in selected]
-        selected += random.sample(remaining, min(count - len(selected), len(remaining)))
-
-    return selected
+    logger.info(f"Pin #{pin.id} posted ✓  (pinterest id: {pin.pinterest_pin_id})")
 
 
-def _pick_trend_for_product(category: str, trends: list[dict]) -> str:
-    """Pick a trending keyword most relevant to the product's category."""
+def _pick_trend_keyword(products: list, trends: list) -> str:
+    """Pick a trending keyword relevant to the product mix."""
     if not trends:
-        return "trending finds"
+        return "amazon finds"
 
-    # Filter to matching category trends
-    category_match = CATEGORY_KEYWORD_MAP.get(category, ["general"])
-    relevant = [t for t in trends if t.get("category") in category_match]
+    # Count category frequency across products
+    cat_counts: dict = {}
+    for p in products:
+        cat_counts[p.category] = cat_counts.get(p.category, 0) + 1
 
-    if relevant:
-        # Sort by score and pick from top 5 randomly
-        relevant.sort(key=lambda x: x.get("score", 0), reverse=True)
-        top = relevant[:5]
-        return random.choice(top)["keyword"]
+    dominant_cat = max(cat_counts, key=cat_counts.get)
 
-    # Fall back to any trend
-    top = sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:5]
-    return random.choice(top)["keyword"] if top else "lifestyle finds"
+    category_map = {
+        "home_decor": ["home_decor", "general"],
+        "kitchen":    ["kitchen", "general"],
+        "office":     ["office", "general"],
+        "fashion":    ["fashion", "general"],
+        "beauty":     ["beauty", "general"],
+        "fitness":    ["fitness", "general"],
+        "travel":     ["travel", "general"],
+        "garden":     ["garden", "general"],
+        "pets":       ["pets", "general"],
+        "tech":       ["tech", "general"],
+        "art":        ["art", "diy", "general"],
+    }
+    target_cats = category_map.get(dominant_cat, ["general"])
+    relevant    = [t for t in trends if t.get("category") in target_cats]
+    pool        = relevant[:5] or sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:5]
+
+    return random.choice(pool)["keyword"] if pool else "lifestyle finds"
 
 
-def _cache_trends(trends: list[dict], db, TrendCache):
-    """Store fetched trends in the database cache."""
+def _cache_trends(trends: list, db, TrendCache):
     try:
-        # Clear old cache
         TrendCache.query.delete()
-
-        for trend in trends:
-            cached = TrendCache(
-                keyword=trend["keyword"],
-                category=trend.get("category", "general"),
-                score=trend.get("score", 0),
-            )
-            db.session.add(cached)
-
+        for t in trends:
+            db.session.add(TrendCache(
+                keyword=t["keyword"],
+                category=t.get("category", "general"),
+                score=t.get("score", 0),
+            ))
         db.session.commit()
-        logger.info(f"Cached {len(trends)} trend keywords to database.")
+        logger.info(f"Cached {len(trends)} trends.")
     except Exception as e:
-        logger.error(f"Failed to cache trends: {e}")
+        logger.error(f"Trend caching failed: {e}")
         db.session.rollback()

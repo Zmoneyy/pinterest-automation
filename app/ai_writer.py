@@ -1,6 +1,6 @@
 """
-Claude API integration for generating Pinterest pin content.
-Uses the anthropic library to produce titles, descriptions, and hashtags.
+Claude API integration for generating Pinterest roundup/collage pin content.
+Produces editorial titles, descriptions, and hashtags in the Jackie Aina style.
 """
 import json
 import logging
@@ -11,228 +11,199 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-STYLES = ["inspirational", "practical", "lifestyle", "gift_guide", "educational"]
+SYSTEM_PROMPT = """You are an expert Pinterest content creator specialising in affiliate roundup posts
+in the style of Jackie Aina — editorial, aspirational, warm, never salesy.
+Each pin features a curated collection of 5-8 products under a single theme.
+Always respond with valid JSON only. No markdown, no extra text."""
 
-SYSTEM_PROMPT = """You are an expert Pinterest content creator who specializes in affiliate marketing.
-You write pin content that feels authentic, helpful, and lifestyle-focused — never spammy or clickbait-y.
-Your content gets high engagement because it genuinely helps people discover products they'll love.
-Always respond with valid JSON only, no markdown, no extra text."""
+# Roundup theme templates — Claude picks and personalises one
+THEME_TEMPLATES = [
+    "Weekly Favs",
+    "Most Loved",
+    "Currently Obsessed",
+    "New Home Finds",
+    "This Week's Picks",
+    "Most Loved on Amazon",
+    "Weekly Favs on Amazon",
+    "Editor's Picks",
+    "Can't Stop Buying These",
+    "Amazon Haul",
+    "Beauty Faves",
+    "Home Refresh",
+    "Cozy Season Finds",
+    "Gift Ideas She'll Love",
+    "Under $50 Finds",
+    "Trending Right Now",
+]
+
+SUBTITLE_OPTIONS = [
+    "on Amazon",
+    "from Amazon",
+    "on Benable",
+    "this week",
+    "right now",
+]
+
+CTA_OPTIONS = [
+    "shop here \u2764\ufe0f",
+    "click here \u2764\ufe0f",
+    "links in bio \u2764\ufe0f",
+    "shop now \u2764\ufe0f",
+    "tap to shop \u2764\ufe0f",
+]
 
 
-def generate_pin_content(
-    product_name: str,
+def generate_roundup_content(
+    products: list,
     trend_keyword: str,
-    category: str,
     benable_url: str,
-    style: Optional[str] = None,
+    theme_hint: Optional[str] = None,
 ) -> dict:
     """
-    Generate pin title, description, and hashtags using Claude.
+    Generate a complete roundup pin content for a collage featuring multiple products.
 
-    Returns a dict with keys: title, description, hashtags (list), style
-    Falls back to template content if Claude is unavailable.
+    Returns:
+        {
+          "theme":       "WEEKLY FAVS",        # all-caps title shown on the image
+          "subtitle":    "on Amazon",           # smaller text below the ornament
+          "title":       "Weekly Favs on Amazon – Beauty Edition",  # Pinterest pin title
+          "description": "...",
+          "hashtags":    ["amazonfinds", ...],
+          "cta_text":    "shop here ♥",
+        }
     """
     from config import Config
 
     if not Config.ANTHROPIC_API_KEY:
-        logger.warning("ANTHROPIC_API_KEY not set. Using template pin content.")
-        return _template_content(product_name, trend_keyword, category, benable_url, style)
+        logger.warning("ANTHROPIC_API_KEY not set — using template content.")
+        return _template_roundup(products, trend_keyword, benable_url, theme_hint)
 
-    chosen_style = style or random.choice(STYLES)
+    product_names = [p.name for p in products[:8]]
 
-    prompt = _build_prompt(product_name, trend_keyword, category, benable_url, chosen_style)
+    prompt = _build_roundup_prompt(product_names, trend_keyword, benable_url, theme_hint)
 
     try:
-        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-
+        client  = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
         message = client.messages.create(
             model="claude-3-5-haiku-20241022",
-            max_tokens=512,
+            max_tokens=600,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
 
-        raw = message.content[0].text.strip()
+        raw  = message.content[0].text.strip()
         data = json.loads(raw)
 
-        # Validate and sanitize
-        title = str(data.get("title", "")).strip()[:100]
+        theme       = str(data.get("theme", "Weekly Favs")).strip().upper()[:40]
+        subtitle    = str(data.get("subtitle", "on Amazon")).strip()[:30]
+        title       = str(data.get("title", theme)).strip()[:100]
         description = str(data.get("description", "")).strip()[:500]
-        hashtags = data.get("hashtags", [])
-
-        if isinstance(hashtags, str):
-            hashtags = [h.strip().lstrip("#") for h in hashtags.split(",") if h.strip()]
-        elif isinstance(hashtags, list):
-            hashtags = [str(h).strip().lstrip("#") for h in hashtags if h]
-
-        hashtags = hashtags[:10]
+        hashtags    = _parse_hashtags(data.get("hashtags", []))
+        cta_text    = str(data.get("cta_text", "shop here \u2764\ufe0f")).strip()[:30]
 
         if not title or not description:
             raise ValueError("Claude returned empty title or description.")
 
-        logger.info(f"Claude generated pin content for '{product_name}' (style: {chosen_style})")
+        logger.info(f"Claude roundup content generated (theme: {theme})")
         return {
-            "title": title,
+            "theme":       theme,
+            "subtitle":    subtitle,
+            "title":       title,
             "description": description,
-            "hashtags": hashtags,
-            "style": chosen_style,
+            "hashtags":    hashtags,
+            "cta_text":    cta_text,
         }
 
     except json.JSONDecodeError as e:
-        logger.error(f"Claude returned invalid JSON: {e}. Raw: {raw[:200] if 'raw' in dir() else 'N/A'}")
-        return _template_content(product_name, trend_keyword, category, benable_url, chosen_style)
+        logger.error(f"Claude returned invalid JSON: {e}")
+        return _template_roundup(products, trend_keyword, benable_url, theme_hint)
     except anthropic.APIError as e:
         logger.error(f"Anthropic API error: {e}")
-        return _template_content(product_name, trend_keyword, category, benable_url, chosen_style)
+        return _template_roundup(products, trend_keyword, benable_url, theme_hint)
     except Exception as e:
-        logger.error(f"Unexpected error generating pin content: {e}", exc_info=True)
-        return _template_content(product_name, trend_keyword, category, benable_url, chosen_style)
+        logger.error(f"Roundup content generation failed: {e}", exc_info=True)
+        return _template_roundup(products, trend_keyword, benable_url, theme_hint)
 
 
-def generate_pin_content_variations(
-    product_name: str,
+def _build_roundup_prompt(
+    product_names: list,
     trend_keyword: str,
-    category: str,
     benable_url: str,
-    count: int = 3,
-) -> list[dict]:
-    """
-    Generate multiple style variations of pin content for the same product.
-    Returns a list of content dicts.
-    """
-    styles = random.sample(STYLES, min(count, len(STYLES)))
-    variations = []
-
-    for style in styles:
-        content = generate_pin_content(
-            product_name=product_name,
-            trend_keyword=trend_keyword,
-            category=category,
-            benable_url=benable_url,
-            style=style,
-        )
-        variations.append(content)
-
-    return variations
-
-
-def _build_prompt(
-    product_name: str,
-    trend_keyword: str,
-    category: str,
-    benable_url: str,
-    style: str,
+    theme_hint: Optional[str],
 ) -> str:
-    style_instructions = {
-        "inspirational": (
-            "Write in an inspirational, aspirational tone. Focus on the lifestyle upgrade "
-            "this product brings. Make the reader feel excited about transforming their space or routine."
-        ),
-        "practical": (
-            "Write in a helpful, practical tone. Focus on the problem this product solves "
-            "and its key benefits. Appeal to people who want smart, functional solutions."
-        ),
-        "lifestyle": (
-            "Write in a warm, personal lifestyle tone as if a friend is recommending this. "
-            "Paint a picture of how this fits beautifully into everyday life."
-        ),
-        "gift_guide": (
-            "Write as a gift recommendation. Position this as a perfect gift idea, "
-            "focusing on who would love it and why it makes a thoughtful present."
-        ),
-        "educational": (
-            "Write in an informative, educational tone. Share a useful tip or insight "
-            "related to the product and how it enhances daily life."
-        ),
-    }
+    theme_suggestion = (
+        f'Suggested theme: "{theme_hint}".' if theme_hint
+        else f"Pick the most fitting theme from these options: {', '.join(random.sample(THEME_TEMPLATES, 6))}."
+    )
 
-    instruction = style_instructions.get(style, style_instructions["lifestyle"])
+    products_str = "\n".join(f"- {n}" for n in product_names)
 
-    return f"""Create Pinterest pin content for this product:
+    return f"""Create Pinterest pin content for a roundup collage featuring these products:
 
-Product: {product_name}
-Trending keyword to incorporate: {trend_keyword}
-Category: {category}
-Affiliate link: {benable_url}
-Content style: {style}
+{products_str}
 
-Style instruction: {instruction}
+Trending keyword to weave in: {trend_keyword}
+Affiliate collection link: {benable_url}
+
+{theme_suggestion}
 
 Requirements:
-- Title: Under 100 characters, catchy but not clickbait, can include the trend keyword naturally
-- Description: 150-300 characters, naturally weave in the affiliate link {benable_url}, lifestyle-focused, ends with a subtle call to action
-- Hashtags: 5-10 hashtags as a list, mix of broad (like #homedecor) and specific, no # symbol needed
+- theme: 1-3 words ALL CAPS (shown huge on image, e.g. "WEEKLY FAVS", "MOST LOVED")
+- subtitle: 2-4 words shown smaller below ornament (e.g. "on Amazon", "this week")
+- title: Pinterest pin title, 60-100 chars, catchy, includes the theme naturally
+- description: 200-350 chars, warm and personal, naturally includes {benable_url}, ends with a soft CTA
+- hashtags: 7-10 as a list, mix broad (#amazonfinds) and specific (#{trend_keyword.replace(' ', '')})
+- cta_text: 3-5 words for the pill button on the image (e.g. "shop here ♥")
 
-Respond with ONLY this JSON format, no other text:
+Respond with ONLY this JSON:
 {{
-  "title": "your title here",
-  "description": "your description here including {benable_url}",
-  "hashtags": ["hashtag1", "hashtag2", "hashtag3", "hashtag4", "hashtag5"]
+  "theme": "WEEKLY FAVS",
+  "subtitle": "on Amazon",
+  "title": "...",
+  "description": "...",
+  "hashtags": ["tag1", "tag2"],
+  "cta_text": "shop here ♥"
 }}"""
 
 
-def _template_content(
-    product_name: str,
+def _template_roundup(
+    products: list,
     trend_keyword: str,
-    category: str,
     benable_url: str,
-    style: Optional[str] = None,
+    theme_hint: Optional[str],
 ) -> dict:
-    """Generate template-based content when Claude API is unavailable."""
-    templates = {
-        "home_decor": {
-            "title": f"{product_name} — The Home Upgrade You Need Right Now",
-            "description": (
-                f"Obsessed with this {product_name}! It's giving major {trend_keyword} vibes "
-                f"and completely transformed my space. Grab it here: {benable_url} ✨"
-            ),
-            "hashtags": [
-                "homedecor", "homeaesthetic", "cozyhome", "interiordesign",
-                "homefinds", "amazonfinds", "homeinspo", trend_keyword.replace(" ", ""),
-            ],
-        },
-        "kitchen": {
-            "title": f"This {product_name} Changed My Morning Routine",
-            "description": (
-                f"If you love {trend_keyword}, you NEED this {product_name} in your life. "
-                f"Such a game changer! Find it here: {benable_url} ☕"
-            ),
-            "hashtags": [
-                "kitchenfinds", "kitchenessentials", "homekitchen", "cookinglife",
-                "amazonkitchen", "kitchenaesthetic", trend_keyword.replace(" ", ""),
-            ],
-        },
-        "office": {
-            "title": f"Work From Home Upgrade: {product_name}",
-            "description": (
-                f"Elevate your {trend_keyword} with this amazing {product_name}. "
-                f"My desk has never looked better! Shop here: {benable_url} 💻"
-            ),
-            "hashtags": [
-                "homeoffice", "desksetup", "workfromhome", "officeaesthetic",
-                "deskorganization", "productivity", trend_keyword.replace(" ", ""),
-            ],
-        },
-    }
+    """Fallback template content when Claude is unavailable."""
+    theme    = (theme_hint or random.choice(THEME_TEMPLATES)).upper()
+    subtitle = random.choice(SUBTITLE_OPTIONS)
+    cta_text = random.choice(CTA_OPTIONS)
 
-    category_template = templates.get(
-        category,
-        {
-            "title": f"{product_name} — A Must-Have Find",
-            "description": (
-                f"Loving this {product_name} for {trend_keyword}! "
-                f"It's such a great find — check it out: {benable_url} 🛍️"
-            ),
-            "hashtags": [
-                "amazonfinds", "musthaves", "productreview", "shopping",
-                "lifestyle", "favorites", trend_keyword.replace(" ", ""),
-            ],
-        },
+    names_preview = ", ".join(p.name for p in products[:3])
+    description = (
+        f"Rounding up this week's most-loved finds — {names_preview} and more. "
+        f"These are the things I keep reaching for! "
+        f"All links are on my Benable page: {benable_url} \u2764\ufe0f"
     )
 
+    keyword_tag = trend_keyword.replace(" ", "").lower()
+    hashtags = [
+        "amazonfinds", "weeklyfinds", "mostloved", "productfaves",
+        "shoppingfinds", "musthaves", keyword_tag, "benablelinks",
+        "affiliatelinks", "roundup",
+    ]
+
     return {
-        "title": category_template["title"],
-        "description": category_template["description"],
-        "hashtags": category_template["hashtags"],
-        "style": style or "lifestyle",
+        "theme":       theme,
+        "subtitle":    subtitle,
+        "title":       f"{theme.title()} — {subtitle.title()} ({trend_keyword.title()})",
+        "description": description,
+        "hashtags":    hashtags[:10],
+        "cta_text":    cta_text,
     }
+
+
+def _parse_hashtags(raw) -> list:
+    if isinstance(raw, str):
+        return [h.strip().lstrip("#") for h in raw.split(",") if h.strip()][:10]
+    if isinstance(raw, list):
+        return [str(h).strip().lstrip("#") for h in raw if h][:10]
+    return []

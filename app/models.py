@@ -2,6 +2,16 @@ from datetime import datetime, timezone
 
 from app import db
 
+# ---------------------------------------------------------------------------
+# Association table: a Pin features many Products (many-to-many)
+# ---------------------------------------------------------------------------
+pin_products = db.Table(
+    "pin_products",
+    db.Column("pin_id", db.Integer, db.ForeignKey("pins.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("product_id", db.Integer, db.ForeignKey("products.id", ondelete="CASCADE"), primary_key=True),
+    db.Column("position", db.Integer, default=0),  # display order in the collage
+)
+
 
 class Product(db.Model):
     __tablename__ = "products"
@@ -11,12 +21,10 @@ class Product(db.Model):
     amazon_url = db.Column(db.Text, nullable=False)
     benable_url = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(100), nullable=False)
-    image_url = db.Column(db.Text, nullable=True)
+    image_url = db.Column(db.Text, nullable=True)   # Product image URL used in collage
     price = db.Column(db.String(20), nullable=True)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True, nullable=False)
-
-    pins = db.relationship("Pin", backref="product", lazy=True)
 
     def to_dict(self):
         return {
@@ -46,12 +54,12 @@ class Pin(db.Model):
     STATUS_NEEDS_IMAGE = "needs_image"
 
     id = db.Column(db.Integer, primary_key=True)
-    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=False)
+    theme = db.Column(db.String(255), nullable=True)          # e.g. "Winter Staples Under $100"
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    hashtags = db.Column(db.Text, nullable=True)  # JSON array stored as string
-    image_path = db.Column(db.Text, nullable=True)  # local /tmp path
-    image_url = db.Column(db.Text, nullable=True)   # remote URL if applicable
+    hashtags = db.Column(db.Text, nullable=True)              # JSON array stored as string
+    image_path = db.Column(db.Text, nullable=True)            # local /tmp path
+    image_url = db.Column(db.Text, nullable=True)             # remote URL after posting
     status = db.Column(db.String(50), default="pending", nullable=False)
     scheduled_for = db.Column(db.DateTime, nullable=True)
     posted_at = db.Column(db.DateTime, nullable=True)
@@ -60,10 +68,16 @@ class Pin(db.Model):
     trend_keyword = db.Column(db.String(255), nullable=True)
     style_variant = db.Column(db.String(50), nullable=True)
 
-    def hashtags_list(self):
-        """Return hashtags as a Python list."""
-        import json
+    # Many-to-many: each collage pin features 5-8 products
+    products = db.relationship(
+        "Product",
+        secondary=pin_products,
+        backref=db.backref("pins", lazy=True),
+        order_by=pin_products.c.position,
+    )
 
+    def hashtags_list(self):
+        import json
         if not self.hashtags:
             return []
         try:
@@ -71,11 +85,15 @@ class Pin(db.Model):
         except (json.JSONDecodeError, TypeError):
             return [h.strip() for h in self.hashtags.split(",") if h.strip()]
 
+    def product_names(self):
+        return ", ".join(p.name for p in self.products)
+
     def to_dict(self):
         return {
             "id": self.id,
-            "product_id": self.product_id,
-            "product_name": self.product.name if self.product else None,
+            "theme": self.theme,
+            "products": [p.to_dict() for p in self.products],
+            "product_count": len(self.products),
             "title": self.title,
             "description": self.description,
             "hashtags": self.hashtags_list(),
