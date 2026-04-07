@@ -1,0 +1,10 @@
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+apscheduler==3.10.4
+anthropic==0.34.2
+requests==2.32.3
+pillow==10.4.0
+google-cloud-aiplatform==1.65.0
+google-auth==2.35.0
+python-dotenv==1.0.1
+gunicorn==23.0.0
