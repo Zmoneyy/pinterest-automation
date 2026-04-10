@@ -15,6 +15,10 @@ class Config:
     BENABLE_URL  = os.environ.get("BENABLE_URL", "")
     BRAND_NAME   = os.environ.get("BRAND_NAME", "")   # shown as signature on pin images
 
+    # Amazon product search (via SerpAPI Google Shopping)
+    SERP_API_KEY         = os.environ.get("SERP_API_KEY", "")
+    AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG", "")  # e.g. auragirlcre-20
+
     # AI APIs
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
     GOOGLE_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID", "")
@@ -45,6 +49,7 @@ class Config:
             "pinterest_token": bool(cls.PINTEREST_ACCESS_TOKEN),
             "pinterest_board": bool(cls.PINTEREST_BOARD_ID),
             "benable": bool(cls.BENABLE_URL),
+            "amazon_search": bool(cls.SERP_API_KEY),
             "anthropic": bool(cls.ANTHROPIC_API_KEY),
             "google_vertex": bool(cls.GOOGLE_PROJECT_ID),
             "dashboard_password": bool(cls.DASHBOARD_PASSWORD),

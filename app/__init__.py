@@ -33,7 +33,11 @@ def create_app(config_object=None):
         # Import models so SQLAlchemy knows about them
         from app import models  # noqa: F401
 
-        db.create_all()
+        from sqlalchemy.exc import OperationalError
+        try:
+            db.create_all()
+        except OperationalError:
+            db.session.rollback()
 
         # Seed sample data on first run
         _seed_sample_data()

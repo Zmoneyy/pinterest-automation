@@ -21,7 +21,7 @@ from flask import (
 )
 
 from app import db
-from app.models import Pin, Product, Setting, TrendCache
+from app.models import Pin, Product, ProductCandidate, Setting, TrendCache
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +277,113 @@ def delete_product(product_id):
         db.session.delete(product)
     db.session.commit()
     return redirect(url_for("main.products"))
+
+
+# ── Product discovery (Amazon PA API) ────────────────────────────────────
+
+@bp.route("/products/queue")
+@login_required
+def product_queue():
+    pending   = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).order_by(ProductCandidate.discovered_at.desc()).all()
+    approved  = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_APPROVED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    rejected  = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_REJECTED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected)
+
+
+@bp.route("/products/discover", methods=["POST"])
+@login_required
+def discover_products():
+    """Search Amazon for products based on top saved trends and add to approval queue."""
+    from app.amazon_api import discover_products_for_trends
+    from config import Config
+
+    if not Config.SERP_API_KEY:
+        return redirect(url_for("main.product_queue") + "?error=no_amazon_credentials")
+
+    # Use top 5 saved trends
+    top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
+    if not top_trends:
+        return redirect(url_for("main.product_queue") + "?error=no_trends")
+
+    trend_dicts = [{"keyword": t.keyword, "category": t.category} for t in top_trends]
+    candidates  = discover_products_for_trends(trend_dicts, per_trend=5)
+
+    added = 0
+    for c in candidates:
+        # Skip if we already have this ASIN in queue or active products
+        if c.get("asin"):
+            already = ProductCandidate.query.filter_by(asin=c["asin"]).first()
+            if not already:
+                already = Product.query.filter(Product.amazon_url.contains(c["asin"])).first()
+            if already:
+                continue
+
+        db.session.add(ProductCandidate(
+            name=c["name"],
+            asin=c.get("asin"),
+            amazon_url=c["amazon_url"],
+            category=c.get("category", "general"),
+            image_url=c.get("image_url"),
+            price=c.get("price"),
+            trend_keyword=c.get("trend_keyword"),
+            status=ProductCandidate.STATUS_PENDING,
+        ))
+        added += 1
+
+    db.session.commit()
+    logger.info(f"Product discovery: added {added} new candidates to approval queue")
+    return redirect(url_for("main.product_queue") + f"?added={added}")
+
+
+@bp.route("/products/queue/<int:candidate_id>/approve", methods=["POST"])
+@login_required
+def approve_candidate(candidate_id):
+    from config import Config
+    candidate = ProductCandidate.query.get_or_404(candidate_id)
+
+    product = Product(
+        name=candidate.name,
+        amazon_url=candidate.amazon_url,
+        benable_url=Config.BENABLE_URL or "https://benable.com",
+        category=candidate.category or "general",
+        image_url=candidate.image_url,
+        price=candidate.price,
+        is_active=True,
+    )
+    db.session.add(product)
+    candidate.status = ProductCandidate.STATUS_APPROVED
+    db.session.commit()
+    return redirect(url_for("main.product_queue"))
+
+
+@bp.route("/products/queue/<int:candidate_id>/reject", methods=["POST"])
+@login_required
+def reject_candidate(candidate_id):
+    candidate = ProductCandidate.query.get_or_404(candidate_id)
+    candidate.status = ProductCandidate.STATUS_REJECTED
+    db.session.commit()
+    return redirect(url_for("main.product_queue"))
+
+
+@bp.route("/products/queue/approve-all", methods=["POST"])
+@login_required
+def approve_all_candidates():
+    from config import Config
+    pending = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).all()
+    for candidate in pending:
+        product = Product(
+            name=candidate.name,
+            amazon_url=candidate.amazon_url,
+            benable_url=Config.BENABLE_URL or "https://benable.com",
+            category=candidate.category or "general",
+            image_url=candidate.image_url,
+            price=candidate.price,
+            is_active=True,
+        )
+        db.session.add(product)
+        candidate.status = ProductCandidate.STATUS_APPROVED
+    db.session.commit()
+    return redirect(url_for("main.product_queue"))
 
 
 # ── Setup wizard ──────────────────────────────────────────────────────────

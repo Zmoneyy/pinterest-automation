@@ -165,15 +165,20 @@
     <div class="section-title">Products to Add</div>
     <div class="card">
       <div class="card-body">
-        <p class="text-sm text-muted mb-8">Search these on Amazon and add them to your Products page:</p>
+        <p class="text-sm text-muted mb-8">Categories trending right now:</p>
         <div>
           {% for cat in analysis.get('product_categories', []) %}
             <span class="product-chip">{{ cat }}</span>
           {% endfor %}
         </div>
-        <div class="mt-16">
-          <a href="{{ url_for('main.products') }}" class="btn btn-green btn-full btn-sm">
-            Go Add Products →
+        <div class="mt-16" style="display:flex;flex-direction:column;gap:8px;">
+          <form method="POST" action="{{ url_for('main.discover_products') }}">
+            <button type="submit" class="btn btn-red btn-full btn-sm">
+              Find Amazon Products Automatically
+            </button>
+          </form>
+          <a href="{{ url_for('main.product_queue') }}" class="btn btn-full btn-sm" style="background:var(--gray-100);color:var(--gray-800);text-align:center;">
+            View Approval Queue →
           </a>
         </div>
       </div>

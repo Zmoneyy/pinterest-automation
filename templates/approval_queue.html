@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Product Approval Queue — Pinterest Automation{% endblock %}
+
+{% block head %}
+<style>
+  .queue-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+  }
+
+  .product-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .product-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .product-card-img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: var(--gray-100);
+  }
+
+  .product-card-img-placeholder {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+    color: var(--gray-400);
+  }
+
+  .product-card-body {
+    padding: 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .product-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-800);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .product-card-meta {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 2px;
+  }
+
+  .product-card-price {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--green);
+    margin-top: 2px;
+  }
+
+  .product-card-trend {
+    font-size: 11px;
+    color: var(--red);
+    background: var(--red-light);
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    display: inline-block;
+    margin-top: 4px;
+    text-transform: capitalize;
+  }
+
+  .product-card-actions {
+    display: flex;
+    gap: 6px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--gray-100);
+  }
+
+  .btn-approve {
+    flex: 1;
+    background: var(--green);
+    color: var(--white);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-approve:hover { opacity: 0.85; }
+
+  .btn-reject {
+    flex: 1;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    border: none;
+    border-radius: var(--radius-pill);
+    padding: 8px 0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-reject:hover { background: var(--gray-200); }
+
+  .section-label {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--gray-800);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .badge {
+    font-size: 12px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-pill);
+    background: var(--gray-200);
+    color: var(--gray-600);
+  }
+
+  .badge-red { background: var(--red-light); color: var(--red); }
+  .badge-green { background: var(--green-light); color: var(--green); }
+
+  .done-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--gray-400);
+    padding: 6px 12px;
+    background: var(--gray-100);
+    border-radius: var(--radius-pill);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="queue-header">
+  <h1 class="page-title" style="margin-bottom:0">Product Approval Queue</h1>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <form method="POST" action="{{ url_for('main.discover_products') }}">
+      <button type="submit" class="btn btn-red">
+        Find Amazon Products
+      </button>
+    </form>
+    {% if pending %}
+    <form method="POST" action="{{ url_for('main.approve_all_candidates') }}">
+      <button type="submit" class="btn btn-green">
+        Approve All ({{ pending|length }})
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% set added = request.args.get('added') %}
+{% set error = request.args.get('error') %}
+
+{% if added %}
+  <div class="alert alert-success" style="margin-bottom:16px;">
+    Found {{ added }} new product{{ 's' if added|int != 1 }} from your trending keywords.
+  </div>
+{% elif added == '0' %}
+  <div class="alert" style="margin-bottom:16px;background:var(--orange-light);color:var(--orange);border-radius:var(--radius-sm);padding:12px 16px;">
+    No new products found — all results were already in your queue or product list.
+  </div>
+{% endif %}
+
+{% if error == 'no_amazon_credentials' %}
+  <div class="alert alert-error" style="margin-bottom:16px;">
+    Amazon PA API not configured. Add your Access Key, Secret Key, and Associate Tag in Setup.
+  </div>
+{% elif error == 'no_trends' %}
+  <div class="alert alert-error" style="margin-bottom:16px;">
+    No saved trends found. Upload a Pinterest Trends CSV first, then come back to discover products.
+  </div>
+{% endif %}
+
+<!-- Pending -->
+{% if pending %}
+<div class="section-label">
+  Waiting for review
+  <span class="badge badge-red">{{ pending|length }}</span>
+</div>
+<div class="product-grid">
+  {% for c in pending %}
+  <div class="product-card">
+    {% if c.image_url %}
+      <img src="{{ c.image_url }}" alt="{{ c.name }}" class="product-card-img" loading="lazy"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+      <div class="product-card-img-placeholder" style="display:none;">🛍️</div>
+    {% else %}
+      <div class="product-card-img-placeholder">🛍️</div>
+    {% endif %}
+
+    <div class="product-card-body">
+      <div class="product-card-name">{{ c.name }}</div>
+      {% if c.price %}
+        <div class="product-card-price">{{ c.price }}</div>
+      {% endif %}
+      <div class="product-card-meta">{{ c.category or 'general' }}</div>
+      {% if c.trend_keyword %}
+        <span class="product-card-trend">{{ c.trend_keyword }}</span>
+      {% endif %}
+    </div>
+
+    <div class="product-card-actions">
+      <form method="POST" action="{{ url_for('main.approve_candidate', candidate_id=c.id) }}" style="flex:1;display:flex;">
+        <button type="submit" class="btn-approve">Approve</button>
+      </form>
+      <form method="POST" action="{{ url_for('main.reject_candidate', candidate_id=c.id) }}" style="flex:1;display:flex;">
+        <button type="submit" class="btn-reject">Reject</button>
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty" style="margin-bottom:32px;">
+  <div class="empty-icon">🛍️</div>
+  <div class="empty-text">No products waiting for review</div>
+  <p class="text-sm text-muted mt-8">
+    Click <strong>Find Amazon Products</strong> to search Amazon based on your trending keywords.
+  </p>
+</div>
+{% endif %}
+
+<!-- Approved -->
+{% if approved %}
+<div class="section-label">
+  Recently approved
+  <span class="badge badge-green">{{ approved|length }}</span>
+</div>
+<div class="product-grid">
+  {% for c in approved %}
+  <div class="product-card" style="opacity:0.7;">
+    {% if c.image_url %}
+      <img src="{{ c.image_url }}" alt="{{ c.name }}" class="product-card-img" loading="lazy">
+    {% else %}
+      <div class="product-card-img-placeholder">✅</div>
+    {% endif %}
+    <div class="product-card-body">
+      <div class="product-card-name">{{ c.name }}</div>
+      {% if c.price %}<div class="product-card-price">{{ c.price }}</div>{% endif %}
+      <span class="done-pill" style="margin-top:4px;">✅ Added to products</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Rejected -->
+{% if rejected %}
+<div class="section-label" style="margin-top:8px;">
+  Rejected
+  <span class="badge">{{ rejected|length }}</span>
+</div>
+<div class="product-grid">
+  {% for c in rejected %}
+  <div class="product-card" style="opacity:0.45;">
+    {% if c.image_url %}
+      <img src="{{ c.image_url }}" alt="{{ c.name }}" class="product-card-img" loading="lazy">
+    {% else %}
+      <div class="product-card-img-placeholder">❌</div>
+    {% endif %}
+    <div class="product-card-body">
+      <div class="product-card-name">{{ c.name }}</div>
+      {% if c.price %}<div class="product-card-price">{{ c.price }}</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

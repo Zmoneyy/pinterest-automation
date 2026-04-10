@@ -125,6 +125,43 @@ class TrendCache(db.Model):
         return f"<TrendCache {self.keyword} ({self.category})>"
 
 
+class ProductCandidate(db.Model):
+    """Amazon products discovered automatically, waiting for user approval."""
+
+    __tablename__ = "product_candidates"
+
+    STATUS_PENDING  = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(255), nullable=False)
+    asin          = db.Column(db.String(20), nullable=True)
+    amazon_url    = db.Column(db.Text, nullable=False)
+    category      = db.Column(db.String(100), nullable=True)
+    image_url     = db.Column(db.Text, nullable=True)
+    price         = db.Column(db.String(20), nullable=True)
+    trend_keyword = db.Column(db.String(255), nullable=True)
+    status        = db.Column(db.String(20), default="pending", nullable=False)
+    discovered_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "asin": self.asin,
+            "amazon_url": self.amazon_url,
+            "category": self.category,
+            "image_url": self.image_url,
+            "price": self.price,
+            "trend_keyword": self.trend_keyword,
+            "status": self.status,
+        }
+
+    def __repr__(self):
+        return f"<ProductCandidate {self.id}: {self.name} [{self.status}]>"
+
+
 class Setting(db.Model):
     """Key-value settings table for persisting OAuth tokens and config."""
 
