@@ -416,6 +416,116 @@ def pinterest_callback():
         return redirect(url_for("main.setup") + "?error=token_exchange_failed")
 
 
+# ── Trends ───────────────────────────────────────────────────────────────
+
+import csv
+import io as _io
+
+
+def _guess_category(keyword: str) -> str:
+    kw = keyword.lower()
+    if any(w in kw for w in ["nail", "manicure", "pedicure", "polish"]):
+        return "beauty"
+    if any(w in kw for w in ["outfit", "fashion", "style", "dress", "clothes", "wear", "y2k"]):
+        return "fashion"
+    if any(w in kw for w in ["home", "decor", "room", "bedroom", "kitchen", "desk", "office"]):
+        return "home_decor"
+    if any(w in kw for w in ["hair", "skin", "makeup", "beauty", "glow", "highlight"]):
+        return "beauty"
+    if any(w in kw for w in ["tech", "electronic", "gadget", "phone", "charger"]):
+        return "tech"
+    return "general"
+
+
+@bp.route("/trends")
+@login_required
+def trends():
+    cached = TrendCache.query.order_by(TrendCache.score.desc(), TrendCache.cached_at.desc()).limit(50).all()
+    return render_template("trends.html", trends=cached, analysis=None)
+
+
+@bp.route("/trends/upload", methods=["POST"])
+@login_required
+def trends_upload():
+    from app.ai_writer import analyze_trends_for_brand
+    from config import Config
+
+    files = request.files.getlist("csv_files")
+    if not files or all(f.filename == "" for f in files):
+        return redirect(url_for("main.trends") + "?error=no_files")
+
+    all_trends = {}
+
+    for f in files:
+        if not f.filename:
+            continue
+        content = f.read().decode("utf-8-sig", errors="replace")
+        reader = csv.reader(_io.StringIO(content))
+
+        header_found = False
+        for row in reader:
+            if not row:
+                continue
+            if row[0].strip() == "Rank":
+                header_found = True
+                continue
+            if header_found and row[0].strip().isdigit():
+                if len(row) < 5:
+                    continue
+                keyword = row[1].strip().lower()
+                if not keyword:
+                    continue
+                try:
+                    def _pct(s):
+                        return s.replace("%", "").replace("+", "").replace(",", "").strip()
+                    weekly  = _pct(row[2])
+                    monthly = _pct(row[3])
+                    yearly  = _pct(row[4])
+                    # latest score = last non-empty column
+                    score = 0.0
+                    for cell in reversed(row[5:]):
+                        if cell.strip():
+                            score = float(cell.strip())
+                            break
+                    if keyword not in all_trends or score > all_trends[keyword]["score"]:
+                        all_trends[keyword] = {
+                            "keyword": keyword,
+                            "weekly_change": weekly,
+                            "monthly_change": monthly,
+                            "yearly_change": yearly,
+                            "score": score,
+                        }
+                except (ValueError, IndexError):
+                    continue
+
+    if not all_trends:
+        return redirect(url_for("main.trends") + "?error=parse_failed")
+
+    sorted_trends = sorted(all_trends.values(), key=lambda x: x["score"], reverse=True)[:50]
+
+    analysis = None
+    try:
+        analysis = analyze_trends_for_brand(
+            trends=sorted_trends[:20],
+            brand_name=Config.BRAND_NAME or "Aura Girl Essentials",
+            benable_url=Config.BENABLE_URL or "https://benable.com",
+        )
+    except Exception as e:
+        logger.error(f"Trend analysis failed: {e}")
+
+    TrendCache.query.delete()
+    for t in sorted_trends:
+        db.session.add(TrendCache(
+            keyword=t["keyword"],
+            category=_guess_category(t["keyword"]),
+            score=t["score"],
+        ))
+    db.session.commit()
+
+    cached = TrendCache.query.order_by(TrendCache.score.desc()).limit(50).all()
+    return render_template("trends.html", trends=cached, analysis=analysis)
+
+
 # ── Health check ──────────────────────────────────────────────────────────
 
 @bp.route("/health")

@@ -201,6 +201,73 @@ def _template_roundup(
     }
 
 
+def analyze_trends_for_brand(trends: list, brand_name: str, benable_url: str) -> dict:
+    """
+    Use Claude to analyze Pinterest trends and return pin opportunities for the brand.
+    trends: list of {keyword, weekly_change, monthly_change, yearly_change, score}
+    """
+    from config import Config
+
+    if not Config.ANTHROPIC_API_KEY:
+        return _template_trend_analysis(trends, brand_name)
+
+    trends_text = "\n".join(
+        f"- {t['keyword']} (monthly: +{t.get('monthly_change','?')}%, score: {t.get('score',0):.0f})"
+        for t in trends[:20]
+    )
+
+    prompt = f"""You are a Pinterest content strategist for "{brand_name}", an Amazon affiliate brand
+targeting women who love affordable aesthetic finds. The affiliate collection is at {benable_url}.
+
+Here are the top trending Pinterest searches right now:
+{trends_text}
+
+Analyze these and return JSON with:
+- top_opportunities: 5 best trends that match Amazon-purchasable products for our brand
+- pin_ideas: 5 specific pin ideas (title + theme), each tied to a trending keyword
+- product_categories: list of specific product types to add (e.g. "gel nail starter kits", "press-on nails")
+
+Respond with ONLY this JSON:
+{{
+  "top_opportunities": [
+    {{"trend": "spring nails", "reason": "...", "monthly_change": "200%"}}
+  ],
+  "pin_ideas": [
+    {{"trend": "spring nails", "title": "Spring Nail Inspo You Can Actually Get on Amazon", "theme": "SPRING NAILS"}}
+  ],
+  "product_categories": ["gel nail starter kits", "press-on nails spring colors"]
+}}"""
+
+    try:
+        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-3-5-haiku-20241022",
+            max_tokens=1000,
+            system="You are an expert Pinterest content strategist. Always respond with valid JSON only.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        return json.loads(raw)
+    except Exception as e:
+        logger.error(f"Trend analysis failed: {e}")
+        return _template_trend_analysis(trends, brand_name)
+
+
+def _template_trend_analysis(trends: list, brand_name: str) -> dict:
+    top = trends[:5]
+    return {
+        "top_opportunities": [
+            {"trend": t["keyword"], "reason": "High search volume", "monthly_change": str(t.get("monthly_change", "N/A"))}
+            for t in top
+        ],
+        "pin_ideas": [
+            {"trend": t["keyword"], "title": f"Best {t['keyword'].title()} Finds on Amazon", "theme": t["keyword"].upper()[:20]}
+            for t in top
+        ],
+        "product_categories": [t["keyword"] for t in top[:8]],
+    }
+
+
 def _parse_hashtags(raw) -> list:
     if isinstance(raw, str):
         return [h.strip().lstrip("#") for h in raw.split(",") if h.strip()][:10]

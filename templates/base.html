@@ -322,6 +322,10 @@
          class="nav-link {% if request.endpoint and 'product' in request.endpoint %}active{% endif %}">
         Products
       </a>
+      <a href="{{ url_for('main.trends') }}"
+         class="nav-link {% if request.endpoint and 'trend' in request.endpoint %}active{% endif %}">
+        Trends
+      </a>
       <a href="{{ url_for('main.setup') }}"
          class="nav-link {% if request.endpoint == 'main.setup' %}active{% endif %}">
         Setup

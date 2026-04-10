@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Trends — Pinterest Automation{% endblock %}
+
+{% block head %}
+<style>
+  .upload-zone {
+    border: 2px dashed var(--gray-200);
+    border-radius: var(--radius);
+    padding: 40px 24px;
+    text-align: center;
+    background: var(--white);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--red);
+    background: var(--red-light);
+  }
+  .upload-icon { font-size: 40px; margin-bottom: 12px; }
+  .upload-label { font-size: 16px; font-weight: 600; color: var(--gray-800); margin-bottom: 6px; }
+  .upload-sub { font-size: 13px; color: var(--gray-400); }
+  .file-list { margin-top: 12px; font-size: 13px; color: var(--gray-600); }
+
+  .opportunity-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .opportunity-rank {
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--red);
+    min-width: 32px;
+    line-height: 1;
+    padding-top: 2px;
+  }
+  .opportunity-body { flex: 1; }
+  .opportunity-keyword { font-size: 16px; font-weight: 700; color: var(--gray-800); text-transform: capitalize; }
+  .opportunity-reason { font-size: 13px; color: var(--gray-600); margin-top: 3px; }
+  .opportunity-change { font-size: 12px; font-weight: 600; color: var(--green); background: var(--green-light); padding: 2px 8px; border-radius: var(--radius-pill); }
+
+  .pin-idea-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    box-shadow: var(--shadow);
+    margin-bottom: 12px;
+    border-left: 3px solid var(--red);
+  }
+  .pin-idea-theme { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--red); margin-bottom: 4px; }
+  .pin-idea-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
+  .pin-idea-trend { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+  .product-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--gray-100);
+    border-radius: var(--radius-pill);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--gray-800);
+    margin: 4px;
+    text-transform: capitalize;
+  }
+
+  .trend-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .trend-row:last-child { border-bottom: none; }
+  .trend-rank { font-size: 13px; color: var(--gray-400); min-width: 28px; text-align: right; }
+  .trend-name { flex: 1; font-size: 14px; font-weight: 500; text-transform: capitalize; }
+  .trend-score {
+    width: 80px;
+    height: 6px;
+    background: var(--gray-100);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .trend-score-fill { height: 100%; background: var(--red); border-radius: 99px; }
+  .trend-cat { font-size: 11px; color: var(--gray-400); min-width: 70px; text-align: right; }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    margin-top: 28px;
+    color: var(--gray-800);
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Pinterest Trends</h1>
+
+{% set error = request.args.get('error') %}
+{% if error == 'no_files' %}
+  <div class="alert alert-error">No files selected. Please choose at least one CSV file.</div>
+{% elif error == 'parse_failed' %}
+  <div class="alert alert-error">Couldn't read the CSV. Make sure you're uploading a Pinterest Trends export.</div>
+{% endif %}
+
+<!-- Upload form -->
+<div class="card">
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('main.trends_upload') }}" enctype="multipart/form-data" id="upload-form">
+      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()">
+        <div class="upload-icon">📈</div>
+        <div class="upload-label">Upload Pinterest Trends CSV</div>
+        <div class="upload-sub">Select one or more files — drag & drop works too</div>
+        <div class="file-list" id="file-list"></div>
+      </div>
+      <input type="file" id="csv-input" name="csv_files" multiple accept=".csv" style="display:none">
+      <div class="mt-16">
+        <button type="submit" class="btn btn-red btn-full" id="analyze-btn" disabled>
+          Analyze Trends
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if analysis %}
+<!-- Claude Analysis Results -->
+<div class="section-title">Top Opportunities for Aura Girl Essentials</div>
+{% for opp in analysis.get('top_opportunities', []) %}
+<div class="opportunity-card">
+  <div class="opportunity-rank">#{{ loop.index }}</div>
+  <div class="opportunity-body">
+    <div class="flex flex-center gap-8">
+      <div class="opportunity-keyword">{{ opp.trend }}</div>
+      {% if opp.monthly_change %}
+        <span class="opportunity-change">+{{ opp.monthly_change }}% / mo</span>
+      {% endif %}
+    </div>
+    <div class="opportunity-reason">{{ opp.reason }}</div>
+  </div>
+</div>
+{% endfor %}
+
+<div class="grid-2">
+  <div>
+    <div class="section-title">Pin Ideas</div>
+    {% for idea in analysis.get('pin_ideas', []) %}
+    <div class="pin-idea-card">
+      <div class="pin-idea-theme">{{ idea.theme }}</div>
+      <div class="pin-idea-title">{{ idea.title }}</div>
+      <div class="pin-idea-trend">trending: {{ idea.trend }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <div>
+    <div class="section-title">Products to Add</div>
+    <div class="card">
+      <div class="card-body">
+        <p class="text-sm text-muted mb-8">Search these on Amazon and add them to your Products page:</p>
+        <div>
+          {% for cat in analysis.get('product_categories', []) %}
+            <span class="product-chip">{{ cat }}</span>
+          {% endfor %}
+        </div>
+        <div class="mt-16">
+          <a href="{{ url_for('main.products') }}" class="btn btn-green btn-full btn-sm">
+            Go Add Products →
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<hr>
+{% endif %}
+
+<!-- All trends table -->
+{% if trends %}
+<div class="section-title">
+  {% if analysis %}All Trends{% else %}Saved Trends ({{ trends|length }}){% endif %}
+</div>
+<div class="card">
+  <div class="card-body">
+    {% for t in trends %}
+    <div class="trend-row">
+      <div class="trend-rank">{{ loop.index }}</div>
+      <div class="trend-name">{{ t.keyword }}</div>
+      <div class="trend-score">
+        <div class="trend-score-fill" style="width: {{ [t.score, 100]|min }}%"></div>
+      </div>
+      <div class="trend-cat">{{ t.category or '' }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% elif not analysis %}
+<div class="empty">
+  <div class="empty-icon">📊</div>
+  <div class="empty-text">Upload a Pinterest Trends CSV to get started</div>
+  <p class="text-sm text-muted mt-8">Export from trends.pinterest.com → select Growing Trends → Download CSV</p>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const input = document.getElementById('csv-input');
+  const zone  = document.getElementById('upload-zone');
+  const btn   = document.getElementById('analyze-btn');
+  const list  = document.getElementById('file-list');
+
+  function updateFiles(files) {
+    if (!files.length) return;
+    const names = Array.from(files).map(f => f.name).join(', ');
+    list.textContent = `Selected: ${names}`;
+    btn.disabled = false;
+  }
+
+  input.addEventListener('change', () => updateFiles(input.files));
+
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const dt = new DataTransfer();
+    Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+    input.files = dt.files;
+    updateFiles(input.files);
+  });
+
+  document.getElementById('upload-form').addEventListener('submit', () => {
+    btn.disabled = true;
+    btn.textContent = 'Analyzing...';
+  });
+</script>
+{% endblock %}
