@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 MIN_PRODUCTS_PER_PIN = 5
 MAX_PRODUCTS_PER_PIN = 8
-PINS_PER_DAY = 3
+PINS_PER_DAY = 5
 
 
 def run_daily_pin_generation():

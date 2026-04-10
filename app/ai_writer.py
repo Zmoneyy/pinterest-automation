@@ -138,6 +138,10 @@ def _build_roundup_prompt(
 
     products_str = "\n".join(f"- {n}" for n in product_names)
 
+    import datetime
+    year = datetime.datetime.now().year
+    next_year = year + 1
+
     return f"""Create Pinterest pin content for a roundup collage featuring these products:
 
 {products_str}
@@ -150,8 +154,8 @@ Affiliate collection link: {benable_url}
 Requirements:
 - theme: 1-3 words ALL CAPS (shown huge on image, e.g. "WEEKLY FAVS", "MOST LOVED")
 - subtitle: 2-4 words shown smaller below ornament (e.g. "on Amazon", "this week")
-- title: Pinterest pin title, 60-100 chars, catchy, includes the theme naturally
-- description: 200-350 chars, warm and personal, naturally includes {benable_url}, ends with a soft CTA
+- title: KEYWORD-STUFFED with comma-separated search terms, max 100 chars. Format: "[Keyword Inspo {year}], [keyword variation], [keyword phrase], [keyword for {next_year}]". Example: "Spring Nail Inspo {year}, Spring Nail Ideas, Spring Nail Art, Spring Nails {next_year}"
+- description: 200-300 chars. Start with direct CTA ("Visit the link attached to this pin to grab these finds!"), then "This pin is about [keyword], [keyword variation], [keyword variation].", then end with a soft CTA like "You should definitely check these out for [occasion/season]."
 - hashtags: 7-10 as a list, mix broad (#amazonfinds) and specific (#{trend_keyword.replace(' ', '')})
 - cta_text: 3-5 words for the pill button on the image (e.g. "shop here ♥")
 
@@ -191,10 +195,16 @@ def _template_roundup(
         "affiliatelinks", "roundup",
     ]
 
+    import datetime
+    year = datetime.datetime.now().year
+    next_year = year + 1
+    kw = trend_keyword.title()
+    kw_tag = trend_keyword.replace(" ", "").lower()
+
     return {
         "theme":       theme,
         "subtitle":    subtitle,
-        "title":       f"{theme.title()} — {subtitle.title()} ({trend_keyword.title()})",
+        "title":       f"{kw} Inspo {year}, {kw} Ideas, {kw} Finds, {kw} for {next_year}",
         "description": description,
         "hashtags":    hashtags[:10],
         "cta_text":    cta_text,
@@ -216,16 +226,23 @@ def analyze_trends_for_brand(trends: list, brand_name: str, benable_url: str) ->
         for t in trends[:20]
     )
 
+    import datetime
+    year = datetime.datetime.now().year
+    next_year = year + 1
+
     prompt = f"""You are a Pinterest content strategist for "{brand_name}", an Amazon affiliate brand
 targeting women who love affordable aesthetic finds. The affiliate collection is at {benable_url}.
+
+Pinterest is a SEARCH ENGINE — pins have a long shelf life (months of traffic from one good pin).
+Focus on trends with the HIGHEST monthly change % — these are "Growing Trends" with fastest momentum.
 
 Here are the top trending Pinterest searches right now:
 {trends_text}
 
 Analyze these and return JSON with:
-- top_opportunities: 5 best trends that match Amazon-purchasable products for our brand
-- pin_ideas: 5 specific pin ideas (title + theme), each tied to a trending keyword
-- product_categories: list of specific product types to add (e.g. "gel nail starter kits", "press-on nails")
+- top_opportunities: 5 best trends with highest monthly growth that match Amazon-purchasable products. Prioritize trends with 50%+ monthly change.
+- pin_ideas: 5 specific pin ideas. Use keyword-stuffed titles with comma-separated variations and year. Format: "[Keyword Inspo {year}], [keyword variation], [keyword phrase], [keyword for {next_year}]"
+- product_categories: list of specific product types to search on Amazon (e.g. "gel nail starter kits", "press-on nails")
 
 Respond with ONLY this JSON:
 {{
@@ -233,7 +250,7 @@ Respond with ONLY this JSON:
     {{"trend": "spring nails", "reason": "...", "monthly_change": "200%"}}
   ],
   "pin_ideas": [
-    {{"trend": "spring nails", "title": "Spring Nail Inspo You Can Actually Get on Amazon", "theme": "SPRING NAILS"}}
+    {{"trend": "spring nails", "title": "Spring Nail Inspo {year}, Spring Nail Ideas, Spring Nail Art, Spring Nails {next_year}", "theme": "SPRING NAILS"}}
   ],
   "product_categories": ["gel nail starter kits", "press-on nails spring colors"]
 }}"""
