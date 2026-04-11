@@ -276,7 +276,13 @@ def _load_product_image(product, max_w: int, max_h: int):
         import requests
         from PIL import Image
 
-        resp = requests.get(product.image_url, timeout=8, stream=True)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.amazon.com/",
+        }
+        resp = requests.get(product.image_url, timeout=8, stream=True, headers=headers)
         resp.raise_for_status()
         img = Image.open(io.BytesIO(resp.content)).convert("RGBA")
         img = _remove_white_background(img)
