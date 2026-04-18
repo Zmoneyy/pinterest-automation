@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+
+{% block title %}Upload Pin — PinBot{% endblock %}
+
+{% block head %}
+<style>
+  .upload-grid {
+    display: grid;
+    gap: 20px;
+    grid-template-columns: 1fr;
+  }
+  @media (min-width: 700px) {
+    .upload-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  .drop-zone {
+    border: 2px dashed var(--gray-200);
+    border-radius: var(--radius);
+    background: var(--white);
+    aspect-ratio: 2/3;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--red);
+    background: var(--red-light);
+  }
+  .drop-zone img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .drop-zone-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    color: var(--gray-400);
+    text-align: center;
+    padding: 24px;
+    pointer-events: none;
+  }
+  .drop-zone-label .icon { font-size: 40px; }
+  .drop-zone-label .hint { font-size: 13px; line-height: 1.5; }
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+    border: none;
+    padding: 0;
+  }
+
+  .copy-section {
+    background: var(--white);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .niche-benable {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 4px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="page-title">Upload Pin</h1>
+<p style="color:var(--gray-600);margin-bottom:24px;font-size:14px;">
+  Upload your pin image from Pin Perfect Pro, paste in the copy, and publish directly to Pinterest.
+</p>
+
+<div class="upload-grid">
+
+  {# ── Left: image ── #}
+  <div>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="imageInput" accept="image/*">
+      <div class="drop-zone-label" id="dropLabel">
+        <span class="icon">🖼️</span>
+        <span style="font-weight:600;color:var(--gray-600);">Tap to upload pin image</span>
+        <span class="hint">PNG or JPG from Pin Perfect Pro<br>2:3 portrait recommended</span>
+      </div>
+      <img id="previewImg" style="display:none;">
+    </div>
+  </div>
+
+  {# ── Right: copy + publish ── #}
+  <div class="copy-section">
+
+    <div class="form-group" style="margin-bottom:0">
+      <label for="nicheSelect">Niche</label>
+      <select id="nicheSelect" onchange="updateBenableUrl()">
+        <option value="beauty">Beauty & Nails</option>
+        <option value="home_decor">Home Decor</option>
+        <option value="fitness">Wellness & Fitness</option>
+      </select>
+      <p class="niche-benable" id="benablePreview">→ benable.com/AuraGirlFinds/beauty-faves</p>
+    </div>
+
+    {# ── Paste all at once ── #}
+    <div class="form-group" style="margin-bottom:0">
+      <label for="pasteAll">Paste everything from Pin Perfect Pro</label>
+      <textarea id="pasteAll" rows="5" placeholder="Paste your full Pin Perfect Pro output here — we'll automatically pull out the title, description, hashtags, and board name for you."></textarea>
+      <p id="parseHint" style="font-size:12px;color:var(--gray-400);margin-top:4px;display:none;">✓ Parsed! Review the fields below before posting.</p>
+    </div>
+
+    {# ── Auto-filled fields (always visible) ── #}
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="form-group" style="margin-bottom:0">
+        <label for="titleInput">Title</label>
+        <input type="text" id="titleInput" placeholder="Auto-filled from paste, or type here">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label for="descInput">Description</label>
+        <textarea id="descInput" rows="4" placeholder="Auto-filled from paste, or type here"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label for="hashtagsInput">Hashtags</label>
+        <textarea id="hashtagsInput" rows="2" placeholder="Auto-filled from paste, or type here"></textarea>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label for="boardInput">Pinterest Board Name</label>
+        <input type="text" id="boardInput" placeholder="Auto-filled from paste, or type here">
+      </div>
+    </div>
+
+    <hr style="margin:4px 0;">
+
+    <button class="btn btn-red btn-full" id="publishBtn" onclick="publishPin()">
+      🚀 Post to Pinterest
+    </button>
+
+    <p id="publishStatus" style="font-size:13px;color:var(--gray-400);text-align:center;display:none;"></p>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const BENABLE_URLS = {
+    beauty:     'benable.com/AuraGirlEssentials/beauty-faves',
+    home_decor: 'benable.com/AuraGirlEssentials/glam-home',
+    fitness:    'benable.com/AuraGirlEssentials/wellness-picks',
+  };
+
+  const BENABLE_FULL = {
+    beauty:     'https://benable.com/AuraGirlEssentials/beauty-faves',
+    home_decor: 'https://benable.com/AuraGirlEssentials/glam-home',
+    fitness:    'https://benable.com/AuraGirlEssentials/wellness-picks',
+  };
+
+  function updateBenableUrl() {
+    const niche = document.getElementById('nicheSelect').value;
+    document.getElementById('benablePreview').textContent = '→ ' + BENABLE_URLS[niche];
+  }
+
+  // ── Image preview ──
+  let uploadedImageBase64 = null;
+  const imageInput = document.getElementById('imageInput');
+  const previewImg = document.getElementById('previewImg');
+  const dropLabel  = document.getElementById('dropLabel');
+  const dropZone   = document.getElementById('dropZone');
+
+  imageInput.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      uploadedImageBase64 = e.target.result;
+      previewImg.src = e.target.result;
+      previewImg.style.display = 'block';
+      dropLabel.style.display  = 'none';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      imageInput.files = dt.files;
+      imageInput.dispatchEvent(new Event('change'));
+    }
+  });
+
+  // ── Parse Pin Perfect Pro output and auto-fill fields ──
+  function extractSection(text, ...labels) {
+    for (const label of labels) {
+      // Capture everything after the label heading until the next markdown heading (## ) or end
+      const regex = new RegExp(label + '[^\\n]*\\n([\\s\\S]*?)(?=\\n#{1,3}\\s|$)', 'i');
+      const m = text.match(regex);
+      if (m) {
+        return m[1]
+          .replace(/\*+/g, '')       // strip bold markers
+          .replace(/^---+$/gm, '')   // strip horizontal rules
+          .trim();
+      }
+    }
+    return '';
+  }
+
+  function parsePaste(text) {
+    const title    = extractSection(text, 'Pin Title', '📌');
+    const desc     = extractSection(text, 'Pin Description', '📝');
+    const hashtags = extractSection(text, 'Hashtags', '🔥');
+    const board    = extractSection(text, 'Board Name', '📂');
+    return { title, desc, hashtags, board };
+  }
+
+  document.getElementById('pasteAll').addEventListener('input', function() {
+    const text = this.value.trim();
+    if (!text) return;
+    const parsed = parsePaste(text);
+    if (parsed.title)    document.getElementById('titleInput').value    = parsed.title;
+    if (parsed.desc)     document.getElementById('descInput').value     = parsed.desc;
+    if (parsed.hashtags) document.getElementById('hashtagsInput').value = parsed.hashtags;
+    if (parsed.board)    document.getElementById('boardInput').value    = parsed.board;
+    if (parsed.title || parsed.desc) {
+      document.getElementById('parseHint').style.display = 'block';
+    }
+  });
+
+  // ── Publish ──
+  async function publishPin() {
+    if (!uploadedImageBase64) {
+      alert('Please upload a pin image first.');
+      return;
+    }
+
+    const niche    = document.getElementById('nicheSelect').value;
+    const link     = BENABLE_FULL[niche];
+    const title    = document.getElementById('titleInput').value.trim();
+    const desc     = document.getElementById('descInput').value.trim();
+    const hashtags = document.getElementById('hashtagsInput').value.trim();
+    const board    = document.getElementById('boardInput').value.trim();
+
+    if (!title) { alert('Please fill in the title (or paste your Pin Perfect Pro output above).'); return; }
+
+    // Build full description: body + benable link + hashtags
+    let fullDesc = desc;
+    if (!fullDesc.includes('benable.com')) {
+      fullDesc += '\n\nShop the list → ' + link;
+    }
+    if (hashtags) {
+      fullDesc += '\n\n' + hashtags;
+    }
+
+    const btn    = document.getElementById('publishBtn');
+    const status = document.getElementById('publishStatus');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Publishing…';
+    status.style.display = 'block';
+    status.style.color = 'var(--gray-400)';
+    status.textContent = 'Uploading and posting to Pinterest…';
+
+    try {
+      const resp = await fetch('/upload-pin/publish', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image_base64: uploadedImageBase64,
+          title,
+          description: fullDesc,
+          board_name: board,
+          link,
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Publish failed');
+
+      status.style.color = 'var(--green)';
+      status.textContent = '✓ Posted to Pinterest!';
+      btn.innerHTML = '✓ Posted!';
+
+    } catch(err) {
+      status.style.color = 'var(--red)';
+      status.textContent = '✗ ' + err.message;
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Post to Pinterest';
+    }
+  }
+</script>
+{% endblock %}

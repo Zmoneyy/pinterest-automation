@@ -68,21 +68,30 @@ def _handle_rate_limit(response: requests.Response) -> bool:
 
 def get_trending_keywords(region: str = "US", limit: int = 50) -> list[dict]:
     """
-    Fetch trending keywords from Pinterest.
-    Returns list of dicts: [{keyword, score, category}, ...]
+    Fetch trending keywords. Tries Pinterest Trends API first, falls back to
+    SerpAPI Google Trends, then hardcoded evergreen keywords.
+    Returns list of dicts: [{keyword, score, category, monthly_change}, ...]
     """
     token = _get_access_token()
-    if not token:
-        logger.warning("No Pinterest access token available for trend fetch.")
-        return _fallback_trends()
+    if token:
+        result = _get_pinterest_trends(token, region, limit)
+        if result:
+            return result
 
-    url = f"{PINTEREST_API_BASE}/trends/trending_keywords"
-    params = {
-        "region": region,
-        "trend_type": "growing",
-        "limit": limit,
-        "include_keywords": True,
-    }
+    # Fall back to SerpAPI Google Trends
+    result = _get_serpapi_trends(limit)
+    if result:
+        return result
+
+    logger.warning("All trend sources failed — using evergreen fallback.")
+    return _fallback_trends()
+
+
+def _get_pinterest_trends(token: str, region: str, limit: int) -> list[dict]:
+    """Fetch trends from Pinterest official Trends API v5."""
+    # Correct endpoint: /trends/keywords/{region}/top/{trend_type}
+    url = f"{PINTEREST_API_BASE}/trends/keywords/{region}/top/growing"
+    params = {"limit": min(limit, 50)}
 
     try:
         resp = requests.get(url, headers=_headers(token), params=params, timeout=15)
@@ -92,30 +101,118 @@ def get_trending_keywords(region: str = "US", limit: int = 50) -> list[dict]:
 
         if resp.status_code == 401:
             logger.error("Pinterest token invalid or expired.")
-            return _fallback_trends()
+            return []
 
         if resp.status_code != 200:
             logger.error(f"Pinterest trends API error {resp.status_code}: {resp.text[:200]}")
-            return _fallback_trends()
+            return []
 
         data = resp.json()
         trends = []
         for item in data.get("trends", []):
             kw = item.get("keyword") or item.get("normalized_keyword", "")
-            if kw:
-                trends.append(
-                    {
-                        "keyword": kw,
-                        "score": item.get("growth_rate", 0),
-                        "category": _guess_category(kw),
-                    }
-                )
-        logger.info(f"Fetched {len(trends)} trending keywords from Pinterest.")
+            if not kw:
+                continue
+            ts = item.get("time_series", [])
+            # pct_growth_mom from time series if available
+            monthly = item.get("pct_growth_mom", item.get("growth_rate", 0))
+            trends.append({
+                "keyword": kw,
+                "score": float(monthly or 0),
+                "category": _guess_category(kw),
+                "monthly_change": monthly,
+                "weekly_change": item.get("pct_growth_wow", 0),
+                "source": "pinterest",
+            })
+        logger.info(f"Fetched {len(trends)} trends from Pinterest API.")
         return trends
 
     except requests.RequestException as e:
         logger.error(f"Pinterest trends request failed: {e}")
-        return _fallback_trends()
+        return []
+
+
+def _get_serpapi_trends(limit: int = 50) -> list[dict]:
+    """Fetch trending keywords via SerpAPI Google Trends."""
+    try:
+        from config import Config
+        if not Config.SERP_API_KEY:
+            return []
+
+        # Specific brand-relevant queries to seed trend discovery
+        seed_queries = [
+            ("home decor 2026", "home_decor"),
+            ("amazon home finds", "home_decor"),
+            ("beauty skincare amazon", "beauty"),
+            ("nail art trends 2026", "beauty"),
+            ("amazon fashion finds", "fashion"),
+            ("kitchen organization amazon", "kitchen"),
+            ("desk setup aesthetic", "office"),
+            ("cozy home aesthetic", "home_decor"),
+        ]
+
+        trends = []
+        for query, default_category in seed_queries:
+            resp = requests.get(
+                "https://serpapi.com/search",
+                params={
+                    "engine": "google_trends",
+                    "q": query,
+                    "data_type": "RELATED_QUERIES",
+                    "api_key": Config.SERP_API_KEY,
+                },
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                continue
+
+            data = resp.json()
+            rising = data.get("related_queries", {}).get("rising", [])
+            for item in rising[:4]:
+                kw = item.get("query", "")
+                value = item.get("extracted_value", 0)
+                if not kw:
+                    continue
+                detected_cat = _guess_category(kw)
+                # Only include if keyword is brand-relevant (not pure news/tech/food)
+                if detected_cat == "general" and not _is_brand_relevant(kw):
+                    continue
+                trends.append({
+                    "keyword": kw,
+                    "score": float(value or 0),
+                    "category": detected_cat if detected_cat != "general" else default_category,
+                    "monthly_change": value,
+                    "weekly_change": 0,
+                    "source": "google_trends",
+                })
+
+        # Deduplicate by keyword, highest score wins
+        seen = set()
+        unique = []
+        for t in sorted(trends, key=lambda x: x["score"], reverse=True):
+            if t["keyword"] not in seen:
+                seen.add(t["keyword"])
+                unique.append(t)
+
+        logger.info(f"Fetched {len(unique)} trends from SerpAPI Google Trends.")
+        return unique[:limit]
+
+    except Exception as e:
+        logger.error(f"SerpAPI trends fetch failed: {e}")
+        return []
+
+
+def _is_brand_relevant(keyword: str) -> bool:
+    """Check if a keyword is relevant to our brand (home, beauty, fashion, lifestyle)."""
+    kw = keyword.lower()
+    brand_signals = [
+        "amazon", "find", "haul", "aesthetic", "cozy", "decor", "home",
+        "beauty", "skincare", "makeup", "hair", "nail", "fashion", "outfit",
+        "style", "kitchen", "organiz", "desk", "room", "spring", "summer",
+        "fall", "winter", "gift", "under $", "affordable", "budget", "diy",
+        "trending", "must have", "favorite", "weekly", "routine",
+    ]
+    return any(s in kw for s in brand_signals)
 
 
 def _guess_category(keyword: str) -> str:
@@ -127,7 +224,7 @@ def _guess_category(keyword: str) -> str:
         (["office", "desk", "work", "study", "organize"], "office"),
         (["fashion", "outfit", "style", "clothing", "wear", "dress"], "fashion"),
         (["beauty", "skincare", "makeup", "hair", "nail"], "beauty"),
-        (["fitness", "workout", "gym", "yoga", "health", "wellness"], "fitness"),
+        (["fitness", "workout", "gym", "yoga", "health", "wellness", "supplement", "collagen", "vitamin", "glow", "spf", "sunscreen", "tanning", "self care", "selfcare"], "fitness"),
         (["travel", "vacation", "trip", "adventure", "explore"], "travel"),
         (["garden", "plant", "outdoor", "nature", "flower"], "garden"),
         (["pet", "dog", "cat", "animal"], "pets"),

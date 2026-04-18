@@ -23,18 +23,33 @@ def run_daily_pin_generation():
     from app import db
     from app.ai_writer import generate_roundup_content
     from app.imagen_api import generate_collage_image
-    from app.models import Pin, Product, TrendCache
+    from app.models import Pin, Product, ProductCandidate, TrendCache
     from app.pinterest_api import get_trending_keywords
     from config import Config
 
     logger.info("=== Daily pin generation started ===")
 
-    # 1. Fetch and cache trending keywords
-    trends = get_trending_keywords()
+    # 1. Run full keyword research (autocomplete + trends + seasonal) → caches to TrendCache
+    try:
+        from app.keyword_research import run_keyword_research
+        run_keyword_research()
+        logger.info("Keyword research complete.")
+    except Exception as e:
+        logger.error(f"Keyword research failed (non-fatal): {e}", exc_info=True)
+
+    # 2. Fetch trending keywords — Pinterest session scraper first, then fallback
+    from app.pinterest_trends_scraper import fetch_pinterest_trends
+    trends = fetch_pinterest_trends()
+    if not trends:
+        logger.info("Pinterest session scrape empty — falling back to Pinterest API / SerpAPI.")
+        trends = get_trending_keywords()
     if trends:
         _cache_trends(trends, db, TrendCache)
 
-    # 2. Pull all active products
+    # 2. Auto-discover new products (trending + evergreen) into approval queue
+    _auto_discover_products(db, ProductCandidate, trends)
+
+    # 3. Pull all active products, grouped by category
     all_products = Product.query.filter_by(is_active=True).all()
     if len(all_products) < 3:
         logger.warning(
@@ -42,10 +57,30 @@ def run_daily_pin_generation():
         )
         return
 
+    # Group products by the 3 core niches
+    CORE_NICHES = ["beauty", "home_decor", "fitness"]
+    by_category: dict = {}
+    for p in all_products:
+        cat = p.category if p.category in CORE_NICHES else "beauty"
+        by_category.setdefault(cat, []).append(p)
+
+    # Only use categories with enough products for a pin
+    viable_categories = [
+        (cat, by_category[cat]) for cat in CORE_NICHES
+        if cat in by_category and len(by_category[cat]) >= MIN_PRODUCTS_PER_PIN
+    ]
+
+    # Fall back to all products if no single category has enough
+    if not viable_categories:
+        logger.warning("No niche has 5+ products — using all products.")
+        viable_categories = [("mixed", all_products)]
+
     pins_created = 0
     for i in range(PINS_PER_DAY):
         try:
-            _generate_one_collage_pin(i, all_products, trends, db, Pin,
+            # Rotate through viable categories
+            category, category_products = viable_categories[i % len(viable_categories)]
+            _generate_one_collage_pin(i, category_products, trends, db, Pin,
                                        generate_roundup_content, generate_collage_image, Config)
             pins_created += 1
         except Exception as e:
@@ -95,6 +130,8 @@ def _generate_one_collage_pin(
         cta_text=content.get("cta_text", "shop here \u2764\ufe0f"),
     )
 
+    # generate_collage_image returns a GCS URL or local path
+    is_url = image_path and image_path.startswith("http")
     pin_status = Pin.STATUS_PENDING if image_path else Pin.STATUS_NEEDS_IMAGE
 
     pin = Pin(
@@ -102,7 +139,8 @@ def _generate_one_collage_pin(
         title=content["title"],
         description=content["description"],
         hashtags=json.dumps(content.get("hashtags", [])),
-        image_path=image_path,
+        image_path=None if is_url else image_path,
+        image_url=image_path if is_url else None,
         status=pin_status,
         trend_keyword=trend_keyword,
         style_variant="roundup_collage",
@@ -188,16 +226,28 @@ def _post_pin(pin, db, post_pin_fn, now):
 
 
 def _pick_trend_keyword(products: list, trends: list) -> str:
-    """Pick a trending keyword relevant to the product mix."""
-    if not trends:
-        return "amazon finds"
-
-    # Count category frequency across products
+    """
+    Pick the best trending keyword for the product mix.
+    Priority: keyword research cache (TrendCache) → session trends → fallback.
+    """
+    # Determine dominant category from products
     cat_counts: dict = {}
     for p in products:
         cat_counts[p.category] = cat_counts.get(p.category, 0) + 1
+    dominant_cat = max(cat_counts, key=cat_counts.get) if cat_counts else "beauty"
 
-    dominant_cat = max(cat_counts, key=cat_counts.get)
+    # 1. Try keyword research cache first (highest quality — real Pinterest searches)
+    try:
+        from app.keyword_research import get_top_keywords_for_niche
+        cached = get_top_keywords_for_niche(dominant_cat, limit=10)
+        if cached:
+            return random.choice(cached[:5])
+    except Exception:
+        pass
+
+    # 2. Fall back to session/API trends list
+    if not trends:
+        return "amazon finds"
 
     category_map = {
         "home_decor": ["home_decor", "general"],
@@ -217,6 +267,62 @@ def _pick_trend_keyword(products: list, trends: list) -> str:
     pool        = relevant[:5] or sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:5]
 
     return random.choice(pool)["keyword"] if pool else "lifestyle finds"
+
+
+def _auto_discover_products(db, ProductCandidate, trends: list):
+    """
+    Auto-discover products daily: trending keywords + evergreen categories.
+    Adds new candidates to approval queue (user still approves before they go into pins).
+    """
+    try:
+        from app.amazon_api import discover_evergreen_products, discover_products_for_trends
+
+        all_candidates = []
+
+        # Trending products (top 3 trends only to save API calls)
+        if trends:
+            top_trends = sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:3]
+            trend_candidates = discover_products_for_trends(top_trends, per_trend=3)
+            all_candidates.extend(trend_candidates)
+
+        # Evergreen products (rotates through all categories)
+        evergreen = discover_evergreen_products(per_query=3)
+        all_candidates.extend(evergreen)
+
+        added = 0
+        for c in all_candidates:
+            asin = c.get("asin")
+            if asin:
+                exists = ProductCandidate.query.filter_by(asin=asin).first()
+                if not exists:
+                    from app.models import Product
+                    exists = Product.query.filter(Product.amazon_url.contains(asin)).first()
+            else:
+                exists = ProductCandidate.query.filter_by(name=c["name"]).first()
+
+            if exists:
+                continue
+
+            db.session.add(ProductCandidate(
+                name=c["name"],
+                asin=asin,
+                amazon_url=c["amazon_url"],
+                category=c.get("category", "general"),
+                image_url=c.get("image_url"),
+                price=c.get("price"),
+                trend_keyword=c.get("trend_keyword"),
+                status=ProductCandidate.STATUS_PENDING,
+            ))
+            added += 1
+
+        db.session.commit()
+        logger.info(f"Auto-discovery: added {added} new products to approval queue.")
+    except Exception as e:
+        logger.error(f"Auto product discovery failed: {e}", exc_info=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
 
 
 def _cache_trends(trends: list, db, TrendCache):

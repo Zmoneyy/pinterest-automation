@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+.gitignore
+*.md
+*.pyc
+__pycache__/
+*.pyo
+.env
+.env.*
+*.db
+*.sqlite
+docs/

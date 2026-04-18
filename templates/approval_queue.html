@@ -163,18 +163,11 @@
 <div class="queue-header">
   <h1 class="page-title" style="margin-bottom:0">Product Approval Queue</h1>
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <form method="POST" action="{{ url_for('main.discover_products') }}">
-      <button type="submit" class="btn btn-red">
-        Find Amazon Products
-      </button>
+    <form method="POST" action="{{ url_for('main.discover_products') }}" style="display:flex;gap:8px;align-items:center;">
+      <input type="text" name="keyword" placeholder="e.g. cozy home decor, kitchen organization..."
+        style="padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:14px;width:260px;">
+      <button type="submit" class="btn btn-red">Find Amazon Products</button>
     </form>
-    {% if pending %}
-    <form method="POST" action="{{ url_for('main.approve_all_candidates') }}">
-      <button type="submit" class="btn btn-green">
-        Approve All ({{ pending|length }})
-      </button>
-    </form>
-    {% endif %}
   </div>
 </div>
 
@@ -268,7 +261,12 @@
     <div class="product-card-body">
       <div class="product-card-name">{{ c.name }}</div>
       {% if c.price %}<div class="product-card-price">{{ c.price }}</div>{% endif %}
-      <span class="done-pill" style="margin-top:4px;">✅ Added to products</span>
+    </div>
+    <div class="product-card-actions">
+      <span class="done-pill" style="flex:1;">✅ Added</span>
+      <form method="POST" action="{{ url_for('main.undo_candidate', candidate_id=c.id) }}" style="display:flex;">
+        <button type="submit" class="btn-reject" style="font-size:12px;padding:6px 10px;">Undo</button>
+      </form>
     </div>
   </div>
   {% endfor %}

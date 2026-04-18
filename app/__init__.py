@@ -39,8 +39,8 @@ def create_app(config_object=None):
         except OperationalError:
             db.session.rollback()
 
-        # Seed sample data on first run
-        _seed_sample_data()
+        # Remove sample placeholder products
+        _remove_sample_data()
 
         # Register routes
         from app.routes import bp
@@ -53,98 +53,31 @@ def create_app(config_object=None):
     return app
 
 
-def _seed_sample_data():
-    """
-    Seed sample products on first run.
-    These are placeholders — replace them with your real Benable links.
-    Each product should have an image_url pointing to the Amazon product image
-    so the collage generator can download and compose it.
-    """
+def _remove_sample_data():
+    """Remove placeholder sample products that were seeded on first run."""
     from app.models import Product
 
-    if Product.query.count() > 0:
-        return
-
-    samples = [
-        Product(
-            name="Cozy Knit Throw Blanket",
-            amazon_url="https://www.amazon.com/dp/B09EXAMPLE1",
-            benable_url="https://benable.com/example",
-            category="home_decor",
-            price="39.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder1.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Ceramic Pour-Over Coffee Set",
-            amazon_url="https://www.amazon.com/dp/B08EXAMPLE2",
-            benable_url="https://benable.com/example",
-            category="kitchen",
-            price="54.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder2.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Minimalist Desk Organizer",
-            amazon_url="https://www.amazon.com/dp/B07EXAMPLE3",
-            benable_url="https://benable.com/example",
-            category="office",
-            price="28.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder3.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Fluffy Crossband Slippers",
-            amazon_url="https://www.amazon.com/dp/B06EXAMPLE4",
-            benable_url="https://benable.com/example",
-            category="fashion",
-            price="22.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder4.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="EOS Cashmere Body Oil",
-            amazon_url="https://www.amazon.com/dp/B05EXAMPLE5",
-            benable_url="https://benable.com/example",
-            category="beauty",
-            price="12.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder5.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Linen Pillow Cover Set",
-            amazon_url="https://www.amazon.com/dp/B04EXAMPLE6",
-            benable_url="https://benable.com/example",
-            category="home_decor",
-            price="24.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder6.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Marble Wireless Charger",
-            amazon_url="https://www.amazon.com/dp/B03EXAMPLE7",
-            benable_url="https://benable.com/example",
-            category="tech",
-            price="19.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder7.jpg",
-            is_active=True,
-        ),
-        Product(
-            name="Gold Acrylic Tray",
-            amazon_url="https://www.amazon.com/dp/B02EXAMPLE8",
-            benable_url="https://benable.com/example",
-            category="home_decor",
-            price="16.99",
-            image_url="https://images-na.ssl-images-amazon.com/images/I/placeholder8.jpg",
-            is_active=True,
-        ),
+    sample_names = [
+        "Cozy Knit Throw Blanket",
+        "Ceramic Pour-Over Coffee Set",
+        "Minimalist Desk Organizer",
+        "Fluffy Crossband Slippers",
+        "EOS Cashmere Body Oil",
+        "Linen Pillow Cover Set",
+        "Marble Wireless Charger",
+        "Gold Acrylic Tray",
     ]
 
-    for s in samples:
-        db.session.add(s)
+    removed = 0
+    for name in sample_names:
+        p = Product.query.filter_by(name=name).first()
+        if p:
+            db.session.delete(p)
+            removed += 1
 
-    db.session.commit()
-    logger.info(f"Seeded {len(samples)} sample products. Replace with your real product links!")
+    if removed:
+        db.session.commit()
+        logger.info(f"Removed {removed} sample placeholder products.")
 
 
 def _start_scheduler(app):

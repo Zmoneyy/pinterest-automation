@@ -80,12 +80,22 @@ def generate_roundup_content(
 
     product_names = [p.name for p in products[:8]]
 
-    prompt = _build_roundup_prompt(product_names, trend_keyword, benable_url, theme_hint)
+    # Get keyword-first title suggestion from keyword research engine
+    try:
+        from app.keyword_research import get_keyword_driven_title_prompt
+        # Infer niche from products
+        categories = [p.category for p in products[:8] if hasattr(p, "category") and p.category]
+        niche = max(set(categories), key=categories.count) if categories else "beauty"
+        title_hint = get_keyword_driven_title_prompt(trend_keyword, niche)
+    except Exception:
+        title_hint = None
+
+    prompt = _build_roundup_prompt(product_names, trend_keyword, benable_url, theme_hint, title_hint)
 
     try:
         client  = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
         message = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=600,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
@@ -97,8 +107,8 @@ def generate_roundup_content(
         theme       = str(data.get("theme", "Weekly Favs")).strip().upper()[:40]
         subtitle    = str(data.get("subtitle", "on Amazon")).strip()[:30]
         title       = str(data.get("title", theme)).strip()[:100]
-        description = str(data.get("description", "")).strip()[:500]
-        hashtags    = _parse_hashtags(data.get("hashtags", []))
+        description = str(data.get("description", "")).strip()[:250]
+        hashtags    = _parse_hashtags(data.get("hashtags", []))[:4]
         cta_text    = str(data.get("cta_text", "shop here \u2764\ufe0f")).strip()[:30]
 
         if not title or not description:
@@ -130,6 +140,7 @@ def _build_roundup_prompt(
     trend_keyword: str,
     benable_url: str,
     theme_hint: Optional[str],
+    title_hint: Optional[str] = None,
 ) -> str:
     theme_suggestion = (
         f'Suggested theme: "{theme_hint}".' if theme_hint
@@ -138,31 +149,62 @@ def _build_roundup_prompt(
 
     products_str = "\n".join(f"- {n}" for n in product_names)
 
-    return f"""Create Pinterest pin content for a roundup collage featuring these products:
+    from app.seasonal import get_season_context_for_claude
+    season_context = get_season_context_for_claude()
 
-{products_str}
+    title_guidance = (
+        f'Title inspiration (rewrite this in your own words, keyword-first): "{title_hint}"'
+        if title_hint
+        else "title: 60-100 chars, catchy and specific to the trend, keyword-first, do NOT list product names"
+    )
 
-Trending keyword to weave in: {trend_keyword}
-Affiliate collection link: {benable_url}
+    return f"""Create Pinterest pin content for a roundup collage. The products are all related to: {trend_keyword}
 
 {theme_suggestion}
 
+Trending keyword: {trend_keyword}
+Affiliate link: {benable_url}
+{season_context}
+
 Requirements:
-- theme: 1-3 words ALL CAPS (shown huge on image, e.g. "WEEKLY FAVS", "MOST LOVED")
-- subtitle: 2-4 words shown smaller below ornament (e.g. "on Amazon", "this week")
-- title: Pinterest pin title, 60-100 chars, catchy, includes the theme naturally
-- description: 200-350 chars, warm and personal, naturally includes {benable_url}, ends with a soft CTA
-- hashtags: 7-10 as a list, mix broad (#amazonfinds) and specific (#{trend_keyword.replace(' ', '')})
-- cta_text: 3-5 words for the pill button on the image (e.g. "shop here ♥")
+
+TITLE ({title_guidance}):
+- Must start with the keyword or close variation — keyword-first
+- Include the year (e.g. "2026") to signal freshness
+- 60-100 chars
+- Example format: "Summer Nail Sets for 2026 — Best Finds on Amazon Right Now"
+
+THEME (text shown on the image):
+- 1-3 words ALL CAPS, transformation-focused not feature-focused
+- Focus on how it makes you feel or look, not what it is
+- Examples: "GLOW UP", "SUMMER NAILS", "COZY VIBES", "REFRESH YOUR SPACE"
+
+SUBTITLE:
+- 2-4 words (e.g. "on Amazon", "this week", "for 2026")
+
+DESCRIPTION — follow this 3-part formula exactly:
+1. Keyword-rich sentence: "This pin is about [keyword-rich phrase including trend_keyword and variations]"
+2. Benefit sentence: explain WHY these products are worth it (transformation, value, quality)
+3. Soft CTA: "Visit the link to shop +" or "Click the link to see the full list +"
+- Total: 180-250 chars. End with: {benable_url}
+- Example: "This pin is about the best summer nail sets on Amazon for 2026. Affordable press-on designs that actually last all week. Visit the link to shop + {benable_url}"
+
+HASHTAGS: exactly 3-4
+- 1 broad: #amazonfinds or #amazonnails or #amazonhome
+- 1 trend-specific: based on "{trend_keyword}" (e.g. #{trend_keyword.replace(' ', '')})
+- 1 niche/product-type specific
+- NO generic tags: #weeklyfinds #mostloved #productfaves #shoppingfinds
+
+CTA TEXT: 3-5 words for image button (e.g. "shop the list ♥")
 
 Respond with ONLY this JSON:
 {{
-  "theme": "WEEKLY FAVS",
+  "theme": "SUMMER NAILS",
   "subtitle": "on Amazon",
   "title": "...",
   "description": "...",
-  "hashtags": ["tag1", "tag2"],
-  "cta_text": "shop here ♥"
+  "hashtags": ["tag1", "tag2", "tag3"],
+  "cta_text": "shop the list ♥"
 }}"""
 
 
@@ -177,18 +219,18 @@ def _template_roundup(
     subtitle = random.choice(SUBTITLE_OPTIONS)
     cta_text = random.choice(CTA_OPTIONS)
 
-    names_preview = ", ".join(p.name for p in products[:3])
     description = (
-        f"Rounding up this week's most-loved finds — {names_preview} and more. "
-        f"These are the things I keep reaching for! "
-        f"All links are on my Benable page: {benable_url} \u2764\ufe0f"
+        f"This pin is about the best {trend_keyword} finds on Amazon for 2026. "
+        f"Affordable, aesthetic, and actually worth it. "
+        f"Visit the link to shop + {benable_url}"
     )
 
     keyword_tag = trend_keyword.replace(" ", "").lower()
     hashtags = [
-        "amazonfinds", "weeklyfinds", "mostloved", "productfaves",
-        "shoppingfinds", "musthaves", keyword_tag, "benablelinks",
-        "affiliatelinks", "roundup",
+        "amazonfinds",
+        keyword_tag,
+        keyword_tag + "amazon",
+        "affordablefinds",
     ]
 
     return {
@@ -241,7 +283,7 @@ Respond with ONLY this JSON:
     try:
         client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
         message = client.messages.create(
-            model="claude-3-5-haiku-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=1000,
             system="You are an expert Pinterest content strategist. Always respond with valid JSON only.",
             messages=[{"role": "user", "content": prompt}],
@@ -266,6 +308,63 @@ def _template_trend_analysis(trends: list, brand_name: str) -> dict:
         ],
         "product_categories": [t["keyword"] for t in top[:8]],
     }
+
+
+def generate_upload_pin_copy(niche: str, keyword: str = "") -> dict:
+    """
+    Generate Pinterest copy for a manually uploaded pin image.
+    Returns title, description, and hashtags based on niche + keyword.
+    """
+    from config import Config
+
+    niche_context = {
+        "beauty": "beauty, nails, skincare, makeup, and self-care products on Amazon",
+        "home_decor": "glam home decor, furniture, and interior styling finds on Amazon",
+        "fitness": "wellness, fitness, and self-care products on Amazon",
+    }
+
+    context = niche_context.get(niche, niche_context["beauty"])
+    keyword_line = f"The pin is focused on this keyword/topic: {keyword}." if keyword else ""
+    benable_url = Config.BENABLE_URL
+
+    prompt = f"""You are a Pinterest expert writing copy for an affiliate pin for the brand "Aura Girl Essentials".
+The pin features {context}.
+{keyword_line}
+
+Write Pinterest copy following the Money Making Pin Formula:
+1. TITLE: Keyword-first, include the year (2026), max 8 words, mixed case (not all caps)
+2. DESCRIPTION: 3 parts — (a) keyword-rich sentence about what's in the pin, (b) benefit to the viewer, (c) soft CTA ending with this Benable link: {benable_url}
+3. HASHTAGS: 10-15 relevant Pinterest hashtags (no # symbol, comma separated)
+
+Respond with ONLY this JSON:
+{{
+  "title": "...",
+  "description": "...",
+  "hashtags": "amazonfinds, beautyfaves, ..."
+}}"""
+
+    try:
+        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system="You are a Pinterest content expert. Always respond with valid JSON only.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        data = json.loads(message.content[0].text.strip())
+        return {
+            "title": data.get("title", "Amazon Finds You'll Love 2026"),
+            "description": data.get("description", ""),
+            "hashtags": data.get("hashtags", "amazonfinds, auragirlfinds"),
+        }
+    except Exception as e:
+        logger.error(f"Upload pin copy generation failed: {e}")
+        keyword_title = keyword.title() if keyword else "Amazon Finds"
+        return {
+            "title": f"{keyword_title} You Need in 2026",
+            "description": f"Obsessed with these {context}! Perfect for anyone who loves affordable, aesthetic finds. Shop all links here: {benable_url}",
+            "hashtags": "amazonfinds, auragirlfinds, affordablefinds, pinterestfinds, amazonfavorites",
+        }
 
 
 def _parse_hashtags(raw) -> list:

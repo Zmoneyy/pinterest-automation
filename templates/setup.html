@@ -358,6 +358,69 @@
   {% endif %}
 </div>
 
+{# ── Pinterest Trends Cookie ── #}
+<div class="setup-section">
+  <h2>📈 Pinterest Trends (Session Cookie)</h2>
+
+  {# Status badge #}
+  {% if cookie_status.status == 'valid' %}
+    <div class="check-item ok" style="margin-bottom:16px;">
+      <div class="check-icon" style="background:#d1fae5;color:#065f46;">✓</div>
+      <div>
+        <strong>Cookie active</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">{{ cookie_status.message }}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btn-refresh-trends" style="margin-left:auto;">↻ Refresh Now</button>
+    </div>
+  {% elif cookie_status.status == 'expired' %}
+    <div class="check-item bad" style="margin-bottom:16px;">
+      <div class="check-icon" style="background:#fee2e2;color:#991b1b;">✕</div>
+      <div>
+        <strong>Cookie expired</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Paste a fresh cookie below to restore Pinterest Trends access.</div>
+      </div>
+    </div>
+  {% else %}
+    <div class="check-item" style="margin-bottom:16px;border-color:#e5e7eb;background:#f9fafb;">
+      <div class="check-icon" style="background:#f3f4f6;color:#6b7280;">?</div>
+      <div>
+        <strong>No cookie stored</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Add your Pinterest session cookie below to unlock real Pinterest Trends data.</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <details style="margin-bottom:16px;">
+    <summary style="cursor:pointer;font-size:14px;font-weight:600;color:var(--gray-700);">How to get your cookie (2 min)</summary>
+    <ol style="font-size:13px;color:var(--gray-600);margin-top:10px;padding-left:20px;line-height:1.8;">
+      <li>Open <a href="https://trends.pinterest.com" target="_blank">trends.pinterest.com</a> in Chrome (make sure you're logged in)</li>
+      <li>Press <strong>Cmd+Option+I</strong> → click <strong>Network</strong> tab → click <strong>Fetch/XHR</strong></li>
+      <li>Reload the page (Cmd+R)</li>
+      <li>Click any <strong>ApiResource</strong> request in the list</li>
+      <li>In the right panel → <strong>Headers</strong> → scroll to <strong>Request Headers</strong></li>
+      <li>Find the <strong>cookie</strong> row → copy the entire value</li>
+      <li>Paste it below and click Save</li>
+    </ol>
+    <p style="font-size:12px;color:var(--gray-500);margin-top:8px;">Cookie usually lasts 1–4 weeks. You'll see a red "expired" notice when it needs refreshing.</p>
+  </details>
+
+  <form method="POST" action="{{ url_for('main.save_pinterest_cookie') }}">
+    <textarea
+      name="pinterest_session_cookie"
+      rows="4"
+      placeholder="Paste your full Pinterest cookie string here..."
+      style="width:100%;font-family:monospace;font-size:12px;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;resize:vertical;"
+    >{{ stored_cookie }}</textarea>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+      <button type="submit" class="btn btn-red">Save Cookie</button>
+      {% if cookie_status.status == 'valid' %}
+        <span style="font-size:13px;color:var(--gray-500);">{{ cookie_status.trend_count }} trend collections available</span>
+      {% endif %}
+    </div>
+  </form>
+  <div id="refresh-result" style="margin-top:10px;font-size:14px;"></div>
+</div>
+
 {# ── Manual controls ── #}
 <div class="setup-section">
   <h2>🔧 Manual Controls</h2>
@@ -397,5 +460,11 @@
 
   document.getElementById('btn-post').addEventListener('click', () =>
     runAction('{{ url_for("main.api_post_due") }}', 'btn-post', 'trigger-result'));
+
+  const btnRefresh = document.getElementById('btn-refresh-trends');
+  if (btnRefresh) {
+    btnRefresh.addEventListener('click', () =>
+      runAction('{{ url_for("main.refresh_trends") }}', 'btn-refresh-trends', 'refresh-result'));
+  }
 </script>
 {% endblock %}

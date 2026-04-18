@@ -179,14 +179,15 @@ def swap_pin(pin_id):
             cta_text=content.get("cta_text", "shop here \u2764\ufe0f"),
         )
 
+        is_url = image_path and image_path.startswith("http")
         pin.theme        = content["theme"]
         pin.title        = content["title"]
         pin.description  = content["description"]
         pin.hashtags     = json.dumps(content.get("hashtags", []))
         pin.products     = new_products
         pin.status       = Pin.STATUS_PENDING if image_path else Pin.STATUS_NEEDS_IMAGE
-        if image_path:
-            pin.image_path = image_path
+        pin.image_path   = None if is_url else image_path
+        pin.image_url    = image_path if is_url else None
         pin.scheduled_for = None
 
         db.session.commit()
@@ -209,6 +210,20 @@ def approve_all_pending():
         pin.status = Pin.STATUS_APPROVED
     db.session.commit()
     logger.info(f"Bulk approved {len(pending)} pins.")
+    return redirect(url_for("main.dashboard"))
+
+
+@bp.route("/pins/clear-pending", methods=["POST"])
+def clear_pending_pins():
+    """Delete all pending pins in bulk."""
+    pending = Pin.query.filter(
+        Pin.status.in_([Pin.STATUS_PENDING, Pin.STATUS_NEEDS_IMAGE])
+    ).all()
+    count = len(pending)
+    for pin in pending:
+        db.session.delete(pin)
+    db.session.commit()
+    logger.info(f"Bulk deleted {count} pending pins.")
     return redirect(url_for("main.dashboard"))
 
 
@@ -300,12 +315,17 @@ def discover_products():
     if not Config.SERP_API_KEY:
         return redirect(url_for("main.product_queue") + "?error=no_amazon_credentials")
 
-    # Use top 5 saved trends
-    top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
-    if not top_trends:
-        return redirect(url_for("main.product_queue") + "?error=no_trends")
+    # Allow manual keyword search from the form
+    manual_keyword = request.form.get("keyword", "").strip()
+    if manual_keyword:
+        trend_dicts = [{"keyword": manual_keyword, "category": "general"}]
+    else:
+        # Use top 5 saved trends
+        top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
+        if not top_trends:
+            return redirect(url_for("main.product_queue") + "?error=no_trends")
+        trend_dicts = [{"keyword": t.keyword, "category": t.category} for t in top_trends]
 
-    trend_dicts = [{"keyword": t.keyword, "category": t.category} for t in top_trends]
     candidates  = discover_products_for_trends(trend_dicts, per_trend=5)
 
     added = 0
@@ -315,6 +335,13 @@ def discover_products():
             already = ProductCandidate.query.filter_by(asin=c["asin"]).first()
             if not already:
                 already = Product.query.filter(Product.amazon_url.contains(c["asin"])).first()
+            if already:
+                continue
+        else:
+            # No ASIN — deduplicate by name
+            already = ProductCandidate.query.filter_by(name=c["name"]).first()
+            if not already:
+                already = Product.query.filter_by(name=c["name"]).first()
             if already:
                 continue
 
@@ -365,6 +392,20 @@ def reject_candidate(candidate_id):
     return redirect(url_for("main.product_queue"))
 
 
+@bp.route("/products/queue/<int:candidate_id>/undo", methods=["POST"])
+@login_required
+def undo_candidate(candidate_id):
+    """Undo an approval — remove the Product record and put candidate back to pending."""
+    candidate = ProductCandidate.query.get_or_404(candidate_id)
+    if candidate.asin:
+        product = Product.query.filter(Product.amazon_url.contains(candidate.asin)).first()
+        if product:
+            db.session.delete(product)
+    candidate.status = ProductCandidate.STATUS_PENDING
+    db.session.commit()
+    return redirect(url_for("main.product_queue"))
+
+
 @bp.route("/products/queue/approve-all", methods=["POST"])
 @login_required
 def approve_all_candidates():
@@ -411,6 +452,16 @@ def setup():
     trend_count  = TrendCache.query.count()
     latest_trend = TrendCache.query.order_by(TrendCache.cached_at.desc()).first()
 
+    # Pinterest session cookie status
+    cookie_status = {"status": "missing", "message": "No cookie stored"}
+    try:
+        from app.pinterest_trends_scraper import check_cookie_status
+        cookie_status = check_cookie_status()
+    except Exception:
+        pass
+
+    stored_cookie = Setting.get("pinterest_session_cookie", "")
+
     return render_template(
         "setup.html",
         config_status=config_status,
@@ -418,7 +469,64 @@ def setup():
         boards=boards,
         trend_count=trend_count,
         latest_trend=latest_trend,
+        cookie_status=cookie_status,
+        stored_cookie=stored_cookie,
     )
+
+
+# ── Pinterest session cookie ──────────────────────────────────────────────
+
+@bp.route("/setup/pinterest-cookie", methods=["POST"])
+@login_required
+def save_pinterest_cookie():
+    cookie = request.form.get("pinterest_session_cookie", "").strip()
+    if cookie:
+        Setting.set("pinterest_session_cookie", cookie)
+        logger.info("Pinterest session cookie updated.")
+    return redirect(url_for("main.setup"))
+
+
+@bp.route("/api/shopping-trends")
+@login_required
+def api_shopping_trends():
+    """Return Pinterest Shopping Trends (product categories ranked by outbound clicks)."""
+    try:
+        from app.pinterest_trends_scraper import _get_session_cookies, HEADERS, PINTEREST_TRENDS_URL
+        import requests as _requests, json as _json, datetime as _dt
+
+        cookies = _get_session_cookies()
+        if not cookies:
+            return jsonify({"ok": False, "error": "No cookie stored"})
+
+        params = {
+            "source_url": "/shopping/?country=US",
+            "data": _json.dumps({
+                "options": {"url": "/ads/v4/trends/shopping/product_categories", "data": {}},
+                "context": {}
+            }),
+            "_": str(int(_dt.datetime.now().timestamp() * 1000)),
+        }
+
+        resp = _requests.get(PINTEREST_TRENDS_URL, headers=HEADERS, cookies=cookies, params=params, timeout=15)
+        raw = resp.json()
+        resource_data = raw.get("resource_response", {}).get("data")
+        return jsonify({"ok": True, "status": resp.status_code, "type": type(resource_data).__name__, "data": resource_data})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/api/refresh-trends", methods=["POST"])
+@login_required
+def refresh_trends():
+    try:
+        from app.pinterest_trends_scraper import fetch_pinterest_trends
+        trends = fetch_pinterest_trends()
+        if trends:
+            return jsonify({"ok": True, "count": len(trends), "message": f"Fetched {len(trends)} trend keywords from Pinterest."})
+        return jsonify({"ok": False, "message": "No trends returned — cookie may be expired."})
+    except Exception as e:
+        logger.error(f"Trend refresh failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 # ── API endpoints ─────────────────────────────────────────────────────────
@@ -438,15 +546,184 @@ def api_pins():
     return jsonify({"pins": [p.to_dict() for p in pins], "total": query.count()})
 
 
+@bp.route("/api/create-pin", methods=["POST"])
+@login_required
+def api_create_pin():
+    """Create a single themed pin from user-chosen theme, category, and keyword."""
+    try:
+        from app.ai_writer import generate_roundup_content
+        from app.imagen_api import generate_collage_image
+        from app.models import Pin
+        from config import Config
+
+        data     = request.get_json() or {}
+        theme    = data.get("theme", "").strip() or None
+        category = data.get("category", "").strip() or None
+        keyword  = data.get("keyword", "").strip() or None
+
+        # Pull approved products filtered by category
+        query = Product.query.filter_by(is_active=True)
+        if category:
+            query = query.filter_by(category=category)
+        products = query.all()
+
+        if len(products) < 3:
+            # Fall back to all products if not enough in category
+            products = Product.query.filter_by(is_active=True).all()
+            if len(products) < 3:
+                return jsonify({"ok": False, "error": f"Not enough approved products. Need at least 3, have {len(products)}."}), 400
+
+        import random
+        count    = random.randint(min(5, len(products)), min(8, len(products)))
+        selected = random.sample(products, count)
+
+        trend_keyword = keyword or (theme or "lifestyle finds")
+
+        content = generate_roundup_content(
+            products=selected,
+            trend_keyword=trend_keyword,
+            benable_url=Config.BENABLE_URL or "https://benable.com",
+            theme_hint=theme,
+        )
+
+        image_path = generate_collage_image(
+            products=selected,
+            theme=content["theme"],
+            subtitle=content.get("subtitle", "on Amazon"),
+            brand_name=Config.BRAND_NAME or "",
+            cta_text=content.get("cta_text", "shop here \u2764\ufe0f"),
+        )
+
+        import json as _json
+        is_url   = image_path and image_path.startswith("http")
+        pin      = Pin(
+            theme=content["theme"],
+            title=content["title"],
+            description=content["description"],
+            hashtags=_json.dumps(content.get("hashtags", [])),
+            image_path=None if is_url else image_path,
+            image_url=image_path if is_url else None,
+            status=Pin.STATUS_PENDING,
+            trend_keyword=trend_keyword,
+            style_variant="roundup_collage",
+        )
+        pin.products = selected
+        db.session.add(pin)
+        db.session.commit()
+
+        logger.info(f"Custom pin created: '{content['theme']}' (category={category}, keyword={keyword})")
+        return jsonify({"ok": True, "pin_id": pin.id, "theme": content["theme"]})
+
+    except Exception as e:
+        logger.error(f"Custom pin creation failed: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @bp.route("/api/trigger", methods=["POST"])
 @login_required
 def api_trigger():
     try:
         from app.scheduler import run_daily_pin_generation
         run_daily_pin_generation()
-        return jsonify({"ok": True, "message": "Pin generation triggered."})
+        return jsonify({"ok": True, "message": "Pin generation complete."})
     except Exception as e:
         logger.error(f"Trigger failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/upload-pin")
+@login_required
+def upload_pin():
+    from config import Config
+    return render_template(
+        "upload_pin.html",
+        benable_url=Config.BENABLE_URL,
+        pinterest_boards=[],  # populated via JS from Pinterest API once connected
+    )
+
+
+@bp.route("/upload-pin/generate-copy", methods=["POST"])
+@login_required
+def upload_pin_generate_copy():
+    try:
+        data    = request.get_json()
+        niche   = data.get("niche", "beauty")
+        keyword = data.get("keyword", "")
+        from app.ai_writer import generate_upload_pin_copy
+        result = generate_upload_pin_copy(niche, keyword)
+        return jsonify({"ok": True, **result})
+    except Exception as e:
+        logger.error(f"Copy generation failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/upload-pin/publish", methods=["POST"])
+@login_required
+def upload_pin_publish():
+    try:
+        import base64
+        import requests as req
+        from config import Config
+
+        data        = request.get_json()
+        image_b64   = data.get("image_base64", "")
+        title       = data.get("title", "")
+        description = data.get("description", "")
+        board_name  = data.get("board_name", "")
+        link        = data.get("link", Config.BENABLE_URL_BEAUTY)
+
+        if not Config.PINTEREST_ACCESS_TOKEN:
+            return jsonify({"ok": False, "error": "Pinterest not connected yet. API approval still pending."}), 400
+
+        # Strip data URL prefix and decode
+        if "," in image_b64:
+            image_b64 = image_b64.split(",", 1)[1]
+        image_bytes = base64.b64decode(image_b64)
+
+        headers = {"Authorization": f"Bearer {Config.PINTEREST_ACCESS_TOKEN}"}
+
+        # Step 1: Upload image to Pinterest media
+        upload_resp = req.post(
+            "https://api.pinterest.com/v5/media",
+            headers=headers,
+            json={"media_type": "image"},
+            timeout=30,
+        )
+        upload_resp.raise_for_status()
+        upload_data = upload_resp.json()
+        media_id    = upload_data["media_id"]
+        upload_url  = upload_data["upload_url"]
+        upload_params = upload_data.get("upload_parameters", {})
+
+        # Step 2: PUT image bytes to S3 upload URL
+        files = {k: (None, v) for k, v in upload_params.items()}
+        files["file"] = ("pin.jpg", image_bytes, "image/jpeg")
+        s3_resp = req.post(upload_url, files=files, timeout=60)
+        s3_resp.raise_for_status()
+
+        # Step 3: Create pin
+        board_id = Config.PINTEREST_BOARD_ID
+        pin_resp = req.post(
+            "https://api.pinterest.com/v5/pins",
+            headers={**headers, "Content-Type": "application/json"},
+            json={
+                "board_id": board_id,
+                "title": title,
+                "description": description,
+                "link": link,
+                "media_source": {
+                    "source_type": "media_id",
+                    "media_id": media_id,
+                },
+            },
+            timeout=30,
+        )
+        pin_resp.raise_for_status()
+        return jsonify({"ok": True, "pin_id": pin_resp.json().get("id")})
+
+    except Exception as e:
+        logger.error(f"Pinterest publish failed: {e}", exc_info=True)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 

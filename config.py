@@ -12,8 +12,19 @@ class Config:
     PINTEREST_BOARD_ID = os.environ.get("PINTEREST_BOARD_ID", "")
 
     # Affiliate / Branding
-    BENABLE_URL  = os.environ.get("BENABLE_URL", "")
-    BRAND_NAME   = os.environ.get("BRAND_NAME", "")   # shown as signature on pin images
+    BENABLE_URL         = os.environ.get("BENABLE_URL", "")
+    BENABLE_URL_BEAUTY  = os.environ.get("BENABLE_URL_BEAUTY", "https://benable.com/AuraGirlFinds/beauty-faves")
+    BENABLE_URL_HOME    = os.environ.get("BENABLE_URL_HOME", "https://benable.com/AuraGirlFinds/glam-home")
+    BENABLE_URL_FITNESS = os.environ.get("BENABLE_URL_FITNESS", "https://benable.com/AuraGirlFinds/wellness-picks")
+    BRAND_NAME          = os.environ.get("BRAND_NAME", "")
+
+    @classmethod
+    def benable_url_for_niche(cls, niche: str) -> str:
+        return {
+            "beauty":     cls.BENABLE_URL_BEAUTY,
+            "home_decor": cls.BENABLE_URL_HOME,
+            "fitness":    cls.BENABLE_URL_FITNESS,
+        }.get(niche, cls.BENABLE_URL_BEAUTY)
 
     # Amazon product search (via SerpAPI Google Shopping)
     SERP_API_KEY         = os.environ.get("SERP_API_KEY", "")
@@ -21,8 +32,11 @@ class Config:
 
     # AI APIs
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    GEMINI_API_KEY    = os.environ.get("GEMINI_API_KEY", "")
     GOOGLE_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID", "")
-    GOOGLE_LOCATION = os.environ.get("GOOGLE_LOCATION", "us-central1")
+    GOOGLE_LOCATION   = os.environ.get("GOOGLE_LOCATION", "us-central1")
+    BLOTATO_API_KEY   = os.environ.get("BLOTATO_API_KEY", "")
+    FAL_API_KEY       = os.environ.get("FAL_API_KEY", "")
 
     # Database
     DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///pins.db")

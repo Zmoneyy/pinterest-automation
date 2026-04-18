@@ -116,7 +116,10 @@
 {% block content %}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
   <h1 class="page-title" style="margin-bottom:0;">Products</h1>
-  <span class="badge badge-gray">{{ products|length }} total · {{ products|selectattr('is_active')|list|length }} active</span>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span class="badge badge-gray">{{ products|length }} total · {{ products|selectattr('is_active')|list|length }} active</span>
+    <a href="{{ url_for('main.product_queue') }}" class="btn btn-red btn-sm">🔍 Discover &amp; Queue</a>
+  </div>
 </div>
 
 {% if request.args.get('error') == 'missing_fields' %}
