@@ -150,6 +150,22 @@
         <span class="badge badge-blue">{{ product.category|replace('_',' ')|title }}</span>
         {% if product.price %}
           <span style="font-weight:600;color:var(--gray-800);">${{ product.price }}</span>
+          {# Commission rate by Amazon category #}
+          {% set rate = {'beauty': 10, 'home_decor': 3, 'fitness': 1}.get(product.category, 3) %}
+          {% set price_num = product.price | replace('$','') | replace(',','') | float %}
+          {% set est = (price_num * rate / 100) | round(2) %}
+          <span style="font-size:11px;padding:2px 7px;border-radius:10px;font-weight:600;
+            background:{{ '#d4f4e8' if rate >= 10 else '#fff3cd' if rate >= 3 else '#fde8e8' }};
+            color:{{ '#1a7a4a' if rate >= 10 else '#856404' if rate >= 3 else '#a42a2a' }};">
+            {{ rate }}% → ~${{ est }}/sale
+          </span>
+        {% else %}
+          {% set rate = {'beauty': 10, 'home_decor': 3, 'fitness': 1}.get(product.category, 3) %}
+          <span style="font-size:11px;padding:2px 7px;border-radius:10px;font-weight:600;
+            background:{{ '#d4f4e8' if rate >= 10 else '#fff3cd' if rate >= 3 else '#fde8e8' }};
+            color:{{ '#1a7a4a' if rate >= 10 else '#856404' if rate >= 3 else '#a42a2a' }};">
+            {{ rate }}% commission
+          </span>
         {% endif %}
         <span>{{ product.pins|length }} pin{{ 's' if product.pins|length != 1 else '' }}</span>
       </div>
