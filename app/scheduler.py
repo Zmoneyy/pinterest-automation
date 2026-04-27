@@ -60,6 +60,12 @@ def run_daily_pin_generation():
     if trends:
         _cache_trends(trends, db, TrendCache)
 
+    # 2b. Discover new Amazon products from trending keywords → ProductCandidate queue
+    try:
+        _discover_and_queue_products(db)
+    except Exception as e:
+        logger.warning(f"Product discovery failed (non-fatal): {e}")
+
     # 3. Generate one pin per niche, rotating content types daily
     # Mix: today's niches paired with content types so every day has variety
     pins_created = 0
@@ -404,6 +410,74 @@ def _post_pin_pinterest(pin, db, now):
 
 # ══════════════════════════════════════════════════════════════════════════════
 # KEYWORD HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _discover_and_queue_products(db):
+    """
+    Daily product discovery:
+    1. Pull top trending keywords from TrendCache (per niche)
+    2. Search Amazon for each keyword
+    3. Add new products to ProductCandidate queue (skip duplicates)
+    4. User reviews candidates in the Discover & Queue tab
+    """
+    from app.models import ProductCandidate, TrendCache
+    from app.amazon_api import search_products
+
+    logger.info("Starting daily product discovery…")
+
+    # Pull top 2 keywords per niche (6 searches total)
+    niches = ["beauty", "home_decor", "fitness"]
+    total_added = 0
+
+    # Get existing ASINs to avoid duplicates
+    existing_urls = {c.amazon_url for c in ProductCandidate.query.all()}
+
+    for niche in niches:
+        top_keywords = (
+            TrendCache.query
+            .filter_by(category=niche)
+            .order_by(TrendCache.score.desc())
+            .limit(2)
+            .all()
+        )
+
+        for kw_row in top_keywords:
+            keyword = kw_row.keyword
+            try:
+                products = search_products(keyword, category=niche, max_results=3)
+                for p in products:
+                    asin = p.get("asin", "")
+                    amazon_url = p.get("amazon_url", "")
+                    if not asin or not amazon_url:
+                        continue
+                    # Skip if already in candidates or products table
+                    if amazon_url in existing_urls:
+                        continue
+                    existing_urls.add(amazon_url)
+
+                    candidate = ProductCandidate(
+                        name=p.get("name", "")[:255],
+                        asin=asin,
+                        amazon_url=amazon_url,
+                        category=niche,
+                        image_url=p.get("image_url", ""),
+                        price=p.get("price", ""),
+                        trend_keyword=keyword,
+                        status=ProductCandidate.STATUS_PENDING,
+                    )
+                    db.session.add(candidate)
+                    total_added += 1
+
+                db.session.commit()
+                logger.info(f"Discovery: '{keyword}' ({niche}) → {len(products)} products queued")
+
+            except Exception as e:
+                db.session.rollback()
+                logger.warning(f"Discovery failed for '{keyword}': {e}")
+
+    logger.info(f"Product discovery complete: {total_added} new candidates added")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _fetch_trends() -> list:
