@@ -1,328 +1,460 @@
 """
 Scheduler jobs:
   run_daily_pin_generation  — runs daily at 9 AM UTC
-  schedule_approved_pins    — runs every 15 min, posts approved pins that are due
+  schedule_approved_pins    — runs every 15 min, posts approved pins via Blotato
+
+Flow (fully automated — no product pre-approval needed):
+  1. Find trending Pinterest keywords per niche
+  2. For each pin slot: pick keyword → search Amazon → fetch real product images
+  3. Generate Pin Perfect Pro content (Claude) + pin image (Ideogram via fal.ai)
+  4. Save pin as "pending" in dashboard → user approves/rejects
+  5. On approval: products activate on shop pages + pin posts to Pinterest via Blotato
 """
 import json
 import logging
 import random
-from datetime import datetime, timezone
+import re
+import uuid
+import io
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-MIN_PRODUCTS_PER_PIN = 5
-MAX_PRODUCTS_PER_PIN = 8
-PINS_PER_DAY = 3
+PINS_PER_DAY = 3   # 3 pins/day — safe for affiliate accounts
 
+# One pin per niche per day
+DAILY_NICHES = ["beauty", "home_decor", "fitness"]
+
+# Daily content mix: 1 evergreen + 1 seasonal + 1 trending
+# This ensures consistent income (evergreen), seasonal relevance, and trend momentum
+DAILY_CONTENT_MIX = ["evergreen", "seasonal", "trending"]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN JOBS
+# ══════════════════════════════════════════════════════════════════════════════
 
 def run_daily_pin_generation():
     """
-    Generate 3 collage-style roundup pins per day.
-    Each pin features 5-8 curated products under a themed headline.
+    Fully automated daily pin generation.
+    Finds trending keywords → searches Amazon → fetches real product images
+    → generates Ideogram pin → saves as pending for user approval.
+    No pre-approved products required.
     """
     from app import db
-    from app.ai_writer import generate_roundup_content
-    from app.imagen_api import generate_collage_image
-    from app.models import Pin, Product, ProductCandidate, TrendCache
-    from app.pinterest_api import get_trending_keywords
+    from app.models import Pin, TrendCache
     from config import Config
 
     logger.info("=== Daily pin generation started ===")
 
-    # 1. Run full keyword research (autocomplete + trends + seasonal) → caches to TrendCache
+    # 1. Run keyword research (fills TrendCache)
     try:
         from app.keyword_research import run_keyword_research
         run_keyword_research()
-        logger.info("Keyword research complete.")
     except Exception as e:
-        logger.error(f"Keyword research failed (non-fatal): {e}", exc_info=True)
+        logger.warning(f"Keyword research failed (non-fatal): {e}")
 
-    # 2. Fetch trending keywords — Pinterest session scraper first, then fallback
-    from app.pinterest_trends_scraper import fetch_pinterest_trends
-    trends = fetch_pinterest_trends()
-    if not trends:
-        logger.info("Pinterest session scrape empty — falling back to Pinterest API / SerpAPI.")
-        trends = get_trending_keywords()
+    # 2. Get trending keywords
+    trends = _fetch_trends()
     if trends:
         _cache_trends(trends, db, TrendCache)
 
-    # 2. Auto-discover new products (trending + evergreen) into approval queue
-    _auto_discover_products(db, ProductCandidate, trends)
-
-    # 3. Pull all active products, grouped by category
-    all_products = Product.query.filter_by(is_active=True).all()
-    if len(all_products) < 3:
-        logger.warning(
-            f"Only {len(all_products)} active products. Need at least 3. Skipping generation."
-        )
-        return
-
-    # Group products by the 3 core niches
-    CORE_NICHES = ["beauty", "home_decor", "fitness"]
-    by_category: dict = {}
-    for p in all_products:
-        cat = p.category if p.category in CORE_NICHES else "beauty"
-        by_category.setdefault(cat, []).append(p)
-
-    # Only use categories with enough products for a pin
-    viable_categories = [
-        (cat, by_category[cat]) for cat in CORE_NICHES
-        if cat in by_category and len(by_category[cat]) >= MIN_PRODUCTS_PER_PIN
-    ]
-
-    # Fall back to all products if no single category has enough
-    if not viable_categories:
-        logger.warning("No niche has 5+ products — using all products.")
-        viable_categories = [("mixed", all_products)]
-
+    # 3. Generate one pin per niche, rotating content types daily
+    # Mix: today's niches paired with content types so every day has variety
     pins_created = 0
-    for i in range(PINS_PER_DAY):
+    today_idx = datetime.now(timezone.utc).weekday()  # 0=Mon … 6=Sun
+    # Rotate content type assignment per niche so no niche always gets the same type
+    for i, niche in enumerate(DAILY_NICHES):
+        content_type = DAILY_CONTENT_MIX[(today_idx + i) % len(DAILY_CONTENT_MIX)]
         try:
-            # Rotate through viable categories
-            category, category_products = viable_categories[i % len(viable_categories)]
-            _generate_one_collage_pin(i, category_products, trends, db, Pin,
-                                       generate_roundup_content, generate_collage_image, Config)
-            pins_created += 1
+            keyword = _pick_keyword_for_niche(niche, trends, content_type=content_type)
+            logger.info(f"Pin {i+1}/{PINS_PER_DAY}: niche={niche}, type={content_type}, keyword='{keyword}'")
+            success = _generate_pin_for_keyword(niche, keyword, db, Pin, Config, content_type=content_type)
+            if success:
+                pins_created += 1
         except Exception as e:
-            logger.error(f"Pin generation #{i + 1} failed: {e}", exc_info=True)
-            db.session.rollback()
+            logger.error(f"Pin generation for {niche} failed: {e}", exc_info=True)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
     logger.info(f"=== Daily generation complete: {pins_created}/{PINS_PER_DAY} pins created ===")
-
-
-def _generate_one_collage_pin(
-    index: int,
-    all_products: list,
-    trends: list,
-    db,
-    Pin,
-    generate_roundup_content,
-    generate_collage_image,
-    Config,
-):
-    """Generate a single collage pin featuring 5-8 randomly selected products."""
-    # How many products for this pin
-    count = random.randint(
-        min(MIN_PRODUCTS_PER_PIN, len(all_products)),
-        min(MAX_PRODUCTS_PER_PIN, len(all_products)),
-    )
-    products = random.sample(all_products, count)
-
-    # Pick a trending keyword relevant to the product mix
-    trend_keyword = _pick_trend_keyword(products, trends)
-    logger.info(
-        f"Pin {index + 1}: {count} products, trend='{trend_keyword}'"
-    )
-
-    # Generate content (theme title, subtitle, description, hashtags, CTA)
-    content = generate_roundup_content(
-        products=products,
-        trend_keyword=trend_keyword,
-        benable_url=Config.BENABLE_URL or "https://benable.com",
-    )
-
-    # Generate collage image
-    image_path = generate_collage_image(
-        products=products,
-        theme=content["theme"],
-        subtitle=content.get("subtitle", "on Amazon"),
-        brand_name=Config.BRAND_NAME or "",
-        cta_text=content.get("cta_text", "shop here \u2764\ufe0f"),
-    )
-
-    # generate_collage_image returns a GCS URL or local path
-    is_url = image_path and image_path.startswith("http")
-    pin_status = Pin.STATUS_PENDING if image_path else Pin.STATUS_NEEDS_IMAGE
-
-    pin = Pin(
-        theme=content["theme"],
-        title=content["title"],
-        description=content["description"],
-        hashtags=json.dumps(content.get("hashtags", [])),
-        image_path=None if is_url else image_path,
-        image_url=image_path if is_url else None,
-        status=pin_status,
-        trend_keyword=trend_keyword,
-        style_variant="roundup_collage",
-    )
-    pin.products = products
-    db.session.add(pin)
-    db.session.commit()
-
-    logger.info(
-        f"  → Pin #{pin.id} created: '{pin.theme}' [{pin_status}] "
-        f"({len(products)} products)"
-    )
 
 
 def schedule_approved_pins():
     """Post approved pins whose scheduled_for time has arrived (or immediately if unscheduled)."""
     from app import db
     from app.models import Pin
-    from app.pinterest_api import post_pin
 
     now = datetime.now(timezone.utc)
 
-    due_pins = Pin.query.filter(
+    due = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for <= now,
     ).all()
-
-    immediate_pins = Pin.query.filter(
+    immediate = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for.is_(None),
     ).all()
 
-    to_post = due_pins + immediate_pins
+    to_post = due + immediate
     if not to_post:
         return
 
-    logger.info(f"Posting {len(to_post)} approved pins...")
+    logger.info(f"Posting {len(to_post)} approved pins via Pinterest API…")
     for pin in to_post:
         try:
-            _post_pin(pin, db, post_pin, now)
+            _post_pin_pinterest(pin, db, now)
         except Exception as e:
             logger.error(f"Failed to post pin #{pin.id}: {e}", exc_info=True)
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
 
-def _post_pin(pin, db, post_pin_fn, now):
-    """Post a single pin to Pinterest and update DB status."""
-    from app.imagen_api import image_path_to_url
-    from config import Config
+# ══════════════════════════════════════════════════════════════════════════════
+# PIN GENERATION PIPELINE
+# ══════════════════════════════════════════════════════════════════════════════
 
-    image_url = pin.image_url
-    if not image_url and pin.image_path:
-        base_url  = f"http://localhost:{Config.PORT}"
-        image_url = image_path_to_url(pin.image_path, base_url)
+def _generate_pin_for_keyword(niche: str, keyword: str, db, Pin, Config, content_type: str = "evergreen") -> bool:
+    """
+    End-to-end pin generation for one keyword/niche:
+      1. Search Amazon for top products
+      2. Fetch real product images → GCS
+      3. Generate Pin Perfect Pro content (Claude)
+      4. Generate pin image (Ideogram Remix with real product images)
+      5. Save Pin + Products to DB (pending)
+    """
+    from app.amazon_api import search_products
+    from app.ai_writer import generate_pin_perfect_pro
+    from app.imagen_api import generate_editorial_pin, generate_pin_perfect_pro_image
+    from app.models import Product
 
-    if not image_url:
-        logger.error(f"Pin #{pin.id} has no image URL — skipping.")
+    shop_url = Config.benable_url_for_niche(niche)
+
+    # ── Step 1: Search Amazon for top products ────────────────────────────
+    amazon_products = search_products(keyword, category=niche, max_results=4)
+    if not amazon_products:
+        logger.warning(f"No Amazon products found for '{keyword}' — skipping.")
+        return False
+
+    logger.info(f"Found {len(amazon_products)} products for '{keyword}'")
+
+    # ── Step 2: Fetch real product images → GCS ───────────────────────────
+    product_image_urls = []
+    product_names = []
+    fetched_products = []  # [{name, asin, amazon_url, image_url, price, category}]
+
+    for p in amazon_products[:4]:
+        name = p.get("name", "")
+        asin = p.get("asin", "")
+        img_url = p.get("image_url")
+
+        if img_url:
+            gcs_url = _download_and_upload_to_gcs(img_url, asin)
+            if gcs_url:
+                product_image_urls.append(gcs_url)
+                p["gcs_image_url"] = gcs_url
+            else:
+                p["gcs_image_url"] = img_url  # use original if GCS fails
+        else:
+            p["gcs_image_url"] = None
+
+        product_names.append(name)
+        fetched_products.append(p)
+
+    if not product_names:
+        logger.warning(f"No product names available for '{keyword}' — skipping.")
+        return False
+
+    # ── Step 3: Generate Pin Perfect Pro content (Claude) ─────────────────
+    ppp_result = generate_pin_perfect_pro(
+        product_names=product_names,
+        niche=niche,
+        trend_keyword=keyword,
+        shop_url=shop_url,
+    )
+    if not ppp_result or not ppp_result.get("title"):
+        logger.error(f"Pin Perfect Pro content generation failed for '{keyword}'")
+        return False
+
+    logger.info(f"Pin Perfect Pro content generated: '{ppp_result['title']}'")
+
+    # ── Step 4: Generate pin image (Ideogram Remix with real product images) ─
+    image_url = None
+    theme    = ppp_result.get("theme", keyword.upper()[:20])
+    subtitle = ppp_result.get("subtitle", "on Amazon")
+
+    if product_image_urls:
+        # Real product photos → gpt-image-2 editorial pin (actual product, no catfishing)
+        image_url = generate_editorial_pin(
+            product_image_urls=product_image_urls,
+            theme=theme,
+            subtitle=subtitle,
+            niche=niche,
+            benefits=ppp_result.get("benefits") or [],
+            product_name=product_names[0] if product_names else "",
+        )
+
+    if not image_url and ppp_result.get("image_prompt"):
+        # Fallback: AI text-to-image when no real product images available
+        image_url = generate_pin_perfect_pro_image(ppp_result["image_prompt"])
+
+    pin_status = Pin.STATUS_PENDING if image_url else Pin.STATUS_NEEDS_IMAGE
+    logger.info(f"Image generated: {image_url or 'FAILED'}")
+
+    # ── Step 5: Save Products + Pin to DB ────────────────────────────────
+    # Save products as inactive — they activate when the pin is approved
+    product_records = []
+    affiliate_tag = "auragirlcreat-20"
+    for p in fetched_products:
+        asin = p.get("asin", "")
+        base_url = p.get("amazon_url", "")
+        if asin and "tag=" not in base_url:
+            base_url = f"https://www.amazon.com/dp/{asin}?tag={affiliate_tag}"
+
+        # Don't duplicate products already in DB
+        existing = None
+        if asin:
+            from app.models import Product as ProductModel
+            existing = ProductModel.query.filter(
+                ProductModel.amazon_url.contains(asin)
+            ).first()
+
+        if existing:
+            product_records.append(existing)
+        else:
+            product = Product(
+                name=p.get("name", "")[:255],
+                amazon_url=base_url,
+                benable_url=shop_url,
+                category=niche,
+                image_url=p.get("gcs_image_url") or p.get("image_url"),
+                price=p.get("price"),
+                is_active=False,  # inactive until pin is approved
+                content_type=content_type,
+            )
+            db.session.add(product)
+            db.session.flush()  # get the ID
+            product_records.append(product)
+
+    # Build hashtags string
+    hashtags_raw = ppp_result.get("hashtags", "")
+    if isinstance(hashtags_raw, str):
+        hashtag_list = [h.strip().lstrip("#") for h in hashtags_raw.split(",") if h.strip()]
+    else:
+        hashtag_list = hashtags_raw
+
+    pin = Pin(
+        theme=ppp_result.get("theme", keyword.upper()[:30]),
+        title=ppp_result.get("title", "")[:255],
+        description=ppp_result.get("description", ""),
+        hashtags=json.dumps(hashtag_list),
+        image_url=image_url,
+        status=pin_status,
+        trend_keyword=keyword,
+        style_variant="pin_perfect_pro",
+        board_name=ppp_result.get("board_name", ""),
+        alt_text=ppp_result.get("alt_text", ""),
+        shop_url=shop_url,  # updated to /shop/pin/<id> after commit
+    )
+    pin.products = product_records
+    db.session.add(pin)
+    db.session.flush()  # get pin.id before commit
+
+    # Update shop_url to the pin-specific landing page
+    pin.shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
+    db.session.commit()
+
+    logger.info(
+        f"  → Pin #{pin.id} created: '{pin.title[:50]}' "
+        f"[{pin_status}] board='{pin.board_name}'"
+    )
+    return True
+
+
+def _download_and_upload_to_gcs(image_url: str, identifier: str = "") -> Optional[str]:
+    """Download a product image and upload to GCS. Returns GCS URL or None."""
+    import requests as req
+    GCS_BUCKET = "pinterest-automation-images-814656203168"
+    GCS_BASE_URL = f"https://storage.googleapis.com/{GCS_BUCKET}"
+
+    try:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+            "Referer": "https://www.amazon.com/",
+            "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+        }
+        resp = req.get(image_url, headers=headers, timeout=15)
+        resp.raise_for_status()
+
+        content_type = resp.headers.get("content-type", "image/jpeg")
+        ext = "jpg" if "jpeg" in content_type or "jpg" in image_url.lower() else "png"
+
+        from google.cloud import storage as gcs_lib
+        gcs_client = gcs_lib.Client()
+        bucket = gcs_client.bucket(GCS_BUCKET)
+        blob_name = f"product-refs/{identifier}_{uuid.uuid4().hex[:8]}.{ext}"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(resp.content, content_type=content_type)
+        return f"{GCS_BASE_URL}/{blob_name}"
+
+    except Exception as e:
+        logger.warning(f"Could not fetch/upload product image {image_url}: {e}")
+        return None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POSTING VIA PINTEREST API DIRECTLY
+# ══════════════════════════════════════════════════════════════════════════════
+
+# Peak posting times in UTC (7 PM, 8 PM, 9 PM EST = midnight, 1 AM, 2 AM UTC)
+# Pinterest traffic peaks 8–11 PM EST — we spread pins across that window
+PEAK_HOURS_UTC = [0, 1, 2]   # midnight, 1 AM, 2 AM UTC = 8, 9, 10 PM EST
+
+
+def _next_peak_slot(now: datetime) -> datetime:
+    """Return the next available peak posting time (8–10 PM EST = 0–2 AM UTC)."""
+    from app.models import Pin
+
+    # Try each peak hour today and tomorrow
+    for day_offset in range(2):
+        for hour in PEAK_HOURS_UTC:
+            candidate = now.replace(
+                hour=hour, minute=0, second=0, microsecond=0
+            ) + timedelta(days=day_offset)
+            if candidate <= now:
+                continue
+            # Check if a pin is already scheduled for that slot (within 30 min window)
+            window_start = candidate - timedelta(minutes=15)
+            window_end   = candidate + timedelta(minutes=15)
+            conflict = Pin.query.filter(
+                Pin.status.in_([Pin.STATUS_APPROVED, Pin.STATUS_POSTED]),
+                Pin.scheduled_for >= window_start,
+                Pin.scheduled_for <= window_end,
+            ).first()
+            if not conflict:
+                return candidate
+
+    # Fallback: 25 hours from now
+    return now + timedelta(hours=25)
+
+
+def _post_pin_pinterest(pin, db, now):
+    """Post a pin to Pinterest directly via Pinterest API v5 and update DB status."""
+    from app.models import Pin
+    from app import pinterest_api
+
+    if not pin.image_url:
+        logger.error(f"Pin #{pin.id} has no image URL — cannot post.")
         return
 
-    # Build description with hashtags
-    hashtag_str  = " ".join(f"#{h}" for h in pin.hashtags_list())
-    full_desc    = pin.description
+    # Build full description with hashtags
+    hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list())
+    full_desc = pin.description or ""
     if hashtag_str:
         full_desc = f"{full_desc}\n\n{hashtag_str}"
 
-    # For collage pins link to the main Benable page (multiple products)
-    link = Config.BENABLE_URL or "https://benable.com"
+    # Get board ID
+    from config import Config
+    board_name = pin.board_name or ""
+    board_id = Config.PINTEREST_BOARDS.get(board_name)
+    if not board_id:
+        niche_boards = {
+            "beauty":     Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"),
+            "home_decor": Config.PINTEREST_BOARDS.get("Glam Home Decor Ideas"),
+            "fitness":    Config.PINTEREST_BOARDS.get("Wellness & Self Care Essentials"),
+        }
+        categories = [p.category for p in pin.products if p.category]
+        niche = max(set(categories), key=categories.count) if categories else "beauty"
+        board_id = niche_boards.get(niche, Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"))
 
-    result = post_pin_fn(
-        title=pin.title,
-        description=full_desc,
-        image_url=image_url,
-        link=link,
-        alt_text=f"{pin.theme} — curated finds",
-    )
+    if not board_id:
+        logger.error(f"Pin #{pin.id}: no board ID found.")
+        return
 
-    pin.status          = Pin.STATUS_POSTED
-    pin.posted_at       = now
-    pin.pinterest_pin_id = result.get("id", "")
-    pin.image_url       = image_url
-    db.session.commit()
-    logger.info(f"Pin #{pin.id} posted ✓  (pinterest id: {pin.pinterest_pin_id})")
+    link = pin.shop_url or Config.benable_url_for_niche("beauty")
+
+    # Schedule for next peak slot if no schedule set
+    publish_at = pin.scheduled_for or _next_peak_slot(now)
+
+    try:
+        result = pinterest_api.post_pin(
+            title=pin.title or "",
+            description=full_desc,
+            image_url=pin.image_url,
+            link=link,
+            board_id=board_id,
+            alt_text=pin.alt_text or "",
+            publish_date=publish_at,
+        )
+        pin.status = Pin.STATUS_POSTED
+        pin.posted_at = now
+        pin.scheduled_for = publish_at
+        pin.pinterest_pin_id = result.get("id", "")
+        db.session.commit()
+        logger.info(f"Pin #{pin.id} posted via Pinterest API ✓  board={board_id}  scheduled={publish_at.isoformat()}")
+    except Exception as e:
+        logger.error(f"Pinterest API post failed for pin #{pin.id}: {e}", exc_info=True)
+        raise
 
 
-def _pick_trend_keyword(products: list, trends: list) -> str:
+# ══════════════════════════════════════════════════════════════════════════════
+# KEYWORD HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fetch_trends() -> list:
+    try:
+        from app.pinterest_trends_scraper import fetch_pinterest_trends
+        trends = fetch_pinterest_trends()
+        if trends:
+            return trends
+    except Exception as e:
+        logger.warning(f"Pinterest scraper failed: {e}")
+
+    try:
+        from app.pinterest_api import get_trending_keywords
+        return get_trending_keywords()
+    except Exception as e:
+        logger.warning(f"Pinterest API trends failed: {e}")
+        return []
+
+
+def _pick_keyword_for_niche(niche: str, trends: list, product_name: str = "", content_type: str = "evergreen") -> str:
     """
-    Pick the best trending keyword for the product mix.
-    Priority: keyword research cache (TrendCache) → session trends → fallback.
+    Pick the best Pinterest keyword for a niche + product combination.
+    Uses product name for relevance matching against TrendCache.
+    content_type: 'evergreen' | 'seasonal' | 'trending'
     """
-    # Determine dominant category from products
-    cat_counts: dict = {}
-    for p in products:
-        cat_counts[p.category] = cat_counts.get(p.category, 0) + 1
-    dominant_cat = max(cat_counts, key=cat_counts.get) if cat_counts else "beauty"
+    # Use smart product-aware picker if we have a product name
+    if product_name:
+        try:
+            from app.keyword_research import pick_best_keyword_for_product
+            kw = pick_best_keyword_for_product(product_name, niche, content_type)
+            if kw:
+                return kw
+        except Exception as e:
+            logger.warning(f"pick_best_keyword_for_product failed: {e}")
 
-    # 1. Try keyword research cache first (highest quality — real Pinterest searches)
+    # Fallback: pull from TrendCache by niche
     try:
         from app.keyword_research import get_top_keywords_for_niche
-        cached = get_top_keywords_for_niche(dominant_cat, limit=10)
+        cached = get_top_keywords_for_niche(niche, limit=10)
         if cached:
             return random.choice(cached[:5])
     except Exception:
         pass
 
-    # 2. Fall back to session/API trends list
-    if not trends:
-        return "amazon finds"
-
-    category_map = {
-        "home_decor": ["home_decor", "general"],
-        "kitchen":    ["kitchen", "general"],
-        "office":     ["office", "general"],
-        "fashion":    ["fashion", "general"],
-        "beauty":     ["beauty", "general"],
-        "fitness":    ["fitness", "general"],
-        "travel":     ["travel", "general"],
-        "garden":     ["garden", "general"],
-        "pets":       ["pets", "general"],
-        "tech":       ["tech", "general"],
-        "art":        ["art", "diy", "general"],
+    # Last resort: hardcoded buying-intent fallbacks
+    fallbacks = {
+        "beauty":     ["press on nails amazon 2026", "affordable skincare routine amazon", "lip gloss set amazon finds"],
+        "home_decor": ["aesthetic home decor amazon finds", "cozy room decor ideas amazon", "glam home decor under 30"],
+        "fitness":    ["self care products amazon finds", "wellness supplements amazon women", "collagen amazon glow up"],
     }
-    target_cats = category_map.get(dominant_cat, ["general"])
-    relevant    = [t for t in trends if t.get("category") in target_cats]
-    pool        = relevant[:5] or sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:5]
-
-    return random.choice(pool)["keyword"] if pool else "lifestyle finds"
-
-
-def _auto_discover_products(db, ProductCandidate, trends: list):
-    """
-    Auto-discover products daily: trending keywords + evergreen categories.
-    Adds new candidates to approval queue (user still approves before they go into pins).
-    """
-    try:
-        from app.amazon_api import discover_evergreen_products, discover_products_for_trends
-
-        all_candidates = []
-
-        # Trending products (top 3 trends only to save API calls)
-        if trends:
-            top_trends = sorted(trends, key=lambda x: x.get("score", 0), reverse=True)[:3]
-            trend_candidates = discover_products_for_trends(top_trends, per_trend=3)
-            all_candidates.extend(trend_candidates)
-
-        # Evergreen products (rotates through all categories)
-        evergreen = discover_evergreen_products(per_query=3)
-        all_candidates.extend(evergreen)
-
-        added = 0
-        for c in all_candidates:
-            asin = c.get("asin")
-            if asin:
-                exists = ProductCandidate.query.filter_by(asin=asin).first()
-                if not exists:
-                    from app.models import Product
-                    exists = Product.query.filter(Product.amazon_url.contains(asin)).first()
-            else:
-                exists = ProductCandidate.query.filter_by(name=c["name"]).first()
-
-            if exists:
-                continue
-
-            db.session.add(ProductCandidate(
-                name=c["name"],
-                asin=asin,
-                amazon_url=c["amazon_url"],
-                category=c.get("category", "general"),
-                image_url=c.get("image_url"),
-                price=c.get("price"),
-                trend_keyword=c.get("trend_keyword"),
-                status=ProductCandidate.STATUS_PENDING,
-            ))
-            added += 1
-
-        db.session.commit()
-        logger.info(f"Auto-discovery: added {added} new products to approval queue.")
-    except Exception as e:
-        logger.error(f"Auto product discovery failed: {e}", exc_info=True)
-        try:
-            db.session.rollback()
-        except Exception:
-            pass
+    return random.choice(fallbacks.get(niche, ["amazon finds 2026"]))
 
 
 def _cache_trends(trends: list, db, TrendCache):

@@ -367,6 +367,270 @@ Respond with ONLY this JSON:
         }
 
 
+def generate_ideogram_prompt(
+    product_names: list,
+    niche: str,
+    theme: str,
+    subtitle: str,
+) -> Optional[str]:
+    """
+    Use Claude to generate a product-specific Ideogram image prompt
+    following the Pin Perfect Pro formula.
+    """
+    from config import Config
+
+    niche_aesthetics = {
+        "beauty": {
+            "bg": "soft blush pink background",
+            "palette": "blush pink, nude, white, rose gold",
+            "style": "feminine luxury beauty editorial, soft studio lighting",
+            "example_products": "glossy lip gloss, skincare serum, press-on nail kit, lash serum",
+        },
+        "home_decor": {
+            "bg": "clean white background",
+            "palette": "black, gold, brass, clear acrylic",
+            "style": "glam home decor editorial, aspirational interior styling",
+            "example_products": "gold chandelier, black velvet ottoman, gold bar cart, marble tray",
+        },
+        "fitness": {
+            "bg": "clean white background",
+            "palette": "white, sage green, soft mint",
+            "style": "clean girl wellness aesthetic, minimal aspirational",
+            "example_products": "collagen supplement jar, insulated water bottle, sunscreen stick, resistance bands",
+        },
+    }
+
+    cfg = niche_aesthetics.get(niche, niche_aesthetics["beauty"])
+    products_str = ", ".join(product_names[:6]) if product_names else cfg["example_products"]
+
+    prompt = f"""You are a Pinterest pin image prompt expert replicating Pin Perfect Pro quality.
+Generate an Ideogram image generation prompt for a Pinterest pin.
+
+Products to feature: {products_str}
+Niche: {niche}
+Pin theme text: {theme}
+Subtitle: {subtitle}
+
+Visual style requirements:
+- Background: {cfg['bg']}
+- Color palette: {cfg['palette']} ONLY — strict cohesion, all products match
+- Style: {cfg['style']}
+- Layout: floating product images with transparent backgrounds arranged naturally overlapping like a curated mood board (NOT a grid)
+- Products fill the upper two-thirds of the image
+- Each product rendered photorealistically with soft studio lighting and natural shadows
+- At the top center: small elegant spaced uppercase brand label "AURA GIRL ESSENTIALS"
+- In the lower third: large elegant mixed-case serif font theme text "{theme}"
+- Below theme text in small italic: "{subtitle}"
+- Bottom center: dark rounded pill-shaped button with white text "shop here ♥"
+- High-end magazine editorial feel — products are the hero, text is elegant and understated
+- Vertical 2:3 portrait format, scroll-stopping Pinterest aesthetic
+- Photorealistic, not AI-looking. No watermarks. No borders.
+
+Write ONLY the image generation prompt as plain text (no JSON, no labels, no explanation).
+Make it vivid, specific, and mention every visual element. 150-250 words."""
+
+    try:
+        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            system="You write vivid, specific image generation prompts for Pinterest pins. Output only the prompt text, nothing else.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        result = message.content[0].text.strip()
+        logger.info(f"Ideogram prompt generated ({len(result)} chars)")
+        return result
+    except Exception as e:
+        logger.error(f"Ideogram prompt generation failed: {e}")
+        return None
+
+
+def generate_pin_perfect_pro(
+    product_names: list,
+    niche: str,
+    trend_keyword: str,
+    shop_url: str,
+    board_name: str = "",
+) -> dict:
+    """
+    Generate a full Pin Perfect Pro output for a set of products and trending keyword.
+    Returns:
+      {
+        "title": "...",
+        "description": "...",
+        "hashtags": "tag1, tag2, ...",
+        "alt_text": "...",
+        "board_name": "...",
+        "image_prompt": "...",   # ready for Ideogram
+        "theme": "...",          # ALL CAPS theme text for image
+        "subtitle": "...",
+      }
+    """
+    from config import Config
+
+    niche_context = {
+        "beauty": "beauty, skincare, nails, makeup, and self-care products on Amazon",
+        "home_decor": "glam home decor, furniture, and interior styling finds on Amazon",
+        "fitness": "wellness, fitness, and self-care products on Amazon",
+    }
+    context = niche_context.get(niche, niche_context["beauty"])
+    products_str = ", ".join(product_names[:6]) if product_names else "top Amazon finds"
+
+    niche_image_style = {
+        "beauty": "soft blush pink background, blush/nude/white/rose gold color palette, feminine luxury editorial, floating product arrangement, soft studio lighting",
+        "home_decor": "clean white background, strict black and gold palette, glam interior editorial, products overlapping like a mood board",
+        "fitness": "clean white background, sage green and white palette, clean girl wellness aesthetic, minimal aspirational layout",
+    }.get(niche, "soft blush pink background, feminine luxury editorial")
+
+    niche_boards = {
+        "beauty": "Beauty Finds & Skincare",
+        "home_decor": "Glam Home Decor Ideas",
+        "fitness": "Wellness & Self Care Essentials",
+    }
+    default_board = niche_boards.get(niche, "Beauty Finds & Skincare")
+
+    prompt = f"""You are writing Pinterest content for "Aura Girl Essentials", an Amazon affiliate brand targeting women who love affordable aesthetic finds.
+
+You MUST follow the Pinterest Pin Copy Formula below — this is what drives clicks and saves on Pinterest.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+THE PINTEREST PIN COPY FORMULA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TITLE = Primary Keyword + Benefit + Curiosity/Specificity
+  • Start with the exact keyword (what someone is searching for)
+  • Add what they'll GET (outcome, not feature)
+  • Add a number, year, or specific angle to boost credibility
+  • 60-100 characters. Include 2026 or 2027 for freshness.
+  • Example: "Best Chemical Exfoliants 2026 — Smoother Skin in Days"
+
+DESCRIPTION = 4 parts in order:
+  1. PRIMARY KEYWORD + SUPPORTING KEYWORDS naturally woven in (searchable)
+  2. CLEAR BENEFIT — what will they get? Focus on outcomes/transformation
+  3. EXPANDED CONTEXT — why these specific products, what makes them worth it
+  4. SOFT CTA — Pinterest is discovery-based, keep it light
+     Use: "Save this for later →" or "Tap to shop →" or "Get the full list →" then add: {shop_url}
+  • Total: 150-250 characters. Conversational, not salesy.
+
+HASHTAGS = 10-15 tags, mix of:
+  • 1-2 broad discovery (#amazonfinds, #amazonskincare)
+  • 2-3 keyword-specific (based on the primary keyword)
+  • 2-3 niche/transformation (#glowup, #skincareRoutine, #clearskin)
+  • NO generic filler: #weeklyfinds #mostloved #productfaves
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EXAMPLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXAMPLE 1 — Beauty/Skincare:
+Keyword: chemical exfoliant for smooth skin
+Products: Paula's Choice BHA liquid exfoliant
+{{
+  "title": "Best Chemical Exfoliant for Smooth Skin 2026 — This One Actually Works",
+  "description": "Searching for a chemical exfoliant that clears texture and minimizes pores? Paula's Choice BHA is a cult favorite for a reason — one swipe and your skin looks visibly smoother. Save this for later → {shop_url}",
+  "hashtags": "amazonfinds, chemicalexfoliant, bhaserum, smoothskin, porescleaned, skincareAmazon, glowup, exfoliatingtoner, clearTexture, skincareroutine, affordableskincare, amazonskincare",
+  "alt_text": "Woman with glowing clear skin holding Paula's Choice BHA liquid exfoliant bottle",
+  "board_name": "Skincare Finds & Glow Up Routines",
+  "theme": "NEW SKIN",
+  "subtitle": "on Amazon",
+  "benefits": ["Zero Texture", "Pores Clear", "Instant Glow"],
+  "image_prompt": "Pinterest pin, vertical 2:3 portrait, soft warm background. Woman with visibly glowing dewy skin holding a Paula's Choice BHA Liquid Exfoliant bottle — white cylindrical bottle with black label reading SKIN PERFECTING 2% BHA Liquid Exfoliant. Lifestyle editorial feel, soft natural light, minimal bathroom setting. Large bold black headline NEW SKIN at top. Bottom white band with 3 centered lines: Zero Texture / Pores Clear / Instant Glow. Dark rounded pill button: Shop on Amazon. Small AURA GIRL ESSENTIALS label at very top."
+}}
+
+EXAMPLE 2 — Home Decor:
+Keyword: glam home decor on a budget
+Products: gold arc floor lamp, velvet ottoman
+{{
+  "title": "Glam Home Decor on a Budget 2026 — Amazon Finds That Look Expensive",
+  "description": "Love the glam aesthetic but don't want to overspend? These Amazon home decor finds — gold lamps, velvet ottomans — look designer without the price tag. Tap to shop → {shop_url}",
+  "hashtags": "amazonhome, glamhomedecor, budgethomedecor, affordabledecor, homedecor2026, goldhomedecor, amazonfinds, homeaesthetic, livingroominspo, homerefresh, interiordesign, velvetdecor",
+  "alt_text": "Glam home decor collection with gold floor lamp and black velvet ottoman styled in an aspirational living room",
+  "board_name": "Glam Home Decor Ideas",
+  "theme": "ELEVATED",
+  "subtitle": "for less",
+  "benefits": ["Looks Expensive", "Ships Fast", "Budget Win"],
+  "image_prompt": "Pinterest pin, vertical 2:3 portrait, clean white background. Gold arc floor lamp and black velvet ottoman with gold legs styled together in an aspirational minimal living room. Strict black and gold palette. Photorealistic studio lighting. Large bold ELEVATED headline at top. Bottom white band 3 lines: Looks Expensive / Ships Fast / Budget Win. Dark rounded pill: Shop on Amazon. AURA GIRL ESSENTIALS label at very top."
+}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NOW GENERATE FOR:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Keyword: {trend_keyword}
+Products: {products_str}
+Niche: {niche} ({context})
+Shop URL: {shop_url}
+Default board if unsure: {default_board}
+Image style: {niche_image_style}
+
+STRICT RULES:
+- THEME: 1-3 words ALL CAPS. Think about what makes THESE SPECIFIC PRODUCTS unique — one result they're famous for that others aren't. Base the theme on that. NEVER reuse themes across products — each must have its OWN hook.
+- BENEFITS: exactly 3, MAX 2 WORDS EACH — no exceptions. They appear as 3 separate centered lines. Short enough to read instantly.
+- IMAGE PROMPT — follow these rules exactly based on niche:
+  BEAUTY: Clean white or light beige background. Product hero centered, no people. Add texture swipe if it's a cream/liquid. Add water droplets if hydrating. Bold clean sans-serif headline. Describe the product's EXACT colors and packaging from the reference.
+  HOME DECOR: Full lifestyle room scene — sofa, candles, plants, rugs, wall art. Product styled IN the room. Warm ambient tones (cream, beige, wood). Serif or mixed font headline. The room scene is essential — never plain white background for home decor.
+  FITNESS: Fresh ingredients around the product (citrus, berries, greens) matching the product flavor/benefit. Or a woman using the product in a wellness setting. Bold heavy headline. Bright, clean, energizing.
+  ALWAYS: Match the pin's color palette to the product's actual packaging colors. Include "AURA GIRL ESSENTIALS" small text at very top. Headline at top, product in middle, 3 benefit lines below product, pill CTA at bottom.
+
+Respond ONLY with valid JSON:
+{{
+  "title": "...",
+  "description": "...",
+  "hashtags": "tag1, tag2, ...",
+  "alt_text": "...",
+  "board_name": "...",
+  "theme": "...",
+  "subtitle": "...",
+  "benefits": ["Word Word", "Word Word", "Word Word"],
+  "image_prompt": "..."
+}}"""
+
+    try:
+        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+            system="You are an expert Pinterest content creator. You follow formulas exactly and write copy that drives clicks. Always respond with valid JSON only — no markdown, no explanation.",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if not raw:
+            logger.error(f"Pin Perfect Pro: Claude returned empty response for keyword='{trend_keyword}', products={product_names}")
+            return {}
+        # Strip markdown code fences if Claude wrapped the JSON
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        data = json.loads(raw)
+        logger.info(f"Pin Perfect Pro content generated for keyword: {trend_keyword}")
+
+        # Parse benefits — expect a list of 3 short strings
+        raw_benefits = data.get("benefits", [])
+        if isinstance(raw_benefits, list):
+            benefits = [str(b).strip() for b in raw_benefits[:3] if b]
+        else:
+            benefits = []
+
+        return {
+            "title":        str(data.get("title", "")).strip()[:100],
+            "description":  str(data.get("description", "")).strip()[:500],
+            "hashtags":     str(data.get("hashtags", "")).strip(),
+            "alt_text":     str(data.get("alt_text", "")).strip()[:500],
+            "board_name":   str(data.get("board_name", board_name)).strip(),
+            "theme":        str(data.get("theme", "")).strip().upper()[:30],
+            "subtitle":     str(data.get("subtitle", "on Amazon")).strip()[:30],
+            "benefits":     benefits,
+            "image_prompt": str(data.get("image_prompt", "")).strip(),
+        }
+    except json.JSONDecodeError as e:
+        logger.error(f"Pin Perfect Pro returned invalid JSON: {e} | raw={raw[:200] if 'raw' in dir() else 'N/A'}")
+        return {}
+    except Exception as e:
+        logger.error(f"Pin Perfect Pro generation failed: {e}", exc_info=True)
+        return {}
+
+
 def _parse_hashtags(raw) -> list:
     if isinstance(raw, str):
         return [h.strip().lstrip("#") for h in raw.split(",") if h.strip()][:10]

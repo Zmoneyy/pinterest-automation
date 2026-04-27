@@ -78,12 +78,7 @@ def get_trending_keywords(region: str = "US", limit: int = 50) -> list[dict]:
         if result:
             return result
 
-    # Fall back to SerpAPI Google Trends
-    result = _get_serpapi_trends(limit)
-    if result:
-        return result
-
-    logger.warning("All trend sources failed — using evergreen fallback.")
+    logger.warning("Pinterest trends API failed — using evergreen fallback.")
     return _fallback_trends()
 
 
@@ -129,76 +124,6 @@ def _get_pinterest_trends(token: str, region: str, limit: int) -> list[dict]:
 
     except requests.RequestException as e:
         logger.error(f"Pinterest trends request failed: {e}")
-        return []
-
-
-def _get_serpapi_trends(limit: int = 50) -> list[dict]:
-    """Fetch trending keywords via SerpAPI Google Trends."""
-    try:
-        from config import Config
-        if not Config.SERP_API_KEY:
-            return []
-
-        # Specific brand-relevant queries to seed trend discovery
-        seed_queries = [
-            ("home decor 2026", "home_decor"),
-            ("amazon home finds", "home_decor"),
-            ("beauty skincare amazon", "beauty"),
-            ("nail art trends 2026", "beauty"),
-            ("amazon fashion finds", "fashion"),
-            ("kitchen organization amazon", "kitchen"),
-            ("desk setup aesthetic", "office"),
-            ("cozy home aesthetic", "home_decor"),
-        ]
-
-        trends = []
-        for query, default_category in seed_queries:
-            resp = requests.get(
-                "https://serpapi.com/search",
-                params={
-                    "engine": "google_trends",
-                    "q": query,
-                    "data_type": "RELATED_QUERIES",
-                    "api_key": Config.SERP_API_KEY,
-                },
-                timeout=15,
-            )
-            if resp.status_code != 200:
-                continue
-
-            data = resp.json()
-            rising = data.get("related_queries", {}).get("rising", [])
-            for item in rising[:4]:
-                kw = item.get("query", "")
-                value = item.get("extracted_value", 0)
-                if not kw:
-                    continue
-                detected_cat = _guess_category(kw)
-                # Only include if keyword is brand-relevant (not pure news/tech/food)
-                if detected_cat == "general" and not _is_brand_relevant(kw):
-                    continue
-                trends.append({
-                    "keyword": kw,
-                    "score": float(value or 0),
-                    "category": detected_cat if detected_cat != "general" else default_category,
-                    "monthly_change": value,
-                    "weekly_change": 0,
-                    "source": "google_trends",
-                })
-
-        # Deduplicate by keyword, highest score wins
-        seen = set()
-        unique = []
-        for t in sorted(trends, key=lambda x: x["score"], reverse=True):
-            if t["keyword"] not in seen:
-                seen.add(t["keyword"])
-                unique.append(t)
-
-        logger.info(f"Fetched {len(unique)} trends from SerpAPI Google Trends.")
-        return unique[:limit]
-
-    except Exception as e:
-        logger.error(f"SerpAPI trends fetch failed: {e}")
         return []
 
 
@@ -262,9 +187,11 @@ def post_pin(
     link: str,
     board_id: Optional[str] = None,
     alt_text: Optional[str] = None,
+    publish_date=None,
 ) -> dict:
     """
-    Post a pin to Pinterest.
+    Post (or schedule) a pin to Pinterest directly via API v5.
+    publish_date: datetime (UTC) to schedule the pin — None means post immediately.
     Returns the created pin data dict or raises on failure.
     """
     from config import Config
@@ -290,6 +217,12 @@ def post_pin(
     }
     if alt_text:
         payload["alt_text"] = alt_text[:500]
+    if publish_date:
+        # Pinterest expects ISO 8601 UTC string e.g. "2026-04-25T00:00:00Z"
+        if hasattr(publish_date, "strftime"):
+            payload["publish_date"] = publish_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+        else:
+            payload["publish_date"] = str(publish_date)
 
     try:
         resp = requests.post(url, headers=_headers(token), json=payload, timeout=30)

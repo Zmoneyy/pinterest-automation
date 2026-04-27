@@ -13,9 +13,9 @@ class Config:
 
     # Affiliate / Branding
     BENABLE_URL         = os.environ.get("BENABLE_URL", "")
-    BENABLE_URL_BEAUTY  = os.environ.get("BENABLE_URL_BEAUTY", "https://benable.com/AuraGirlFinds/beauty-faves")
-    BENABLE_URL_HOME    = os.environ.get("BENABLE_URL_HOME", "https://benable.com/AuraGirlFinds/glam-home")
-    BENABLE_URL_FITNESS = os.environ.get("BENABLE_URL_FITNESS", "https://benable.com/AuraGirlFinds/wellness-picks")
+    BENABLE_URL_BEAUTY  = os.environ.get("BENABLE_URL_BEAUTY", "https://auragirlessentials.com/shop/beauty")
+    BENABLE_URL_HOME    = os.environ.get("BENABLE_URL_HOME", "https://auragirlessentials.com/shop/glam-home")
+    BENABLE_URL_FITNESS = os.environ.get("BENABLE_URL_FITNESS", "https://auragirlessentials.com/shop/wellness")
     BRAND_NAME          = os.environ.get("BRAND_NAME", "")
 
     @classmethod
@@ -26,8 +26,6 @@ class Config:
             "fitness":    cls.BENABLE_URL_FITNESS,
         }.get(niche, cls.BENABLE_URL_BEAUTY)
 
-    # Amazon product search (via SerpAPI Google Shopping)
-    SERP_API_KEY         = os.environ.get("SERP_API_KEY", "")
     AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG", "")  # e.g. auragirlcre-20
 
     # AI APIs
@@ -35,7 +33,21 @@ class Config:
     GEMINI_API_KEY    = os.environ.get("GEMINI_API_KEY", "")
     GOOGLE_PROJECT_ID = os.environ.get("GOOGLE_PROJECT_ID", "")
     GOOGLE_LOCATION   = os.environ.get("GOOGLE_LOCATION", "us-central1")
-    BLOTATO_API_KEY   = os.environ.get("BLOTATO_API_KEY", "")
+    OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
+    BLOTATO_API_KEY    = os.environ.get("BLOTATO_API_KEY", "")
+    BLOTATO_ACCOUNT_ID = os.environ.get("BLOTATO_ACCOUNT_ID", "5694")
+
+    PINTEREST_BOARDS = {
+        "Beauty Finds & Skincare":              os.environ.get("PINTEREST_BOARD_BEAUTY",           "1140044161863463132"),
+        "Glam Home Decor Ideas":                os.environ.get("PINTEREST_BOARD_GLAM_HOME",        "1140044161863463135"),
+        "Wellness & Self Care Essentials":      os.environ.get("PINTEREST_BOARD_WELLNESS",         "1140044161863463136"),
+        "Nail Inspo & Nail Art Ideas":          os.environ.get("PINTEREST_BOARD_NAILS",            "1140044161863463150"),
+        "Luxury Look for Less Home Decor":      os.environ.get("PINTEREST_BOARD_LUXURY_HOME",      "1140044161863463151"),
+        "Amazon Home Finds":                    os.environ.get("PINTEREST_BOARD_AMAZON_HOME",      "1140044161863463152"),
+        "Aesthetic Home Decor for Cozy Spaces": os.environ.get("PINTEREST_BOARD_AESTHETIC_HOME",   "1140044161863463154"),
+        "Affordable Beauty Essentials":         os.environ.get("PINTEREST_BOARD_AFFORDABLE_BEAUTY","1140044161863463155"),
+        "Fitness Finds on Amazon":              os.environ.get("PINTEREST_BOARD_FITNESS",          "1140044161863463156"),
+    }
     FAL_API_KEY       = os.environ.get("FAL_API_KEY", "")
 
     # Database
@@ -58,12 +70,18 @@ class Config:
     @classmethod
     def is_configured(cls):
         """Return a dict of which required settings are configured."""
+        # Check DB for token in case it was set via OAuth flow
+        db_token = ""
+        try:
+            from app.models import Setting
+            db_token = Setting.get("pinterest_access_token", "")
+        except Exception:
+            pass
         return {
             "pinterest_app": bool(cls.PINTEREST_APP_ID and cls.PINTEREST_APP_SECRET),
-            "pinterest_token": bool(cls.PINTEREST_ACCESS_TOKEN),
+            "pinterest_token": bool(cls.PINTEREST_ACCESS_TOKEN or db_token),
             "pinterest_board": bool(cls.PINTEREST_BOARD_ID),
             "benable": bool(cls.BENABLE_URL),
-            "amazon_search": bool(cls.SERP_API_KEY),
             "anthropic": bool(cls.ANTHROPIC_API_KEY),
             "google_vertex": bool(cls.GOOGLE_PROJECT_ID),
             "dashboard_password": bool(cls.DASHBOARD_PASSWORD),

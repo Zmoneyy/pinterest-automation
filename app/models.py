@@ -16,15 +16,20 @@ pin_products = db.Table(
 class Product(db.Model):
     __tablename__ = "products"
 
+    CONTENT_EVERGREEN = "evergreen"   # sells year-round (skincare basics, home organizers)
+    CONTENT_SEASONAL  = "seasonal"    # tied to a season or moment (summer, holiday, back-to-school)
+    CONTENT_TRENDING  = "trending"    # growing fast on Pinterest right now
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     amazon_url = db.Column(db.Text, nullable=False)
     benable_url = db.Column(db.Text, nullable=False)
     category = db.Column(db.String(100), nullable=False)
-    image_url = db.Column(db.Text, nullable=True)   # Product image URL used in collage
+    image_url = db.Column(db.Text, nullable=True)
     price = db.Column(db.String(20), nullable=True)
     added_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    content_type = db.Column(db.String(20), default="evergreen", nullable=False)  # evergreen/seasonal/trending
 
     def to_dict(self):
         return {
@@ -37,6 +42,7 @@ class Product(db.Model):
             "price": self.price,
             "added_at": self.added_at.isoformat() if self.added_at else None,
             "is_active": self.is_active,
+            "content_type": self.content_type,
         }
 
     def __repr__(self):
@@ -67,6 +73,9 @@ class Pin(db.Model):
     pinterest_pin_id = db.Column(db.String(255), nullable=True)
     trend_keyword = db.Column(db.String(255), nullable=True)
     style_variant = db.Column(db.String(50), nullable=True)
+    board_name    = db.Column(db.String(255), nullable=True)   # Pinterest board name for posting
+    alt_text      = db.Column(db.Text, nullable=True)          # SEO alt text for the pin
+    shop_url      = db.Column(db.Text, nullable=True)          # shop page link (auragirlessentials.com/shop/...)
 
     # Many-to-many: each collage pin features 5-8 products
     products = db.relationship(

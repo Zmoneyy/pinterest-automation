@@ -6,8 +6,26 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     fonts-dejavu-core \
+    fonts-unifont \
     wget \
     ca-certificates \
+    libnss3 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libxkbcommon0 \
+    libx11-xcb1 \
+    libxcb-dri3-0 \
+    libdrm2 \
+    libgbm1 \
+    libasound2t64 \
+    libxshmfence1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Download Playfair Display — the luxury serif that matches Jackie Aina's editorial style.
@@ -24,7 +42,8 @@ RUN mkdir -p /app/fonts && \
 
 # Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    playwright install chromium
 
 # App code
 COPY . .

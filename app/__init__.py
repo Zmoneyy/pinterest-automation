@@ -39,6 +39,9 @@ def create_app(config_object=None):
         except OperationalError:
             db.session.rollback()
 
+        # Migrate any new columns added to existing tables
+        _run_migrations()
+
         # Remove sample placeholder products
         _remove_sample_data()
 
@@ -51,6 +54,25 @@ def create_app(config_object=None):
         _start_scheduler(app)
 
     return app
+
+
+def _run_migrations():
+    """Add new columns to existing tables without dropping data."""
+    from sqlalchemy import text
+    migrations = [
+        "ALTER TABLE pins ADD COLUMN IF NOT EXISTS board_name VARCHAR(255)",
+        "ALTER TABLE pins ADD COLUMN IF NOT EXISTS alt_text TEXT",
+        "ALTER TABLE pins ADD COLUMN IF NOT EXISTS shop_url TEXT",
+    ]
+    for sql in migrations:
+        try:
+            db.session.execute(text(sql))
+        except Exception:
+            db.session.rollback()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _remove_sample_data():
