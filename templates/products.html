@@ -126,9 +126,33 @@
   <div class="alert alert-error">Please fill in all required fields (name, Amazon URL, Benable URL).</div>
 {% endif %}
 
-{# ── Product list ── #}
+{# ── Filter bar ── #}
 {% if products %}
-<div class="product-list">
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+  <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
+  <button onclick="filterProducts('all')"      id="filter-all"      class="filter-btn active">All</button>
+  <button onclick="filterProducts('beauty')"   id="filter-beauty"   class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a22;">💄 Beauty 10%</button>
+  <button onclick="filterProducts('home_decor')" id="filter-home_decor" class="filter-btn" style="background:#fff3cd;color:#856404;border-color:#85640422;">🏠 Home 3%</button>
+  <button onclick="filterProducts('fitness')"  id="filter-fitness"  class="filter-btn" style="background:#fde8e8;color:#a42a2a;border-color:#a42a2a22;">🏋 Fitness 1%</button>
+</div>
+<style>
+  .filter-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--gray-200);
+    background: var(--white);
+    color: var(--gray-600);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s, box-shadow 0.15s;
+  }
+  .filter-btn.active { box-shadow: 0 0 0 2px currentColor; }
+  .filter-btn:not(.active) { opacity: 0.6; }
+</style>
+
+{# ── Product list ── #}
+<div class="product-list" id="productList">
   {% for product in products %}
   {% set icons = {
     'home_decor': '🏠', 'kitchen': '☕', 'office': '💻',
@@ -136,7 +160,7 @@
     'travel': '✈', 'garden': '🌿', 'pets': '🐾',
     'tech': '📱', 'art': '🎨', 'general': '🛍'
   } %}
-  <div class="product-card {% if not product.is_active %}inactive{% endif %}">
+  <div class="product-card {% if not product.is_active %}inactive{% endif %}" data-category="{{ product.category }}">
     <div class="product-icon">
       {{ icons.get(product.category, '🛍') }}
     </div>
@@ -243,4 +267,25 @@
     </div>
   </form>
 </div>
+
+<script>
+  function filterProducts(category) {
+    // Update active button
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('filter-' + category).classList.add('active');
+
+    // Show/hide cards
+    document.querySelectorAll('#productList .product-card').forEach(card => {
+      card.style.display = (category === 'all' || card.dataset.category === category) ? '' : 'none';
+    });
+
+    // Update count badge
+    const visible = document.querySelectorAll('#productList .product-card:not([style*="none"])').length;
+    const total   = document.querySelectorAll('#productList .product-card').length;
+    document.querySelector('.badge-gray').textContent =
+      category === 'all'
+        ? `${total} total · ${document.querySelectorAll('#productList .product-card:not(.inactive):not([style*="none"])').length} active`
+        : `${visible} shown`;
+  }
+</script>
 {% endblock %}
