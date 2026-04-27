@@ -774,7 +774,15 @@ def fetch_amazon_images():
                     if title_tag:
                         product_title = title_tag.get_text(strip=True)
 
-                    # Source 2: og:title meta tag — often present even on bot-detected pages
+                    # Source 2: embedded JSON blob — Amazon serves "productTitle":"..." in
+                    # a JS data object when the page is bot-detected (no rendered DOM element)
+                    if not product_title:
+                        json_match = re.search(r'"productTitle"\s*:\s*"([^"]{10,})"', page_resp.text)
+                        if json_match:
+                            import html as html_module
+                            product_title = html_module.unescape(json_match.group(1)).strip()
+
+                    # Source 3: og:title meta tag
                     if not product_title:
                         og = soup.find("meta", property="og:title") or soup.find("meta", attrs={"name": "title"})
                         if og and og.get("content"):
@@ -783,7 +791,7 @@ def fetch_amazon_images():
                             if cleaned and cleaned.lower() not in ("amazon.com", "amazon", ""):
                                 product_title = cleaned
 
-                    # Source 3: <title> tag with "Amazon.com :" prefix stripped
+                    # Source 4: <title> tag with "Amazon.com :" prefix stripped
                     if not product_title:
                         page_title = soup.find("title")
                         if page_title:
