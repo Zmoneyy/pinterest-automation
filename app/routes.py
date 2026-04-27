@@ -1122,6 +1122,191 @@ def upload_pin_publish():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@bp.route("/bulk-upload")
+@login_required
+def bulk_upload():
+    from config import Config
+    boards = list(Config.PINTEREST_BOARDS.keys())
+    return render_template("bulk_upload.html", boards=boards)
+
+
+@bp.route("/bulk-upload/submit", methods=["POST"])
+@login_required
+def bulk_upload_submit():
+    """
+    Accept multiple pins at once: images + Pin Perfect Pro text per pin.
+    Schedules them spread across a date range at specified times.
+    """
+    import base64
+    import uuid as _uuid
+    from datetime import timedelta
+    from google.cloud import storage as gcs
+    from config import Config
+
+    try:
+        data         = request.get_json()
+        pins_data    = data.get("pins", [])           # list of {ppp_text, image_b64, board_name}
+        start_date   = data.get("start_date", "")     # ISO date string "2026-04-28"
+        pins_per_day = int(data.get("pins_per_day", 3))
+        post_times   = data.get("post_times", ["09:00", "13:00", "19:00"])  # HH:MM UTC
+
+        if not pins_data:
+            return jsonify({"ok": False, "error": "No pins provided"}), 400
+        if not start_date:
+            return jsonify({"ok": False, "error": "Start date required"}), 400
+
+        # Build the schedule slots: date × time
+        start_dt = datetime.fromisoformat(start_date)
+        schedule_slots = []
+        day = 0
+        while len(schedule_slots) < len(pins_data):
+            for t in post_times:
+                if len(schedule_slots) >= len(pins_data):
+                    break
+                h, m = int(t.split(":")[0]), int(t.split(":")[1])
+                slot = (start_dt + timedelta(days=day)).replace(
+                    hour=h, minute=m, second=0, microsecond=0,
+                    tzinfo=timezone.utc
+                )
+                schedule_slots.append(slot)
+            day += 1
+
+        # Upload images to GCS
+        gcs_client = gcs.Client()
+        bucket = gcs_client.bucket("pinterest-automation-images-814656203168")
+
+        saved = []
+        errors = []
+
+        for i, pin_data in enumerate(pins_data):
+            try:
+                ppp_text   = pin_data.get("ppp_text", "")
+                image_b64  = pin_data.get("image_b64", "")
+                board_name = pin_data.get("board_name", "")
+
+                # Parse Pin Perfect Pro output
+                parsed = _parse_ppp_output(ppp_text)
+
+                title       = parsed.get("title", f"Pin {i+1}")
+                description = parsed.get("description", "")
+                hashtags    = parsed.get("hashtags", "")
+                alt_text    = parsed.get("alt_text", "")
+                board_name  = board_name or parsed.get("board_name", "Beauty Finds & Skincare")
+
+                # Upload image to GCS
+                image_url = None
+                if image_b64:
+                    raw = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+                    img_bytes = base64.b64decode(raw)
+                    blob_name = f"bulk-upload/{_uuid.uuid4().hex}.jpg"
+                    blob = bucket.blob(blob_name)
+                    blob.upload_from_string(img_bytes, content_type="image/jpeg")
+                    image_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
+
+                scheduled_for = schedule_slots[i]
+
+                # Save pin to DB
+                pin = Pin(
+                    title=title,
+                    description=description,
+                    hashtags=hashtags,
+                    alt_text=alt_text,
+                    board_name=board_name,
+                    image_url=image_url,
+                    status=Pin.STATUS_SCHEDULED,
+                    scheduled_for=scheduled_for,
+                )
+                db.session.add(pin)
+                db.session.flush()
+
+                shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
+                pin.shop_url = shop_url
+                if "auragirlessentials.com" not in description and "benable.com" not in description:
+                    pin.description = description + f"\n\nShop the list → {shop_url}"
+
+                db.session.commit()
+                saved.append({
+                    "pin_id": pin.id,
+                    "title": title,
+                    "scheduled_for": scheduled_for.isoformat(),
+                })
+
+            except Exception as e:
+                db.session.rollback()
+                errors.append({"index": i, "error": str(e)})
+                logger.error(f"Bulk upload pin {i} failed: {e}", exc_info=True)
+
+        return jsonify({
+            "ok": True,
+            "saved": len(saved),
+            "errors": len(errors),
+            "pins": saved,
+            "error_details": errors,
+        })
+
+    except Exception as e:
+        logger.error(f"Bulk upload submit failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _parse_ppp_output(text: str) -> dict:
+    """
+    Parse Pin Perfect Pro output into structured fields.
+    Handles the exact format Pin Perfect Pro produces.
+    """
+    import re
+
+    def extract_section(label_patterns, txt):
+        for pat in label_patterns:
+            m = re.search(pat + r'\s*\n+([\s\S]+?)(?=\n---|\n##|\n###|\Z)', txt, re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+        return ""
+
+    # Title — look for "Pin Title" section
+    title = extract_section([r'##[^#]*Pin Title[^#\n]*', r'\*\*Pin Title'], text)
+    # Strip markdown bold/italic and leading dashes
+    title = re.sub(r'\*+', '', title).strip().lstrip('-').strip()
+    # Take just the first line
+    title = title.split('\n')[0].strip()
+
+    # Description
+    description = extract_section([r'##[^#]*Pin Description[^#\n]*', r'\*\*Pin Description'], text)
+    description = re.sub(r'\*+', '', description).strip()
+    description = description.split('\n')[0].strip() if description else ""
+
+    # Alt text
+    alt_text = extract_section([r'##[^#]*Alt Text[^#\n]*', r'\*\*Alt Text'], text)
+    alt_text = re.sub(r'\*+', '', alt_text).strip().split('\n')[0].strip()
+
+    # Board name
+    board_name = extract_section([r'##[^#]*Board Name[^#\n]*', r'\*\*Board Name'], text)
+    board_name = re.sub(r'\*+', '', board_name).strip().split('\n')[0].strip()
+
+    # Hashtags — from Supporting Keywords section, convert to #hashtags
+    keywords_raw = extract_section([r'###[^#]*Supporting Keywords', r'\*\*Supporting Keywords'], text)
+    hashtags = ""
+    if keywords_raw:
+        kws = [k.strip().lstrip('-').strip() for k in re.split(r'[,\n]', keywords_raw) if k.strip()]
+        hashtags = " ".join(f"#{kw.replace(' ', '').lower()}" for kw in kws if kw)
+
+    # Also grab primary keyword as a hashtag
+    primary_kw = extract_section([r'##[^#]*Primary Keyword', r'\*\*Primary Keyword'], text)
+    primary_kw = re.sub(r'\*+', '', primary_kw).strip().split('\n')[0].strip()
+    if primary_kw:
+        primary_tag = f"#{primary_kw.replace(' ', '').lower()}"
+        if primary_tag not in hashtags:
+            hashtags = primary_tag + " " + hashtags
+
+    return {
+        "title": title,
+        "description": description,
+        "alt_text": alt_text,
+        "board_name": board_name,
+        "hashtags": hashtags.strip(),
+    }
+
+
 @bp.route("/api/post_due", methods=["POST"])
 @login_required
 def api_post_due():
