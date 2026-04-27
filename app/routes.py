@@ -906,6 +906,7 @@ def generate_pin_perfect_pro_route():
         board_name        = data.get("board_name", "")
         amazon_url        = data.get("amazon_url", "")
         price             = data.get("price", "")
+        image_model       = data.get("image_model", "dalle3")
         shop_url          = Config.benable_url_for_niche(niche)
 
         # Auto-pick keyword from Pinterest TrendCache if not provided
@@ -947,6 +948,7 @@ def generate_pin_perfect_pro_route():
                 product_name=product_names[0] if product_names else "",
                 amazon_url=amazon_url,
                 price=price,
+                image_model=image_model,
             )
 
         if not image_url and result.get("image_prompt"):

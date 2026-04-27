@@ -105,6 +105,21 @@
   </div>
   <div id="pppPanel" style="display:none;margin-top:16px;display:none;">
     <div style="display:flex;flex-direction:column;gap:12px;">
+      {# Image model selector #}
+      <div style="margin-bottom:12px;">
+        <label style="font-size:13px;font-weight:600;color:#333;display:block;margin-bottom:6px;">🎨 Image style</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:2px solid #d4547a;border-radius:8px;cursor:pointer;font-size:13px;background:#fff8f9;">
+            <input type="radio" name="imageModel" value="dalle3" checked style="accent-color:#d4547a;">
+            <span><strong>DALL-E 3</strong> <span style="color:#aaa;font-size:11px;">— lifestyle glow, pink aesthetic</span></span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;padding:8px 14px;border:2px solid #eee;border-radius:8px;cursor:pointer;font-size:13px;background:#fafafa;">
+            <input type="radio" name="imageModel" value="claude_design" style="accent-color:#555;">
+            <span><strong>Claude Design</strong> <span style="color:#aaa;font-size:11px;">— clean HTML layout</span></span>
+          </label>
+        </div>
+      </div>
+
       {# Keyword is auto-picked from the product + Pinterest trends — hidden by default #}
       <input type="hidden" id="pppKeyword">
       <div style="margin-bottom:4px;">
@@ -607,6 +622,7 @@
           product_images: productImageUrls,
           amazon_url: _fetchedProductImages.length ? (_fetchedProductImages[0].amazon_url || '') : '',
           price: _fetchedProductImages.length ? (_fetchedProductImages[0].price || '') : '',
+          image_model: document.querySelector('input[name="imageModel"]:checked')?.value || 'dalle3',
         }),
       });
       const data = await resp.json();

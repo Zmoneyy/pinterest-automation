@@ -183,6 +183,97 @@ def generate_claude_design_pin(
         return None
 
 
+def generate_dalle3_pin(
+    product_image_url: str,
+    product_name: str,
+    niche: str = "beauty",
+    theme: str = "",
+    benefits: list = None,
+) -> Optional[str]:
+    """
+    Generate a Pinterest pin using DALL-E 3.
+    DALL-E 3 can create lifestyle backgrounds, glow effects, and photorealistic
+    product scenes — much closer to the Pin Perfect Pro / gpt-image-2 style.
+    """
+    import requests as req
+    from openai import OpenAI
+    from config import Config
+
+    if not Config.OPENAI_API_KEY:
+        logger.warning("DALL-E 3: no OPENAI_API_KEY")
+        return None
+
+    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+
+    b = benefits or ["Premium Quality", "Fast Results", "Easy to Use"]
+    b1 = b[0] if len(b) > 0 else "Premium Quality"
+    b2 = b[1] if len(b) > 1 else "Fast Results"
+    b3 = b[2] if len(b) > 2 else "Easy to Use"
+
+    headline = theme if theme else product_name
+
+    NICHE_STYLE = {
+        "beauty": {
+            "bg": "soft pink or rose gradient background with sparkle/glitter effects and glowing skin bokeh in the background",
+            "accent": "hot pink (#d4547a)",
+            "cta": "Save This Routine",
+        },
+        "home_decor": {
+            "bg": "warm cozy lifestyle living room scene with soft ambient lighting, cream and beige tones",
+            "accent": "warm gold (#b07d3a)",
+            "cta": "Save This Idea",
+        },
+        "fitness": {
+            "bg": "fresh energetic background — either clean white with citrus/ingredient props or dark dramatic with glow effects",
+            "accent": "teal or bold gold (#2a9d8f or #e8a020)",
+            "cta": "Save This",
+        },
+    }
+    style = NICHE_STYLE.get(niche, NICHE_STYLE["beauty"])
+
+    prompt = f"""Create a Pinterest pin image (portrait, 2:3 ratio) for: {product_name}
+
+EXACT LAYOUT (top to bottom):
+1. TOP SECTION (~30%): {style["bg"]}. Large bold headline text: "{headline}" — biggest text on the pin, font weight 900, mixed case or ALL CAPS. One key word in {style["accent"]} accent color.
+2. MIDDLE SECTION (~45%): The product "{product_name}" as the hero — large, centered, photorealistic, true to the actual product packaging and colors. Background behind product blends with the overall scene.
+3. BOTTOM SECTION (~25%): Light panel. Three benefit icons in a row: {b1} · {b2} · {b3}. Below that a full-width rounded button with bookmark icon and text "🔖 {style["cta"]}" in {style["accent"]} color.
+
+STYLE: Pinterest-native, scroll-stopping, premium editorial. Feels like a magazine ad. Warm, aspirational, not clinical. No watermarks. No borders. Mobile-optimized."""
+
+    try:
+        logger.info(f"Calling DALL-E 3 for product='{product_name}', niche='{niche}'")
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=prompt,
+            n=1,
+            size="1024x1792",  # closest to 2:3 portrait
+            quality="hd",
+            response_format="b64_json",
+        )
+
+        import base64
+        img_bytes = base64.b64decode(response.data[0].b64_json)
+
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        fname = f"pin_dalle3_{uuid.uuid4().hex}.png"
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(img_bytes)
+
+        gcs_url = _upload_to_gcs(path)
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+
+        logger.info(f"DALL-E 3 pin uploaded: {gcs_url}")
+        return gcs_url
+
+    except Exception as e:
+        logger.error(f"DALL-E 3 generation failed: {e}", exc_info=True)
+        return None
+
+
 def generate_editorial_pin(
     product_image_urls: list,
     theme: str,
@@ -192,19 +283,35 @@ def generate_editorial_pin(
     product_name: str = "",
     amazon_url: str = "",
     price: str = "",
+    image_model: str = "dalle3",
 ) -> Optional[str]:
     """
     Generate a Pinterest editorial pin.
 
-    Priority:
-    1. Claude Design (HTML → Playwright screenshot) — best quality
-    2. gpt-image-1 (AI image generation with product photo reference)
-    3. PIL compositor (last resort)
+    image_model options:
+      "dalle3"        — DALL-E 3 (default, best lifestyle/glow aesthetic)
+      "claude_design" — Claude HTML → Playwright PNG
+      "gpt_image_1"   — gpt-image-1 edit (requires org verification)
+
+    Falls back to claude_design then PIL if primary fails.
     """
     from config import Config
 
-    # 1. Try Claude Design first
-    if Config.ANTHROPIC_API_KEY and product_image_urls:
+    # 1. DALL-E 3 (default)
+    if image_model == "dalle3" and Config.OPENAI_API_KEY:
+        result = generate_dalle3_pin(
+            product_image_url=product_image_urls[0] if product_image_urls else "",
+            product_name=product_name,
+            niche=niche,
+            theme=theme,
+            benefits=benefits or [],
+        )
+        if result:
+            return result
+        logger.warning("DALL-E 3 failed — falling back to Claude Design")
+
+    # 2. Claude Design
+    if image_model in ("claude_design", "dalle3") and Config.ANTHROPIC_API_KEY and product_image_urls:
         result = generate_claude_design_pin(
             product_image_url=product_image_urls[0],
             product_name=product_name,
@@ -216,7 +323,7 @@ def generate_editorial_pin(
             return result
         logger.warning("Claude Design failed — falling back to gpt-image-1")
 
-    # 2. Try gpt-image-1
+    # 3. gpt-image-1
     if Config.OPENAI_API_KEY:
         result = _generate_gpt_image_pin(
             product_image_urls=product_image_urls,
@@ -230,7 +337,7 @@ def generate_editorial_pin(
             return result
         logger.warning("gpt-image-1 failed — falling back to PIL compositor")
 
-    # 3. PIL fallback
+    # 4. PIL last resort
     return _generate_pil_editorial_pin(
         product_image_urls=product_image_urls,
         theme=theme,
