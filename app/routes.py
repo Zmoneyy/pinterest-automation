@@ -730,13 +730,17 @@ def fetch_amazon_images():
             continue
 
         # Follow amzn.to short links to get the full URL with ASIN
-        if 'amzn.to' in url:
+        # Use GET (not HEAD) — Amazon often ignores HEAD and returns a redirect loop
+        if 'amzn.to' in url or 'a.co' in url:
             try:
-                redir = req.head(url, allow_redirects=True, timeout=10,
-                                 headers={"User-Agent": "Mozilla/5.0"})
+                redir = req.get(url, allow_redirects=True, timeout=10,
+                                headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"},
+                                stream=True)
+                redir.close()  # don't download body, just need the final URL
                 url = redir.url
+                logger.info(f"Resolved short link → {url}")
             except Exception as e:
-                logger.warning(f"Could not follow amzn.to redirect for {url}: {e}")
+                logger.warning(f"Could not follow short link redirect for {url}: {e}")
 
         # Extract ASIN from URL: /dp/XXXXXXXXXX or /product/XXXXXXXXXX
         asin_match = re.search(r'/(?:dp|product|gp/product)/([A-Z0-9]{10})', url)
@@ -764,16 +768,27 @@ def fetch_amazon_images():
                 if page_resp.ok:
                     from bs4 import BeautifulSoup
                     soup = BeautifulSoup(page_resp.text, "html.parser")
+
+                    # Source 1: #productTitle — the definitive element
                     title_tag = soup.find(id="productTitle")
                     if title_tag:
                         product_title = title_tag.get_text(strip=True)
+
+                    # Source 2: og:title meta tag — often present even on bot-detected pages
                     if not product_title:
-                        # Fallback: parse <title> tag, strip "Amazon.com :" prefix
+                        og = soup.find("meta", property="og:title") or soup.find("meta", attrs={"name": "title"})
+                        if og and og.get("content"):
+                            raw = og["content"].strip()
+                            cleaned = re.sub(r'\s*[:\|]\s*Amazon\.com.*$', '', raw, flags=re.IGNORECASE).strip()
+                            if cleaned and cleaned.lower() not in ("amazon.com", "amazon", ""):
+                                product_title = cleaned
+
+                    # Source 3: <title> tag with "Amazon.com :" prefix stripped
+                    if not product_title:
                         page_title = soup.find("title")
                         if page_title:
                             raw = page_title.get_text(strip=True)
                             cleaned = re.sub(r'^Amazon\.com\s*[:\-]\s*', '', raw).split(" : ")[0].strip()
-                            # Only use if it's not just "Amazon.com" or empty
                             if cleaned and cleaned.lower() not in ("amazon.com", "amazon", ""):
                                 product_title = cleaned
             except Exception as scrape_err:
@@ -846,7 +861,7 @@ def fetch_amazon_images():
 
             results.append({
                 "asin": asin,
-                "name": str(product_title)[:120],
+                "name": str(product_title),
                 "image_url": gcs_url,
                 "amazon_url": f"https://www.amazon.com/dp/{asin}",
                 "error": None,
