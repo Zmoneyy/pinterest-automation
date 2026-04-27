@@ -1,10 +1,9 @@
 """
-Pinterest collage image generator.
+Pinterest pin image generator.
 
 Priority order:
-  1. fal.ai Nano Banana 2 (primary) — generates photorealistic product collage pins
-     directly from product names + niche. Text baked into image. Best quality.
-  2. Gemini Imagen (fallback) — text-to-image via Vertex AI.
+  1. Claude Design (primary) — Claude generates HTML pin, Playwright screenshots it to PNG.
+  2. gpt-image-1 (fallback) — OpenAI image generation with product photo reference.
   3. PIL collage (last resort) — basic editorial collage using Pillow.
 """
 import io
@@ -60,6 +59,650 @@ INNER_W    = W - 2 * MARGIN
 # PUBLIC API
 # ══════════════════════════════════════════════════════════════════════════
 
+def generate_claude_design_pin(
+    product_image_url: str,
+    product_name: str,
+    amazon_url: str,
+    niche: str = "beauty",
+    price: str = "",
+) -> Optional[str]:
+    """
+    Generate a Pinterest pin using Claude Design:
+    1. Send product info + image to Claude API with the system prompt
+    2. Claude returns a full HTML pin (1000x1500px)
+    3. Playwright screenshots it to PNG
+    4. Upload PNG to GCS, return URL
+    """
+    import base64
+    import re
+    import requests as req
+    from config import Config
+
+    if not Config.ANTHROPIC_API_KEY:
+        logger.warning("Claude Design: no ANTHROPIC_API_KEY")
+        return None
+
+    try:
+        # Load system prompt
+        system_prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "system_prompt.txt")
+        with open(system_prompt_path) as f:
+            system_prompt = f.read()
+
+        # Fetch and base64-encode the product image
+        img_b64 = None
+        if product_image_url:
+            try:
+                img_resp = req.get(product_image_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+                if img_resp.ok:
+                    img_b64 = base64.standard_b64encode(img_resp.content).decode("utf-8")
+                    img_media_type = img_resp.headers.get("content-type", "image/jpeg").split(";")[0]
+            except Exception as e:
+                logger.warning(f"Claude Design: could not fetch product image: {e}")
+
+        # Build user message
+        user_text = f"Generate a Pinterest pin for this product.\n\nProduct: {product_name}\nAmazon URL: {amazon_url}\nCategory: {niche}"
+        if price:
+            user_text += f"\nPrice: {price}"
+
+        content = []
+        if img_b64:
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": img_media_type, "data": img_b64},
+            })
+        content.append({"type": "text", "text": user_text})
+
+        import anthropic
+        client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": content}],
+        )
+
+        html = response.content[0].text.strip()
+
+        # Strip markdown fences if Claude wrapped it anyway
+        html = re.sub(r'^```html?\s*', '', html, flags=re.IGNORECASE)
+        html = re.sub(r'\s*```$', '', html)
+
+        # ── CRITICAL: inject base64 image so Playwright (file://) can render it ──
+        # Claude generates <img src="IMAGE_PLACEHOLDER"> or an http URL.
+        # Playwright running from file:// can't load external URLs, so we must
+        # embed the product image as a data URI directly in the HTML.
+        if img_b64:
+            data_uri = f"data:{img_media_type};base64,{img_b64}"
+            # Replace the placeholder Claude was instructed to use
+            html = html.replace("IMAGE_PLACEHOLDER", data_uri)
+            # Also replace any raw http(s) URL that matches the original product image
+            if product_image_url:
+                html = html.replace(product_image_url, data_uri)
+            # Fallback: replace the first external img src we find (covers cases where
+            # Claude used a different URL or ignored the placeholder instruction)
+            html = re.sub(
+                r'(<img\b[^>]*\bsrc=")[^"]*(?:http|IMAGE_PLACEHOLDER)[^"]*(")',
+                rf'\g<1>{data_uri}\2',
+                html,
+                count=1,
+            )
+
+        # Save HTML to temp file
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        pin_id = uuid.uuid4().hex
+        html_path = os.path.join(OUTPUT_DIR, f"{pin_id}.html")
+        png_path  = os.path.join(OUTPUT_DIR, f"{pin_id}.png")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        # Screenshot with Playwright
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
+            page = browser.new_page(viewport={"width": 1000, "height": 1500})
+            page.goto(f"file://{html_path}")
+            page.wait_for_timeout(2000)  # let Google Fonts load
+            page.screenshot(path=png_path, full_page=False, clip={"x": 0, "y": 0, "width": 1000, "height": 1500})
+            browser.close()
+
+        # Upload to GCS
+        gcs_url = _upload_to_gcs(png_path)
+
+        # Clean up temp files
+        try:
+            os.remove(html_path)
+            os.remove(png_path)
+        except Exception:
+            pass
+
+        logger.info(f"Claude Design pin uploaded: {gcs_url}")
+        return gcs_url
+
+    except Exception as e:
+        logger.error(f"Claude Design pin failed: {e}", exc_info=True)
+        return None
+
+
+def generate_editorial_pin(
+    product_image_urls: list,
+    theme: str,
+    subtitle: str = "on Amazon",
+    niche: str = "beauty",
+    benefits: list = None,
+    product_name: str = "",
+    amazon_url: str = "",
+    price: str = "",
+) -> Optional[str]:
+    """
+    Generate a Pinterest editorial pin.
+
+    Priority:
+    1. Claude Design (HTML → Playwright screenshot) — best quality
+    2. gpt-image-1 (AI image generation with product photo reference)
+    3. PIL compositor (last resort)
+    """
+    from config import Config
+
+    # 1. Try Claude Design first
+    if Config.ANTHROPIC_API_KEY and product_image_urls:
+        result = generate_claude_design_pin(
+            product_image_url=product_image_urls[0],
+            product_name=product_name,
+            amazon_url=amazon_url,
+            niche=niche,
+            price=price,
+        )
+        if result:
+            return result
+        logger.warning("Claude Design failed — falling back to gpt-image-1")
+
+    # 2. Try gpt-image-1
+    if Config.OPENAI_API_KEY:
+        result = _generate_gpt_image_pin(
+            product_image_urls=product_image_urls,
+            theme=theme,
+            subtitle=subtitle,
+            niche=niche,
+            benefits=benefits or [],
+            product_name=product_name,
+        )
+        if result:
+            return result
+        logger.warning("gpt-image-1 failed — falling back to PIL compositor")
+
+    # 3. PIL fallback
+    return _generate_pil_editorial_pin(
+        product_image_urls=product_image_urls,
+        theme=theme,
+        subtitle=subtitle,
+        niche=niche,
+        benefits=benefits or [],
+    )
+
+
+def _generate_gpt_image_pin(
+    product_image_urls: list,
+    theme: str,
+    subtitle: str,
+    niche: str,
+    benefits: list,
+    product_name: str = "",
+) -> Optional[str]:
+    """
+    Use gpt-image-1 with the real product photo passed via images.edit
+    so the model sees the actual product colors, shape, and packaging.
+    """
+    import base64
+    import requests as req
+    from openai import OpenAI
+    from PIL import Image as PILImage
+    from config import Config
+
+    client = OpenAI(api_key=Config.OPENAI_API_KEY)
+
+    b1 = benefits[0] if len(benefits) > 0 else "Clearer Skin"
+    b2 = benefits[1] if len(benefits) > 1 else "Smaller Pores"
+    b3 = benefits[2] if len(benefits) > 2 else "Smoother Texture"
+    product_label = product_name if product_name else "a premium product"
+
+    # ── RULE 1: Color palette pulled from product packaging ────────────────
+    # The pin's colors must match the actual product. We pass the real photo
+    # via images.edit so the model sees the exact packaging — but we also
+    # describe it explicitly in the prompt so nothing is left to chance.
+
+    # ── RULE 2: Background scene by niche ─────────────────────────────────
+    NICHE_SCENE = {
+        "beauty": (
+            "Clean white or soft light beige background with subtle drop shadow. "
+            "Product centered and hero — no room scene, no people. "
+            "If the product is a cream or liquid, add a small texture swipe behind it showing the product's texture. "
+            "If it's a hydrating product, add soft water droplets around it. "
+            "Soft studio lighting, premium skincare editorial feel."
+        ),
+        "home_decor": (
+            "Full lifestyle room scene — cozy living room or bedroom setting. "
+            "Show the product styled IN a real room: sofa, throw blanket, candles, plants, wall art nearby. "
+            "Warm ambient lighting from the product itself if it's a lamp. "
+            "The room context is essential — people need to visualize it in their own space. "
+            "Neutral warm tones: cream, beige, wood, warm whites."
+        ),
+        "fitness": (
+            "Fresh, energetic product scene. "
+            "Surround the product with fresh ingredients that match the flavor or benefit "
+            "(citrus for hydration, berries/greens for supplements, clean gym surface for equipment). "
+            "Or show a lifestyle usage shot: a woman using the product in a wellness/gym context. "
+            "Bright, clean, energizing feel. White or very light background with fresh props."
+        ),
+    }
+    scene = NICHE_SCENE.get(niche, NICHE_SCENE["beauty"])
+
+    # ── RULE 3: Headline font energy by niche ─────────────────────────────
+    NICHE_FONT_STYLE = {
+        "beauty":    "bold clean modern sans-serif, dark charcoal/black, high contrast on light background — clinical and trustworthy",
+        "home_decor":"bold serif or mixed serif/sans — feels editorial, interior-design-magazine-worthy, warm dark brown tones",
+        "fitness":   "bold heavy sans-serif, can be ALL CAPS for energy products, dark on light or white on dark — powerful and energetic",
+    }
+    font_style = NICHE_FONT_STYLE.get(niche, NICHE_FONT_STYLE["beauty"])
+
+    # ── RULE 5: CTA language by niche ─────────────────────────────────────
+    NICHE_CTA = {
+        "beauty":    "Save This Routine →",
+        "home_decor":"Save This Idea →",
+        "fitness":   "Save for Later →",
+    }
+    cta_text = NICHE_CTA.get(niche, "Shop on Amazon →")
+
+    # ── RULE 6: Category label by niche ───────────────────────────────────
+    NICHE_CATEGORY = {
+        "beauty":    "Cult-Favorite Skincare",
+        "home_decor":"Editor's Home Pick",
+        "fitness":   "Wellness Essential",
+    }
+    category_label = NICHE_CATEGORY.get(niche, "Amazon Find")
+
+    prompt = f"""Create a Pinterest-optimized vertical pin (2:3 ratio, 1000x1500 px) for: {product_label}
+
+CRITICAL — PRODUCT ACCURACY: Recreate this product with 100% accurate colors, shape, packaging, labels, and design. Match exactly what you see in the reference photo. Do NOT change any colors or details. The product's own color palette must drive the entire pin's color scheme.
+
+SCENE & BACKGROUND:
+{scene}
+
+TYPOGRAPHY — top to bottom, all text crisp and legible on mobile:
+1. Very top center: small elegant spaced uppercase "AURA GIRL ESSENTIALS" in light gray
+2. Small uppercase category label just above headline: "{category_label}"
+3. Large bold headline — {font_style}: "{theme}"
+4. Below product — 3 benefit lines with small icons, each on its own line:
+   • {b1}
+   • {b2}
+   • {b3}
+5. Below benefits — dot-separated summary line: "{b1} • {b2} • {b3}"
+6. Bottom center — dark rounded pill button with white text: "{cta_text}"
+
+VISUAL HIERARCHY RULES (must follow exactly):
+- Headline is the LARGEST text — takes up significant space at the top
+- Product is the HERO — large, centered, sharp, photorealistic
+- Benefits are smaller than the headline but clearly readable
+- CTA pill is the final eye stop at the very bottom
+- Generous white space — never cramped or cluttered
+- High contrast throughout — dark text on light, or light text on dark (never low contrast)
+- The pin must feel like a premium editorial magazine page, not a basic product ad
+
+STYLE: Scroll-stopping, Pinterest-native, mobile-optimized. No watermarks. No borders. No gradients. No generic stock-photo feel."""
+
+    try:
+        if not product_image_urls:
+            logger.error("No product image URLs provided")
+            return None
+
+        # Download real product image and pass it to images.edit
+        # This gives the model the exact product to reference
+        img_resp = req.get(product_image_urls[0], timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        img_resp.raise_for_status()
+
+        # Convert to RGBA PNG for images.edit
+        pil_img = PILImage.open(io.BytesIO(img_resp.content)).convert("RGBA")
+        png_buf = io.BytesIO()
+        pil_img.save(png_buf, format="PNG")
+        png_buf.seek(0)
+
+        logger.info(f"Calling gpt-image-1 edit for theme='{theme}', niche='{niche}'")
+
+        response = client.images.edit(
+            model="gpt-image-1",
+            image=("product.png", png_buf, "image/png"),
+            prompt=prompt,
+            n=1,
+            size="1024x1536",
+        )
+
+        image_data = response.data[0]
+        if hasattr(image_data, "b64_json") and image_data.b64_json:
+            img_bytes = base64.b64decode(image_data.b64_json)
+        elif hasattr(image_data, "url") and image_data.url:
+            dl = req.get(image_data.url, timeout=30)
+            dl.raise_for_status()
+            img_bytes = dl.content
+        else:
+            logger.error("gpt-image-1 returned no image data")
+            return None
+
+        # Save + upload to GCS
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        fname = f"pin_gpt2_{uuid.uuid4().hex}.png"
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(img_bytes)
+
+        gcs_url = _upload_to_gcs(path)
+        if gcs_url:
+            logger.info(f"gpt-image-2 pin uploaded to GCS: {gcs_url}")
+            return gcs_url
+        return path
+
+    except Exception as e:
+        logger.error(f"gpt-image-2 generation failed: {e}", exc_info=True)
+        return None
+
+
+def _generate_pil_editorial_pin(
+    product_image_urls: list,
+    theme: str,
+    subtitle: str,
+    niche: str,
+    benefits: list,
+) -> Optional[str]:
+    """PIL fallback compositor — used when OpenAI API is unavailable."""
+    import requests as req
+    from PIL import Image as PILImage, ImageDraw, ImageFont
+
+    # ── Niche accent colour (used for CTA pill + thin rules only) ─────────
+    NICHE_ACCENT = {
+        "beauty":    ( 95, 150, 190),   # soft blue (like the Medicube CTA)
+        "home_decor":(130, 105,  60),   # warm gold
+        "fitness":   ( 70, 130,  90),   # sage green
+    }
+    accent    = NICHE_ACCENT.get(niche, NICHE_ACCENT["beauty"])
+    BG        = (255, 255, 255)         # pure white always
+    TEXT_DARK = ( 22,  22,  30)         # near-black for headline
+    TEXT_MID  = ( 80,  80,  90)         # mid-grey for bullets/subtitle
+
+    W, H = 1000, 1500
+
+    # ── Default benefit bullets by niche if not provided ──────────────────
+    if not benefits:
+        _defaults = {
+            "beauty":    ["Smoother Skin", "Fewer Breakouts", "Instant Glow"],
+            "home_decor":["Elevates Any Room", "Budget-Friendly", "Ships Fast"],
+            "fitness":   ["Boosts Results", "Clean Ingredients", "Worth It"],
+        }
+        benefits = _defaults.get(niche, _defaults["beauty"])
+
+    # ── Layout zones (1000 × 1500 canvas) ────────────────────────────────
+    HOOK_TOP     = 0       # hook headline starts here
+    HOOK_BOT     = 270     # hook headline ends (270px)
+    PRODUCT_TOP  = 270     # product hero starts
+    PRODUCT_BOT  = 1165    # product hero ends (895px — ~60% of canvas)
+    BULLETS_TOP  = 1165    # benefit bullets
+    BULLETS_BOT  = 1360
+    CTA_TOP      = 1368
+    CTA_BOT      = 1460
+
+    # ── Download real product images ──────────────────────────────────────
+    product_imgs = []
+    for url in product_image_urls[:4]:
+        try:
+            r = req.get(url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+            r.raise_for_status()
+            img = PILImage.open(io.BytesIO(r.content)).convert("RGBA")
+            product_imgs.append(img)
+        except Exception as e:
+            logger.warning(f"Could not load product image {url}: {e}")
+
+    if not product_imgs:
+        logger.error("No product images loaded for editorial pin — cannot generate")
+        return None
+
+    # ── Build white canvas ────────────────────────────────────────────────
+    canvas = PILImage.new("RGB", (W, H), BG)
+    draw   = ImageDraw.Draw(canvas)
+
+    # ── Load fonts ────────────────────────────────────────────────────────
+    BOLD_FONTS = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+    ]
+    REG_FONTS = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        "/usr/share/fonts/truetype/freefont/FreeSans.ttf",
+    ]
+
+    def _load_font(paths, size):
+        for p in paths:
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                continue
+        return ImageFont.load_default()
+
+    font_hook    = _load_font(BOLD_FONTS, 100)   # big hook headline
+    font_brand   = _load_font(REG_FONTS,  19)    # small brand label
+    font_bullets = _load_font(BOLD_FONTS, 34)    # benefit bullets
+    font_cta     = _load_font(BOLD_FONTS, 30)    # CTA pill
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ZONE 1: HOOK HEADLINE (top)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Thin top rule
+    draw.rectangle([50, 16, W - 50, 19], fill=(220, 220, 220))
+
+    # Brand label — tiny, uppercase, centered
+    _draw_centered_text(draw, "AURA GIRL ESSENTIALS", font_brand, W, 28, (170, 170, 175), letter_gap=3)
+
+    # Hook text — large, bold, dark, centered, up to 2 lines
+    hook_display = theme.upper()
+    hook_lines   = _wrap_text(hook_display, font_hook, W - 80)
+    hook_y = 72
+    for line in hook_lines[:2]:
+        _draw_centered_text(draw, line, font_hook, W, hook_y, TEXT_DARK)
+        try:
+            bbox = font_hook.getbbox(line)
+            hook_y += (bbox[3] - bbox[1]) + 6
+        except Exception:
+            hook_y += 106
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ZONE 2: PRODUCT HERO (middle — the biggest zone)
+    # ═══════════════════════════════════════════════════════════════════════
+    PROD_ZONE_H = PRODUCT_BOT - PRODUCT_TOP   # ~895px
+    PROD_ZONE_W = W
+
+    n = len(product_imgs)
+
+    if n == 1:
+        img = product_imgs[0].copy()
+        # Fill the zone — very tight padding so product is massive
+        img.thumbnail((PROD_ZONE_W - 20, PROD_ZONE_H - 10), PILImage.LANCZOS)
+        x = (W - img.width) // 2
+        y = PRODUCT_TOP + (PROD_ZONE_H - img.height) // 2
+        _paste_with_alpha(canvas, img, x, y)
+
+    elif n == 2:
+        # Side by side — each takes half, no gap
+        cell_w = W // 2
+        cell_h = PROD_ZONE_H
+        for i, img in enumerate(product_imgs):
+            img = img.copy()
+            img.thumbnail((cell_w - 10, cell_h - 10), PILImage.LANCZOS)
+            x = i * cell_w + (cell_w - img.width) // 2
+            y = PRODUCT_TOP + (cell_h - img.height) // 2
+            _paste_with_alpha(canvas, img, x, y)
+
+    elif n == 3:
+        # Main product top (large), two smaller bottom
+        top_h = int(PROD_ZONE_H * 0.58)
+        bot_h = PROD_ZONE_H - top_h - 4
+
+        img0 = product_imgs[0].copy()
+        img0.thumbnail((W - 20, top_h - 8), PILImage.LANCZOS)
+        _paste_with_alpha(canvas, img0,
+                          (W - img0.width) // 2,
+                          PRODUCT_TOP + (top_h - img0.height) // 2)
+
+        # 1px separator
+        draw.rectangle([40, PRODUCT_TOP + top_h, W - 40, PRODUCT_TOP + top_h + 1],
+                       fill=(230, 230, 230))
+
+        cell_w = W // 2
+        for i, img in enumerate(product_imgs[1:3]):
+            img = img.copy()
+            img.thumbnail((cell_w - 12, bot_h - 8), PILImage.LANCZOS)
+            x = i * cell_w + (cell_w - img.width) // 2
+            y = PRODUCT_TOP + top_h + 4 + (bot_h - img.height) // 2
+            _paste_with_alpha(canvas, img, x, y)
+
+    else:
+        # 2×2 grid
+        cell_w = W // 2
+        cell_h = PROD_ZONE_H // 2
+        for i, img in enumerate(product_imgs[:4]):
+            col, row = i % 2, i // 2
+            img = img.copy()
+            img.thumbnail((cell_w - 12, cell_h - 12), PILImage.LANCZOS)
+            x = col * cell_w + (cell_w - img.width) // 2
+            y = PRODUCT_TOP + row * cell_h + (cell_h - img.height) // 2
+            _paste_with_alpha(canvas, img, x, y)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ZONE 3: BENEFIT BULLETS (bottom white band)
+    # ═══════════════════════════════════════════════════════════════════════
+    # Fill bottom with white
+    draw.rectangle([0, BULLETS_TOP - 4, W, H], fill=BG)
+    # Thin separator line
+    draw.rectangle([40, BULLETS_TOP - 4, W - 40, BULLETS_TOP - 2], fill=(220, 220, 225))
+
+    # Bullet line: "✔ Smooth Skin  •  Fewer Breakouts  •  Oil Control"
+    bullets_str = "  •  ".join(benefits[:3])
+    check_str   = "\u2714 " + bullets_str
+    _draw_centered_text(draw, check_str, font_bullets, W, BULLETS_TOP + 16, TEXT_MID)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # ZONE 4: CTA PILL
+    # ═══════════════════════════════════════════════════════════════════════
+    cta_label = subtitle if subtitle else "Shop This Find"
+    # Make it title case and trim
+    if cta_label.lower().startswith("on "):
+        cta_label = "Shop on Amazon"
+    try:
+        cbbox = font_cta.getbbox(cta_label)
+        cw = cbbox[2] - cbbox[0]
+        ch = cbbox[3] - cbbox[1]
+    except Exception:
+        cw, ch = 200, 30
+    pill_w = cw + 90
+    pill_h = ch + 30
+    pill_x = (W - pill_w) // 2
+    pill_y = CTA_TOP
+    draw.rounded_rectangle(
+        [pill_x, pill_y, pill_x + pill_w, pill_y + pill_h],
+        radius=pill_h // 2, fill=accent,
+    )
+    draw.text((pill_x + 45, pill_y + 15), cta_label, font=font_cta, fill=(255, 255, 255))
+
+    # Bottom thin rule
+    draw.rectangle([50, H - 20, W - 50, H - 17], fill=(220, 220, 225))
+
+    # ── Save + upload ─────────────────────────────────────────────────────
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    fname = f"editorial_{uuid.uuid4().hex}.jpg"
+    path  = os.path.join(OUTPUT_DIR, fname)
+    canvas.save(path, "JPEG", quality=95)
+
+    gcs_url = _upload_to_gcs(path)
+    if gcs_url:
+        logger.info(f"Editorial pin uploaded to GCS: {gcs_url}")
+        return gcs_url
+    return path
+
+
+def _draw_centered_text(draw, text, font, canvas_w, y, color, letter_gap=0):
+    """Draw horizontally centered text. Optionally letter-space it."""
+    if letter_gap == 0:
+        try:
+            bbox = font.getbbox(text)
+            tw = bbox[2] - bbox[0]
+        except Exception:
+            tw = len(text) * 12
+        draw.text(((canvas_w - tw) // 2, y), text, font=font, fill=color)
+    else:
+        total_w = sum(
+            (font.getbbox(ch)[2] - font.getbbox(ch)[0]) + letter_gap
+            for ch in text
+        )
+        x = (canvas_w - total_w) // 2
+        for ch in text:
+            draw.text((x, y), ch, font=font, fill=color)
+            try:
+                bbox = font.getbbox(ch)
+                x += (bbox[2] - bbox[0]) + letter_gap
+            except Exception:
+                x += 12 + letter_gap
+
+
+def _wrap_text(text, font, max_width):
+    """Break text into lines that fit within max_width pixels."""
+    words = text.split()
+    lines = []
+    current = ""
+    for word in words:
+        test = (current + " " + word).strip()
+        try:
+            bbox = font.getbbox(test)
+            tw = bbox[2] - bbox[0]
+        except Exception:
+            tw = len(test) * 45
+        if tw <= max_width:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines if lines else [text]
+
+
+def _paste_with_alpha(canvas: "PILImage.Image", img: "PILImage.Image", x: int, y: int):
+    """Paste an RGBA image onto an RGB canvas using its alpha channel as mask."""
+    if img.mode == "RGBA":
+        canvas.paste(img, (x, y), mask=img.split()[3])
+    else:
+        canvas.paste(img.convert("RGBA"), (x, y))
+
+
+def generate_pin_perfect_pro_image(
+    image_prompt: str,
+) -> Optional[str]:
+    """
+    Generate a Pinterest pin image using Ideogram v2 via fal.ai.
+    Takes a Claude-generated, product-specific image prompt.
+    Returns a GCS URL or None on failure.
+    """
+    from config import Config
+
+    if Config.FAL_API_KEY:
+        result = _generate_ideogram_image(image_prompt)
+        if result:
+            return result
+        logger.warning("Ideogram failed — falling back to Nano Banana.")
+        result = _generate_fal_image_from_prompt(image_prompt)
+        if result:
+            return result
+
+    return None
+
+
 def generate_collage_image(
     products: list,
     theme: str,
@@ -69,7 +712,7 @@ def generate_collage_image(
 ) -> Optional[str]:
     """
     Generate a Pinterest pin image.
-    Priority: Blotato → Gemini → PIL collage.
+    Priority: Ideogram → Nano Banana → Gemini → PIL collage.
     Returns a GCS URL or local file path, or None on failure.
     """
     from config import Config
@@ -78,21 +721,34 @@ def generate_collage_image(
     if not products:
         return None
 
-    # 1. Try fal.ai Nano Banana first (best quality)
+    # 1. Try Ideogram first (Pin Perfect Pro quality)
+    if Config.FAL_API_KEY:
+        from app.ai_writer import generate_ideogram_prompt
+        categories = [getattr(p, "category", "beauty") for p in products]
+        dominant = max(set(categories), key=categories.count) if categories else "beauty"
+        product_names = [p.name for p in products[:6] if getattr(p, "name", None)]
+        image_prompt = generate_ideogram_prompt(product_names, dominant, theme, subtitle)
+        if image_prompt:
+            result = _generate_ideogram_image(image_prompt)
+            if result:
+                return result
+        logger.warning("Ideogram failed — falling back to Nano Banana.")
+
+    # 2. Try fal.ai Nano Banana
     if Config.FAL_API_KEY:
         result = _generate_fal_image(products, theme, subtitle, brand_name, cta_text)
         if result:
             return result
         logger.warning("fal.ai Nano Banana failed — falling back to Gemini.")
 
-    # 2. Try Gemini
+    # 3. Try Gemini
     if Config.GEMINI_API_KEY:
         result = _generate_gemini_collage(products, theme, subtitle, brand_name, cta_text)
         if result:
             return result
         logger.warning("Gemini image generation failed — falling back to PIL collage.")
 
-    # 3. Last resort: PIL collage
+    # 4. Last resort: PIL collage
     return _generate_pil_collage(products, theme, subtitle, brand_name, cta_text)
 
 
@@ -161,6 +817,220 @@ def _generate_fal_image(
 
     except Exception as e:
         logger.error(f"fal.ai image generation failed: {e}", exc_info=True)
+        return None
+
+
+def _generate_ideogram_image(image_prompt: str) -> Optional[str]:
+    """
+    Generate a Pinterest pin using Ideogram v2 via fal.ai.
+    Ideogram excels at text-in-image and clean editorial Pinterest aesthetics.
+    """
+    import requests as req
+    from config import Config
+
+    logger.info(f"Generating Ideogram image (prompt length: {len(image_prompt)})")
+
+    try:
+        resp = req.post(
+            "https://fal.run/fal-ai/ideogram/v2",
+            headers={
+                "Authorization": f"Key {Config.FAL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "prompt": image_prompt,
+                "aspect_ratio": "ASPECT_2_3",
+                "model": "V_2",
+                "magic_prompt_option": "OFF",
+                "style_type": "REALISTIC",
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        image_url = data["images"][0]["url"]
+        logger.info(f"Ideogram image generated: {image_url}")
+
+        img_resp = req.get(image_url, timeout=30)
+        img_resp.raise_for_status()
+
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        fname = f"pin_ideogram_{uuid.uuid4().hex}.png"
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(img_resp.content)
+
+        gcs_url = _upload_to_gcs(path)
+        if gcs_url:
+            logger.info(f"Ideogram image uploaded to GCS: {gcs_url}")
+            return gcs_url
+        return path
+
+    except Exception as e:
+        logger.error(f"Ideogram image generation failed: {e}", exc_info=True)
+        return None
+
+
+def generate_ideogram_remix_image(
+    image_urls: list,
+    prompt: str,
+    niche: str = "beauty",
+) -> Optional[str]:
+    """
+    Generate a Pinterest pin using Ideogram v2 Remix.
+    Takes real product images (GCS URLs), creates a reference collage,
+    then remixes it with the editorial Pinterest prompt so Ideogram
+    sees the actual products instead of imagining them.
+    """
+    import io, requests as req
+    from PIL import Image as PILImage
+    from config import Config
+
+    if not image_urls or not Config.FAL_API_KEY:
+        return None
+
+    logger.info(f"Building product reference collage from {len(image_urls)} images")
+
+    # ── Download all product images ─────────────────────────────────────────
+    pil_images = []
+    for url in image_urls[:4]:
+        try:
+            resp = req.get(url, timeout=15)
+            resp.raise_for_status()
+            img = PILImage.open(io.BytesIO(resp.content)).convert("RGBA")
+            pil_images.append(img)
+        except Exception as e:
+            logger.warning(f"Could not load product image {url}: {e}")
+
+    if not pil_images:
+        logger.error("No product images loaded — falling back to text-to-image")
+        return _generate_ideogram_image(prompt)
+
+    # ── Build a simple 2:3 reference collage on white ──────────────────────
+    # Grid: 1 product → centered; 2 → side by side; 3-4 → 2x2 grid
+    CELL = 500  # each product cell (px)
+    cols = 2 if len(pil_images) > 1 else 1
+    rows = math.ceil(len(pil_images) / cols)
+    canvas_w = cols * CELL
+    canvas_h = max(rows * CELL, int(canvas_w * 1.5))  # keep ≥2:3
+
+    canvas = PILImage.new("RGB", (canvas_w, canvas_h), (255, 255, 255))
+
+    for idx, img in enumerate(pil_images):
+        col = idx % cols
+        row = idx // cols
+        # Fit image in cell with padding
+        pad = 20
+        cell_inner = CELL - pad * 2
+        img.thumbnail((cell_inner, cell_inner), PILImage.LANCZOS)
+        # Center in cell
+        x = col * CELL + pad + (cell_inner - img.width) // 2
+        y = row * CELL + pad + (cell_inner - img.height) // 2
+        if img.mode == "RGBA":
+            canvas.paste(img, (x, y), mask=img.split()[3])
+        else:
+            canvas.paste(img, (x, y))
+
+    # ── Upload collage to GCS ───────────────────────────────────────────────
+    buf = io.BytesIO()
+    canvas.save(buf, format="JPEG", quality=95)
+    buf.seek(0)
+
+    from google.cloud import storage as gcs_lib
+    gcs_client = gcs_lib.Client()
+    gcs_bucket = gcs_client.bucket(GCS_BUCKET)
+    collage_name = f"product-collages/collage_{uuid.uuid4().hex}.jpg"
+    collage_blob = gcs_bucket.blob(collage_name)
+    collage_blob.upload_from_file(buf, content_type="image/jpeg")
+    collage_gcs_url = f"{GCS_BASE_URL}/{collage_name}"
+    logger.info(f"Product collage uploaded: {collage_gcs_url}")
+
+    # ── Call Ideogram Remix ─────────────────────────────────────────────────
+    logger.info("Calling Ideogram v2 Remix with real product reference")
+    try:
+        resp = req.post(
+            "https://fal.run/fal-ai/ideogram/v2/remix",
+            headers={
+                "Authorization": f"Key {Config.FAL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "prompt": prompt,
+                "image_url": collage_gcs_url,
+                "strength": 0.70,        # 0=ignore reference, 1=copy exactly; 0.70 keeps product look
+                "aspect_ratio": "ASPECT_2_3",
+                "model": "V_2",
+                "magic_prompt_option": "OFF",
+                "style_type": "REALISTIC",
+            },
+            timeout=150,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        image_url = data["images"][0]["url"]
+        logger.info(f"Ideogram Remix image generated: {image_url}")
+
+        img_resp = req.get(image_url, timeout=30)
+        img_resp.raise_for_status()
+
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        fname = f"pin_remix_{uuid.uuid4().hex}.jpg"
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(img_resp.content)
+
+        gcs_url = _upload_to_gcs(path)
+        if gcs_url:
+            logger.info(f"Remix pin uploaded to GCS: {gcs_url}")
+            return gcs_url
+        return path
+
+    except Exception as e:
+        logger.error(f"Ideogram Remix failed: {e}", exc_info=True)
+        # Fallback to text-to-image with the same prompt
+        return _generate_ideogram_image(prompt)
+
+
+def _generate_fal_image_from_prompt(image_prompt: str) -> Optional[str]:
+    """Nano Banana 2 fallback that takes a raw prompt string."""
+    import requests as req
+    from config import Config
+
+    try:
+        resp = req.post(
+            "https://fal.run/fal-ai/nano-banana-2",
+            headers={
+                "Authorization": f"Key {Config.FAL_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "prompt": image_prompt,
+                "aspect_ratio": "2:3",
+                "resolution": "1K",
+                "num_images": 1,
+                "output_format": "png",
+            },
+            timeout=120,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        image_url = data["images"][0]["url"]
+
+        img_resp = req.get(image_url, timeout=30)
+        img_resp.raise_for_status()
+
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        fname = f"pin_nano_{uuid.uuid4().hex}.png"
+        path = os.path.join(OUTPUT_DIR, fname)
+        with open(path, "wb") as f:
+            f.write(img_resp.content)
+
+        gcs_url = _upload_to_gcs(path)
+        return gcs_url or path
+    except Exception as e:
+        logger.error(f"Nano Banana fallback failed: {e}")
         return None
 
 

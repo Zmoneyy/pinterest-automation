@@ -93,9 +93,73 @@
 
 {% block content %}
 <h1 class="page-title">Upload Pin</h1>
-<p style="color:var(--gray-600);margin-bottom:24px;font-size:14px;">
-  Upload your pin image from Pin Perfect Pro, paste in the copy, and publish directly to Pinterest.
-</p>
+
+{# ── Pin Perfect Pro Generator ── #}
+<div style="background:linear-gradient(135deg,#fff0f3,#fff8f0);border:1.5px solid #f5ccd4;border-radius:12px;padding:20px;margin-bottom:24px;">
+  <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="togglePPP()">
+    <div>
+      <div style="font-weight:700;font-size:16px;color:#c41230;">✨ Generate with AI (Pin Perfect Pro)</div>
+      <div style="font-size:13px;color:#888;margin-top:2px;">Enter a keyword + products → get title, description, hashtags, board, AND AI pin image in one click</div>
+    </div>
+    <span id="pppToggleIcon" style="font-size:20px;color:#c41230;">＋</span>
+  </div>
+  <div id="pppPanel" style="display:none;margin-top:16px;display:none;">
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      {# Keyword is auto-picked from the product + Pinterest trends — hidden by default #}
+      <input type="hidden" id="pppKeyword">
+      <div style="margin-bottom:4px;">
+        <span style="font-size:12px;color:#aaa;cursor:pointer;" onclick="document.getElementById('keywordAdvanced').style.display=document.getElementById('keywordAdvanced').style.display==='none'?'block':'none'">
+          ⚙️ Override keyword (advanced)
+        </span>
+        <div id="keywordAdvanced" style="display:none;margin-top:8px;">
+          <input type="text" id="pppKeywordOverride" placeholder="e.g. skincare routine amazon 2026" style="font-size:13px;">
+          <div id="trendingSuggestions" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+          <div style="font-size:11px;color:#aaa;margin-top:4px;">Leave blank to auto-pick from Pinterest trends based on your product.</div>
+        </div>
+      </div>
+
+      {# Amazon URLs → real product images #}
+      <div style="background:#fff;border:1px solid #eee;border-radius:8px;padding:14px;">
+        <div style="font-size:13px;font-weight:600;color:#333;margin-bottom:8px;">
+          📦 Amazon product URLs <span style="font-weight:400;color:#aaa;">(paste 1–4 links — AI uses the real product images)</span>
+        </div>
+        <textarea id="pppAmazonUrls" rows="4" placeholder="https://www.amazon.com/dp/B0XXXXXXXX&#10;https://www.amazon.com/dp/B0YYYYYYYY&#10;https://www.amazon.com/dp/B0ZZZZZZZZ" style="font-size:12px;font-family:monospace;"></textarea>
+        <button class="btn" id="fetchImagesBtn" onclick="fetchProductImages()" style="margin-top:8px;padding:7px 16px;font-size:13px;background:#f5f5f5;color:#333;border:1px solid #ddd;">
+          🔍 Fetch Product Images
+        </button>
+        <p id="fetchStatus" style="font-size:12px;color:#888;margin-top:6px;display:none;"></p>
+        {# Product image previews #}
+        <div id="productPreviews" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label for="pppProducts">Product names <span style="font-weight:400;color:#aaa;">(auto-filled from URLs, or type manually)</span></label>
+        <textarea id="pppProducts" rows="3" placeholder="Auto-filled when you fetch product images above, or type product names here"></textarea>
+      </div>
+      <button class="btn btn-red" id="pppBtn" onclick="runPinPerfectPro()" style="align-self:flex-start;padding:10px 24px;">
+        ✨ Generate Everything
+      </button>
+
+      {# Progress steps #}
+      <div id="pppProgress" style="display:none;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:16px;margin-top:4px;">
+        <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:10px;letter-spacing:0.5px;">GENERATING YOUR PIN</div>
+        <div class="progress-step" id="step1" style="display:flex;align-items:center;gap:10px;padding:6px 0;color:#bbb;font-size:13px;">
+          <span class="step-icon">○</span> Fetching product from Amazon
+        </div>
+        <div class="progress-step" id="step2" style="display:flex;align-items:center;gap:10px;padding:6px 0;color:#bbb;font-size:13px;">
+          <span class="step-icon">○</span> Claude writing title, description & hashtags
+        </div>
+        <div class="progress-step" id="step3" style="display:flex;align-items:center;gap:10px;padding:6px 0;color:#bbb;font-size:13px;">
+          <span class="step-icon">○</span> AI generating your pin image (~30 sec)
+        </div>
+        <div class="progress-step" id="step4" style="display:flex;align-items:center;gap:10px;padding:6px 0;color:#bbb;font-size:13px;">
+          <span class="step-icon">○</span> Done — review your pin below
+        </div>
+      </div>
+      <p id="pppStatus" style="font-size:13px;color:#888;display:none;"></p>
+    </div>
+  </div>
+</div>
 
 <div class="upload-grid">
 
@@ -147,12 +211,23 @@
         <textarea id="hashtagsInput" rows="2" placeholder="Auto-filled from paste, or type here"></textarea>
       </div>
       <div class="form-group" style="margin-bottom:0">
-        <label for="boardInput">Pinterest Board Name</label>
-        <input type="text" id="boardInput" placeholder="Auto-filled from paste, or type here">
+        <label for="boardInput">Pinterest Board <span id="boardAutoTag" style="font-size:11px;color:var(--green);font-weight:400;text-transform:none;letter-spacing:0;"></span></label>
+        <select id="boardInput">
+          <option value="">— Auto-selected or pick manually —</option>
+          {% for board in pinterest_boards %}
+          <option value="{{ board }}">{{ board }}</option>
+          {% endfor %}
+        </select>
       </div>
     </div>
 
     <hr style="margin:4px 0;">
+
+    <div class="form-group" style="margin-bottom:0">
+      <label for="scheduleInput">Schedule (optional)</label>
+      <input type="datetime-local" id="scheduleInput">
+      <p style="font-size:12px;color:var(--gray-400);margin-top:4px;">Leave blank to post immediately.</p>
+    </div>
 
     <button class="btn btn-red btn-full" id="publishBtn" onclick="publishPin()">
       🚀 Post to Pinterest
@@ -167,21 +242,186 @@
 {% block scripts %}
 <script>
   const BENABLE_URLS = {
-    beauty:     'benable.com/AuraGirlEssentials/beauty-faves',
-    home_decor: 'benable.com/AuraGirlEssentials/glam-home',
-    fitness:    'benable.com/AuraGirlEssentials/wellness-picks',
+    beauty:     'auragirlessentials.com/shop/beauty',
+    home_decor: 'auragirlessentials.com/shop/glam-home',
+    fitness:    'auragirlessentials.com/shop/wellness',
   };
 
   const BENABLE_FULL = {
-    beauty:     'https://benable.com/AuraGirlEssentials/beauty-faves',
-    home_decor: 'https://benable.com/AuraGirlEssentials/glam-home',
-    fitness:    'https://benable.com/AuraGirlEssentials/wellness-picks',
+    beauty:     'https://auragirlessentials.com/shop/beauty',
+    home_decor: 'https://auragirlessentials.com/shop/glam-home',
+    fitness:    'https://auragirlessentials.com/shop/wellness',
   };
+
+  // Niche auto-detection from pasted text
+  function autoSelectNiche(text) {
+    const lower = text.toLowerCase();
+    const beautyWords   = ['beauty', 'skincare', 'makeup', 'nail', 'manicure', 'glow', 'serum', 'lipstick', 'blush', 'foundation', 'concealer', 'mascara'];
+    const fitnessWords  = ['fitness', 'workout', 'gym', 'yoga', 'pilates', 'wellness', 'self care', 'exercise', 'protein', 'health'];
+    const homeWords     = ['home', 'decor', 'interior', 'room', 'kitchen', 'bedroom', 'living room', 'furniture', 'shelf', 'vintage', 'cozy', 'aesthetic'];
+
+    const beautyScore  = beautyWords.filter(w => lower.includes(w)).length;
+    const fitnessScore = fitnessWords.filter(w => lower.includes(w)).length;
+    const homeScore    = homeWords.filter(w => lower.includes(w)).length;
+
+    const max = Math.max(beautyScore, fitnessScore, homeScore);
+    if (max === 0) return;
+
+    const sel = document.getElementById('nicheSelect');
+    if (homeScore === max)    sel.value = 'home_decor';
+    else if (fitnessScore === max) sel.value = 'fitness';
+    else                      sel.value = 'beauty';
+
+    // Update benable preview
+    document.getElementById('benablePreview').textContent = '→ ' + BENABLE_URLS[sel.value];
+  }
+
+  // Board auto-selection: keywords mapped to board names
+  const BOARD_KEYWORDS = {
+    'Beauty Finds & Skincare':              ['beauty', 'skincare', 'skin', 'makeup', 'glow', 'serum', 'moisturizer'],
+    'Nail Inspo & Nail Art Ideas':          ['nail', 'manicure', 'pedicure', 'polish', 'gel'],
+    'Affordable Beauty Essentials':         ['affordable beauty', 'budget beauty', 'drugstore'],
+    'Glam Home Decor Ideas':                ['glam home', 'home decor', 'decor ideas', 'interior'],
+    'Luxury Look for Less Home Decor':      ['luxury', 'look for less', 'high end', 'elevated'],
+    'Amazon Home Finds':                    ['amazon home', 'home finds', 'amazon finds'],
+    'Aesthetic Home Decor for Cozy Spaces': ['aesthetic', 'cozy', 'cosy', 'vintage', 'antique', 'boho'],
+    'Wellness & Self Care Essentials':      ['wellness', 'self care', 'selfcare', 'mental health', 'relaxation'],
+    'Fitness Finds on Amazon':              ['fitness', 'workout', 'gym', 'exercise', 'yoga', 'pilates'],
+  };
+
+  const NICHE_DEFAULT_BOARD = {
+    beauty:     'Beauty Finds & Skincare',
+    home_decor: 'Glam Home Decor Ideas',
+    fitness:    'Fitness Finds on Amazon',
+  };
+
+  function autoSelectBoard(parsedBoardName) {
+    const sel   = document.getElementById('boardInput');
+    const tag   = document.getElementById('boardAutoTag');
+    const niche = document.getElementById('nicheSelect').value;
+    let matched = null;
+
+    // 1. Try to match parsed board name from Pin Perfect Pro
+    if (parsedBoardName) {
+      const lower = parsedBoardName.toLowerCase();
+      for (const [board, keywords] of Object.entries(BOARD_KEYWORDS)) {
+        if (keywords.some(k => lower.includes(k))) { matched = board; break; }
+      }
+      // Also try direct keyword match against board names
+      if (!matched) {
+        matched = Array.from(sel.options).find(o =>
+          o.value && parsedBoardName.toLowerCase().split(' ').some(w => w.length > 3 && o.value.toLowerCase().includes(w))
+        )?.value || null;
+      }
+    }
+
+    // 2. Fall back to niche default
+    if (!matched) matched = NICHE_DEFAULT_BOARD[niche];
+
+    if (matched) {
+      sel.value = matched;
+      tag.textContent = '✓ auto-selected';
+    }
+  }
+
+  // ── Trending keywords — instant fallbacks + live cache overlay ──────────
+  const FALLBACK_KEYWORDS = {
+    beauty:     ['summer skincare routine 2026', 'pore minimizing products', 'glass skin routine', 'korean skincare amazon', 'affordable glow up products'],
+    home_decor: ['aesthetic room decor 2026', 'cozy home amazon finds', 'glam home decor ideas', 'affordable home refresh', 'bedroom glow up ideas'],
+    fitness:    ['self care sunday routine', 'wellness must haves 2026', 'glow up supplements amazon', 'clean girl aesthetic routine', 'healthy morning routine products'],
+  };
+
+  // Merge live cached keywords (from server) on top of fallbacks
+  const LIVE_KEYWORDS = {{ trending_keywords | tojson }};
+  const TRENDING_BY_NICHE = {};
+  for (const niche of ['beauty', 'home_decor', 'fitness']) {
+    const live = (LIVE_KEYWORDS[niche] || []).filter(Boolean);
+    const fallback = FALLBACK_KEYWORDS[niche];
+    // Live keywords first, then fill remaining slots with fallbacks
+    const merged = [...live];
+    for (const f of fallback) {
+      if (merged.length >= 5) break;
+      if (!merged.includes(f)) merged.push(f);
+    }
+    TRENDING_BY_NICHE[niche] = merged;
+  }
+
+  function loadTrendingKeywords(niche, autoFill = false) {
+    const keywords  = TRENDING_BY_NICHE[niche] || FALLBACK_KEYWORDS[niche];
+    const kwInput   = document.getElementById('pppKeyword');
+    const suggestEl = document.getElementById('trendingSuggestions');
+
+    // Only auto-fill if product has been fetched and user hasn't typed their own
+    if (autoFill && !kwInput.dataset.userEdited) {
+      kwInput.value = keywords[0] || '';
+      kwInput.placeholder = keywords[0] || 'e.g. pore minimizing products 2026';
+    }
+
+    // Show suggestion pills (always show so user can pick)
+    suggestEl.innerHTML = keywords.slice(0, 5).map((kw, i) =>
+      `<span onclick="selectKeyword('${kw.replace(/'/g,"\\'")}', this)"
+        style="cursor:pointer;padding:4px 10px;border-radius:20px;font-size:12px;
+               background:${i===0&&autoFill?'#c41230':'#f0f0f0'};color:${i===0&&autoFill?'#fff':'#333'};
+               border:1px solid ${i===0&&autoFill?'#c41230':'#ddd'};">${kw}</span>`
+    ).join('');
+  }
+
+  // Match product name to best keyword from trending list
+  function pickBestKeyword(productName, niche) {
+    const keywords = TRENDING_BY_NICHE[niche] || FALLBACK_KEYWORDS[niche];
+    if (!productName) return keywords[0];
+    const nameLower = productName.toLowerCase();
+    // Try to find a keyword that shares words with the product name
+    for (const kw of keywords) {
+      const kwWords = kw.toLowerCase().split(' ').filter(w => w.length > 3);
+      if (kwWords.some(w => nameLower.includes(w))) return kw;
+    }
+    return keywords[0]; // fallback to top trending
+  }
+
+  function selectKeyword(kw, el) {
+    document.getElementById('pppKeyword').value = kw;
+    document.getElementById('pppKeyword').dataset.userEdited = '1';
+    document.querySelectorAll('#trendingSuggestions span').forEach(s => {
+      s.style.background = '#f0f0f0'; s.style.color = '#333'; s.style.borderColor = '#ddd';
+    });
+    el.style.background = '#c41230'; el.style.color = '#fff'; el.style.borderColor = '#c41230';
+  }
+
+  document.getElementById('pppKeyword').addEventListener('input', function() {
+    this.dataset.userEdited = '1';
+  });
+
+  // ── Auto-fetch when Amazon URL is pasted ─────────────────────────────────
+  document.getElementById('pppAmazonUrls').addEventListener('paste', function() {
+    // Small delay so paste value is available
+    setTimeout(() => {
+      const val = this.value.trim();
+      if (val.includes('amazon.com') || val.includes('amzn.to')) {
+        fetchProductImages();
+      }
+    }, 150);
+  });
+
+  // Also trigger if user types/edits and the field loses focus with a valid URL
+  document.getElementById('pppAmazonUrls').addEventListener('blur', function() {
+    const val = this.value.trim();
+    if ((val.includes('amazon.com') || val.includes('amzn.to')) && _fetchedProductImages.length === 0) {
+      fetchProductImages();
+    }
+  });
 
   function updateBenableUrl() {
     const niche = document.getElementById('nicheSelect').value;
     document.getElementById('benablePreview').textContent = '→ ' + BENABLE_URLS[niche];
+    autoSelectBoard('');
+    loadTrendingKeywords(niche);
   }
+
+  // On page load: show suggestion pills but keep keyword field blank
+  // It will auto-fill once the product is fetched
+  loadTrendingKeywords(document.getElementById('nicheSelect').value, false);
+  document.getElementById('pppKeyword').placeholder = 'Auto-fills after you paste an Amazon link';
 
   // ── Image preview ──
   let uploadedImageBase64 = null;
@@ -217,6 +457,198 @@
     }
   });
 
+  // ── Pin Perfect Pro Generator ──
+  let pppOpen = false;
+  let _fetchedProductImages = [];  // {image_url, name} objects from fetch-amazon-images
+
+  function togglePPP() {
+    pppOpen = !pppOpen;
+    document.getElementById('pppPanel').style.display = pppOpen ? 'flex' : 'none';
+    document.getElementById('pppToggleIcon').textContent = pppOpen ? '－' : '＋';
+  }
+
+  async function fetchProductImages() {
+    const raw = document.getElementById('pppAmazonUrls').value.trim();
+    const urls = raw.split('\n').map(s => s.trim()).filter(s => s.includes('amazon.com') || s.includes('amzn.to'));
+
+    if (!urls.length) { alert('Please paste at least one Amazon product URL.'); return; }
+
+    const btn    = document.getElementById('fetchImagesBtn');
+    const status = document.getElementById('fetchStatus');
+    const previews = document.getElementById('productPreviews');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="border-color:rgba(0,0,0,0.2);border-top-color:#333;"></span> Fetching…';
+    status.style.display = 'block';
+    status.textContent = 'Pulling real product images from Amazon…';
+    previews.innerHTML = '';
+    _fetchedProductImages = [];
+
+    try {
+      const resp = await fetch('/upload-pin/fetch-amazon-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Fetch failed');
+
+      const successful = data.products.filter(p => p.image_url);
+      _fetchedProductImages = successful;
+
+      // Show image previews
+      for (const p of successful) {
+        const div = document.createElement('div');
+        div.style.cssText = 'text-align:center;width:80px;';
+        div.innerHTML = `
+          <img src="${p.image_url}" style="width:80px;height:80px;object-fit:contain;border:1px solid #eee;border-radius:6px;background:#fafafa;">
+          <div style="font-size:10px;color:#666;margin-top:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;" title="${p.name || ''}">${(p.name || 'Product').substring(0, 20)}</div>
+        `;
+        previews.appendChild(div);
+      }
+
+      // Auto-fill product names
+      const names = successful.map(p => p.name).filter(Boolean);
+      if (names.length) {
+        document.getElementById('pppProducts').value = names.join('\n');
+      }
+
+      // NOW auto-fill keyword based on the actual product fetched
+      const niche = document.getElementById('nicheSelect').value;
+      const kwInput = document.getElementById('pppKeyword');
+      if (!kwInput.dataset.userEdited) {
+        const bestKeyword = pickBestKeyword(names[0] || '', niche);
+        kwInput.value = bestKeyword;
+        loadTrendingKeywords(niche, true);
+      }
+
+      const failed = data.products.length - successful.length;
+      status.style.color = successful.length ? 'var(--green)' : 'var(--red)';
+      status.textContent = successful.length
+        ? `✓ ${successful.length} product image${successful.length > 1 ? 's' : ''} fetched!${failed ? ` (${failed} failed)` : ''} Now hit "Generate Everything".`
+        : '✗ Could not fetch any product images. Check the URLs and try again.';
+
+    } catch(err) {
+      status.style.color = 'var(--red)';
+      status.textContent = '✗ ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🔍 Fetch Product Images';
+    }
+  }
+
+  function setStep(stepId, state) {
+    // state: 'active' | 'done' | 'error'
+    const el = document.getElementById(stepId);
+    if (!el) return;
+    const icon = el.querySelector('.step-icon');
+    if (state === 'active') {
+      el.style.color = '#c41230';
+      icon.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-color:rgba(196,18,48,0.3);border-top-color:#c41230;display:inline-block;"></span>';
+    } else if (state === 'done') {
+      el.style.color = '#2a9d5c';
+      icon.textContent = '✓';
+    } else if (state === 'error') {
+      el.style.color = '#e63946';
+      icon.textContent = '✗';
+    }
+  }
+
+  function resetSteps() {
+    ['step1','step2','step3','step4'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.color = '#bbb'; el.querySelector('.step-icon').textContent = '○'; }
+    });
+  }
+
+  async function runPinPerfectPro() {
+    const products = document.getElementById('pppProducts').value.trim()
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    const niche    = document.getElementById('nicheSelect').value;
+    const productImageUrls = _fetchedProductImages.map(p => p.image_url);
+
+    // Use override keyword if provided, otherwise leave blank and let server auto-pick
+    const overrideKw = document.getElementById('pppKeywordOverride')?.value.trim() || '';
+    // Set hidden field so it gets sent
+    document.getElementById('pppKeyword').value = overrideKw;
+    const keyword = overrideKw; // may be blank — server handles auto-pick
+
+    const btn    = document.getElementById('pppBtn');
+    const status = document.getElementById('pppStatus');
+    const progress = document.getElementById('pppProgress');
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Generating…';
+    status.style.display = 'none';
+    progress.style.display = 'block';
+    resetSteps();
+
+    // Step 1: product already fetched if images exist
+    if (productImageUrls.length) {
+      setStep('step1', 'done');
+    } else {
+      setStep('step1', 'active');
+    }
+    // Step 2: Claude writing copy
+    setTimeout(() => setStep('step2', 'active'), productImageUrls.length ? 100 : 500);
+    // Step 3: image generation (starts after ~2s when Claude is done)
+    setTimeout(() => { setStep('step2', 'done'); setStep('step3', 'active'); }, 4000);
+
+    try {
+      const resp = await fetch('/upload-pin/generate-pin-perfect-pro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keyword,
+          products,
+          niche,
+          board_name: '',
+          product_images: productImageUrls,
+          amazon_url: _fetchedProductImages.length ? (_fetchedProductImages[0].amazon_url || '') : '',
+          price: _fetchedProductImages.length ? (_fetchedProductImages[0].price || '') : '',
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Generation failed');
+
+      // Store keyword for publish payload
+      window._pppTrendKeyword = keyword || '';
+
+      // Auto-fill all fields
+      if (data.title)       document.getElementById('titleInput').value    = data.title;
+      if (data.description) document.getElementById('descInput').value     = data.description;
+      if (data.hashtags)    document.getElementById('hashtagsInput').value = data.hashtags;
+      if (data.board_name)  autoSelectBoard(data.board_name);
+
+      autoSelectNiche(keyword + ' ' + (data.board_name || ''));
+
+      if (data.image_url) {
+        uploadedImageBase64 = null;
+        previewImg.src = data.image_url;
+        previewImg.style.display = 'block';
+        dropLabel.style.display  = 'none';
+        window._pppImageUrl = data.image_url;
+        setStep('step3', 'done');
+        setStep('step4', 'done');
+      } else {
+        setStep('step3', 'error');
+        setStep('step4', 'active');
+        window._pppImageUrl = null;
+      }
+      document.getElementById('parseHint').style.display = 'block';
+
+    } catch(err) {
+      setStep('step1', 'error');
+      setStep('step2', 'error');
+      setStep('step3', 'error');
+      status.style.display = 'block';
+      status.style.color = 'var(--red)';
+      status.textContent = '✗ ' + err.message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '✨ Generate Everything';
+    }
+  }
+
   // ── Parse Pin Perfect Pro output and auto-fill fields ──
   function extractSection(text, ...labels) {
     for (const label of labels) {
@@ -248,7 +680,8 @@
     if (parsed.title)    document.getElementById('titleInput').value    = parsed.title;
     if (parsed.desc)     document.getElementById('descInput').value     = parsed.desc;
     if (parsed.hashtags) document.getElementById('hashtagsInput').value = parsed.hashtags;
-    if (parsed.board)    document.getElementById('boardInput').value    = parsed.board;
+    autoSelectNiche(text);
+    autoSelectBoard(parsed.board);
     if (parsed.title || parsed.desc) {
       document.getElementById('parseHint').style.display = 'block';
     }
@@ -256,25 +689,27 @@
 
   // ── Publish ──
   async function publishPin() {
-    if (!uploadedImageBase64) {
-      alert('Please upload a pin image first.');
+    const hasUploadedImage = !!uploadedImageBase64;
+    const hasAIImage = !!window._pppImageUrl;
+
+    if (!hasUploadedImage && !hasAIImage) {
+      alert('Please upload a pin image or generate one with the AI generator above.');
       return;
     }
 
-    const niche    = document.getElementById('nicheSelect').value;
-    const link     = BENABLE_FULL[niche];
-    const title    = document.getElementById('titleInput').value.trim();
-    const desc     = document.getElementById('descInput').value.trim();
-    const hashtags = document.getElementById('hashtagsInput').value.trim();
-    const board    = document.getElementById('boardInput').value.trim();
+    const niche     = document.getElementById('nicheSelect').value;
+    const title     = document.getElementById('titleInput').value.trim();
+    const desc      = document.getElementById('descInput').value.trim();
+    const hashtags  = document.getElementById('hashtagsInput').value.trim();
+    const board     = document.getElementById('boardInput').value.trim();
+    const scheduleVal = document.getElementById('scheduleInput').value;
+    const scheduledTime = scheduleVal ? new Date(scheduleVal).toISOString() : null;
+    const trendKeyword = (window._pppTrendKeyword || '');
 
-    if (!title) { alert('Please fill in the title (or paste your Pin Perfect Pro output above).'); return; }
+    if (!title) { alert('Please fill in the title (or generate content above).'); return; }
 
-    // Build full description: body + benable link + hashtags
+    // Description body + hashtags (shop link is added server-side using /shop/pin/<id>)
     let fullDesc = desc;
-    if (!fullDesc.includes('benable.com')) {
-      fullDesc += '\n\nShop the list → ' + link;
-    }
     if (hashtags) {
       fullDesc += '\n\n' + hashtags;
     }
@@ -282,29 +717,38 @@
     const btn    = document.getElementById('publishBtn');
     const status = document.getElementById('publishStatus');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Publishing…';
+    btn.innerHTML = '<span class="spinner"></span> ' + (scheduledTime ? 'Scheduling…' : 'Publishing…');
     status.style.display = 'block';
     status.style.color = 'var(--gray-400)';
-    status.textContent = 'Uploading and posting to Pinterest…';
+    status.textContent = scheduledTime ? 'Scheduling pin for ' + new Date(scheduleVal).toLocaleString() + '…' : 'Uploading and posting to Pinterest…';
 
     try {
+      const body = {
+        title,
+        description: fullDesc,
+        board_name: board,
+        niche,
+        trend_keyword: trendKeyword,
+        scheduled_time: scheduledTime,
+      };
+      // Use GCS URL directly if image was AI-generated, else send base64
+      if (hasAIImage) {
+        body.image_url = window._pppImageUrl;
+      } else {
+        body.image_base64 = uploadedImageBase64;
+      }
+
       const resp = await fetch('/upload-pin/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          image_base64: uploadedImageBase64,
-          title,
-          description: fullDesc,
-          board_name: board,
-          link,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Publish failed');
 
       status.style.color = 'var(--green)';
-      status.textContent = '✓ Posted to Pinterest!';
-      btn.innerHTML = '✓ Posted!';
+      status.textContent = scheduledTime ? '✓ Scheduled for ' + new Date(scheduleVal).toLocaleString() : '✓ Posted to Pinterest!';
+      btn.innerHTML = scheduledTime ? '✓ Scheduled!' : '✓ Posted!';
 
     } catch(err) {
       status.style.color = 'var(--red)';

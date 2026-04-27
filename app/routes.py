@@ -27,6 +27,23 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
 
+# Routes that are visible on the public domain (auragirlessentials.com)
+PUBLIC_PATHS = ("/shop", "/privacy", "/health")
+PUBLIC_DOMAIN = "auragirlessentials.com"
+
+
+@bp.before_request
+def block_admin_on_public_domain():
+    """
+    auragirlessentials.com is the public shop — no admin routes exposed there.
+    Dashboard, setup, upload-pin, etc. are only accessible via the Cloud Run URL.
+    """
+    host = request.host.split(":")[0]  # strip port if present
+    if host == PUBLIC_DOMAIN:
+        path = request.path
+        if not any(path.startswith(p) for p in PUBLIC_PATHS):
+            return "", 404
+
 
 # ── Auth helpers ──────────────────────────────────────────────────────────
 
@@ -43,6 +60,9 @@ def login_required(f):
 
 @bp.route("/")
 def index():
+    host = request.host.split(":")[0]
+    if host == PUBLIC_DOMAIN:
+        return redirect(url_for("main.shop"))
     return redirect(url_for("main.dashboard"))
 
 
@@ -125,8 +145,16 @@ def approve_pin(pin_id):
         pin.scheduled_for = None
 
     pin.status = Pin.STATUS_APPROVED
+
+    # Activate all products linked to this pin → they appear on shop pages
+    activated = 0
+    for product in pin.products:
+        if not product.is_active:
+            product.is_active = True
+            activated += 1
+
     db.session.commit()
-    logger.info(f"Pin #{pin_id} approved (scheduled: {pin.scheduled_for})")
+    logger.info(f"Pin #{pin_id} approved — activated {activated} products on shop")
     return redirect(url_for("main.dashboard"))
 
 
@@ -310,10 +338,6 @@ def product_queue():
 def discover_products():
     """Search Amazon for products based on top saved trends and add to approval queue."""
     from app.amazon_api import discover_products_for_trends
-    from config import Config
-
-    if not Config.SERP_API_KEY:
-        return redirect(url_for("main.product_queue") + "?error=no_amazon_credentials")
 
     # Allow manual keyword search from the form
     manual_keyword = request.form.get("keyword", "").strip()
@@ -636,11 +660,31 @@ def api_trigger():
 @login_required
 def upload_pin():
     from config import Config
+    from app.keyword_research import get_top_keywords_for_niche
+
+    # Pre-load top trending keywords per niche to auto-fill the keyword field
+    trending = {
+        "beauty":    get_top_keywords_for_niche("beauty", limit=5),
+        "home_decor": get_top_keywords_for_niche("home_decor", limit=5),
+        "fitness":   get_top_keywords_for_niche("fitness", limit=5),
+    }
+
     return render_template(
         "upload_pin.html",
         benable_url=Config.BENABLE_URL,
-        pinterest_boards=[],  # populated via JS from Pinterest API once connected
+        pinterest_boards=list(Config.PINTEREST_BOARDS.keys()),
+        trending_keywords=trending,
     )
+
+
+@bp.route("/upload-pin/trending-keywords")
+@login_required
+def trending_keywords_api():
+    """Return top trending keywords per niche from cache."""
+    from app.keyword_research import get_top_keywords_for_niche
+    niche = request.args.get("niche", "beauty")
+    keywords = get_top_keywords_for_niche(niche, limit=5)
+    return jsonify({"keywords": keywords})
 
 
 @bp.route("/upload-pin/generate-copy", methods=["POST"])
@@ -658,72 +702,398 @@ def upload_pin_generate_copy():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@bp.route("/upload-pin/fetch-amazon-images", methods=["POST"])
+@login_required
+def fetch_amazon_images():
+    """
+    Given a list of Amazon product URLs, extract each ASIN, fetch the real
+    product image (via SerpAPI), upload to GCS, and return GCS URLs so they
+    can be used as Ideogram visual references.
+    """
+    import re, uuid, requests as req
+    from google.cloud import storage as gcs
+    from config import Config
+
+    data = request.get_json()
+    amazon_urls = data.get("urls", [])[:4]  # max 4 products
+
+    if not amazon_urls:
+        return jsonify({"ok": False, "error": "No URLs provided"}), 400
+
+    results = []
+    gcs_client = gcs.Client()
+    bucket = gcs_client.bucket("pinterest-automation-images-814656203168")
+
+    for url in amazon_urls:
+        url = url.strip()
+        if not url:
+            continue
+
+        # Follow amzn.to short links to get the full URL with ASIN
+        if 'amzn.to' in url:
+            try:
+                redir = req.head(url, allow_redirects=True, timeout=10,
+                                 headers={"User-Agent": "Mozilla/5.0"})
+                url = redir.url
+            except Exception as e:
+                logger.warning(f"Could not follow amzn.to redirect for {url}: {e}")
+
+        # Extract ASIN from URL: /dp/XXXXXXXXXX or /product/XXXXXXXXXX
+        asin_match = re.search(r'/(?:dp|product|gp/product)/([A-Z0-9]{10})', url)
+        if not asin_match:
+            results.append({"url": url, "error": "Could not extract ASIN from URL", "image_url": None, "name": None})
+            continue
+
+        asin = asin_match.group(1)
+        logger.info(f"Fetching product image for ASIN: {asin}")
+
+        try:
+            # Free method: scrape product title directly from Amazon page
+            amz_headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            }
+            product_title = None
+            try:
+                page_resp = req.get(
+                    f"https://www.amazon.com/dp/{asin}",
+                    headers=amz_headers,
+                    timeout=15,
+                )
+                if page_resp.ok:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(page_resp.text, "html.parser")
+                    title_tag = soup.find(id="productTitle")
+                    if title_tag:
+                        product_title = title_tag.get_text(strip=True)
+                    if not product_title:
+                        # Fallback: parse <title> tag, strip "Amazon.com :" prefix
+                        page_title = soup.find("title")
+                        if page_title:
+                            raw = page_title.get_text(strip=True)
+                            cleaned = re.sub(r'^Amazon\.com\s*[:\-]\s*', '', raw).split(" : ")[0].strip()
+                            # Only use if it's not just "Amazon.com" or empty
+                            if cleaned and cleaned.lower() not in ("amazon.com", "amazon", ""):
+                                product_title = cleaned
+            except Exception as scrape_err:
+                logger.warning(f"Could not scrape Amazon title for {asin}: {scrape_err}")
+
+            # Try extracting title from the original URL path as last resort
+            if not product_title:
+                slug_match = re.search(r'/([^/]+)/dp/', url)
+                if slug_match:
+                    slug = slug_match.group(1).replace('-', ' ').title()
+                    if len(slug) > 5:
+                        product_title = slug
+            if not product_title:
+                product_title = f"Amazon Product ({asin})"
+
+            # Try to get the real product image from the Amazon page we already scraped
+            product_image_url = None
+            img_headers = {
+                "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Referer": "https://www.amazon.com/",
+                "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+            }
+
+            # Try scraping the main product image from the page first
+            try:
+                if 'page_resp' in dir() and page_resp and page_resp.ok:
+                    from bs4 import BeautifulSoup as _BS
+                    _soup = _BS(page_resp.text, "html.parser")
+                    # Amazon stores the main image in #landingImage or #imgBlkFront
+                    for img_id in ("landingImage", "imgBlkFront", "main-image"):
+                        img_tag = _soup.find(id=img_id)
+                        if img_tag:
+                            src = img_tag.get("src") or img_tag.get("data-old-hires") or img_tag.get("data-src")
+                            if src and src.startswith("http"):
+                                product_image_url = src
+                                break
+            except Exception:
+                pass
+
+            # Fallback CDN URL patterns
+            if not product_image_url:
+                cdn_candidates = [
+                    f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg",
+                    f"https://images-na.ssl-images-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg",
+                ]
+                for cdn_url in cdn_candidates:
+                    try:
+                        test = req.get(cdn_url, headers=img_headers, timeout=10)
+                        # Check it's actually an image and not a placeholder (>5KB)
+                        if test.ok and test.headers.get("content-type", "").startswith("image") and len(test.content) > 5000:
+                            product_image_url = cdn_url
+                            break
+                    except Exception:
+                        continue
+
+            if not product_image_url:
+                product_image_url = f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+
+            img_resp = req.get(product_image_url, headers=img_headers, timeout=20)
+            img_resp.raise_for_status()
+
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+            ext = "jpg" if "jpeg" in content_type else "png"
+
+            # Upload to GCS
+            blob_name = f"product-refs/{asin}_{uuid.uuid4().hex[:8]}.{ext}"
+            blob = bucket.blob(blob_name)
+            blob.upload_from_string(img_resp.content, content_type=content_type)
+            gcs_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
+
+            results.append({
+                "asin": asin,
+                "name": str(product_title)[:120],
+                "image_url": gcs_url,
+                "amazon_url": f"https://www.amazon.com/dp/{asin}",
+                "error": None,
+            })
+            logger.info(f"Product image uploaded to GCS: {gcs_url}")
+
+        except Exception as e:
+            logger.error(f"Failed to fetch image for ASIN {asin}: {e}")
+            results.append({"asin": asin, "url": url, "image_url": None, "name": None, "error": str(e)})
+
+    success = [r for r in results if r.get("image_url")]
+    return jsonify({"ok": True, "products": results, "fetched": len(success)})
+
+
+@bp.route("/upload-pin/generate-pin-perfect-pro", methods=["POST"])
+@login_required
+def generate_pin_perfect_pro_route():
+    """
+    Full Pin Perfect Pro generation: given products + keyword + niche,
+    returns title, description, hashtags, alt text, board name, theme,
+    subtitle, AND a ready-to-use Ideogram image prompt.
+    Also generates the actual image and returns its URL.
+    """
+    try:
+        from config import Config
+        from app.ai_writer import generate_pin_perfect_pro
+        from app.imagen_api import generate_editorial_pin, generate_pin_perfect_pro_image
+
+        data              = request.get_json()
+        niche             = data.get("niche", "beauty")
+        keyword           = data.get("keyword", "")
+        product_names     = data.get("products", [])
+        product_image_urls = data.get("product_images", [])  # GCS URLs from fetch-amazon-images
+        board_name        = data.get("board_name", "")
+        amazon_url        = data.get("amazon_url", "")
+        price             = data.get("price", "")
+        shop_url          = Config.benable_url_for_niche(niche)
+
+        # Auto-pick keyword from Pinterest TrendCache if not provided
+        if not keyword:
+            try:
+                from app.keyword_research import pick_best_keyword_for_product
+                first_product = product_names[0] if product_names else ""
+                keyword = pick_best_keyword_for_product(first_product, niche, "evergreen")
+                logger.info(f"Auto-picked keyword: '{keyword}' for product '{first_product}'")
+            except Exception as e:
+                logger.warning(f"Auto keyword pick failed: {e}")
+                keyword = f"amazon {niche} finds 2026"
+
+        # Step 1: Generate copy via Claude (Pin Perfect Pro formula)
+        result = generate_pin_perfect_pro(
+            product_names=product_names,
+            niche=niche,
+            trend_keyword=keyword,
+            shop_url=shop_url,
+            board_name=board_name,
+        )
+        if not result:
+            return jsonify({"ok": False, "error": "Pin Perfect Pro generation failed"}), 500
+
+        # Step 2: Generate pin image
+        # If real product photos → editorial compositor (actual product, no catfishing)
+        # No photos → Ideogram AI text-to-image as fallback
+        image_url = None
+        theme    = result.get("theme", keyword.upper()[:20])
+        subtitle = result.get("subtitle", "on Amazon")
+
+        if product_image_urls:
+            image_url = generate_editorial_pin(
+                product_image_urls=product_image_urls,
+                theme=theme,
+                subtitle=subtitle,
+                niche=niche,
+                benefits=result.get("benefits") or [],
+                product_name=product_names[0] if product_names else "",
+                amazon_url=amazon_url,
+                price=price,
+            )
+
+        if not image_url and result.get("image_prompt"):
+            image_url = generate_pin_perfect_pro_image(result["image_prompt"])
+
+        return jsonify({
+            "ok": True,
+            "title":        result.get("title", ""),
+            "description":  result.get("description", ""),
+            "hashtags":     result.get("hashtags", ""),
+            "alt_text":     result.get("alt_text", ""),
+            "board_name":   result.get("board_name", ""),
+            "theme":        result.get("theme", ""),
+            "subtitle":     result.get("subtitle", ""),
+            "image_prompt": result.get("image_prompt", ""),
+            "image_url":    image_url,
+        })
+
+    except Exception as e:
+        logger.error(f"Pin Perfect Pro generation failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @bp.route("/upload-pin/publish", methods=["POST"])
 @login_required
 def upload_pin_publish():
     try:
-        import base64
         import requests as req
         from config import Config
+        from app import db
+        from app.models import Pin
 
         data        = request.get_json()
         image_b64   = data.get("image_base64", "")
+        image_url_direct = data.get("image_url", "")  # pre-hosted GCS URL from AI generation
         title       = data.get("title", "")
         description = data.get("description", "")
-        board_name  = data.get("board_name", "")
-        link        = data.get("link", Config.BENABLE_URL_BEAUTY)
+        board_name      = data.get("board_name", "")
+        niche           = data.get("niche", "beauty")
+        trend_keyword   = data.get("trend_keyword", "")
+        scheduled_time  = data.get("scheduled_time")
 
-        if not Config.PINTEREST_ACCESS_TOKEN:
-            return jsonify({"ok": False, "error": "Pinterest not connected yet. API approval still pending."}), 400
+        # Look up board ID from name
+        board_id = Config.PINTEREST_BOARDS.get(board_name)
+        if not board_id:
+            return jsonify({"ok": False, "error": f"Unknown board: {board_name}. Please select a board."}), 400
 
-        # Strip data URL prefix and decode
-        if "," in image_b64:
-            image_b64 = image_b64.split(",", 1)[1]
-        image_bytes = base64.b64decode(image_b64)
+        blotato_headers = {
+            "blotato-api-key": Config.BLOTATO_API_KEY,
+            "Content-Type": "application/json",
+        }
 
-        headers = {"Authorization": f"Bearer {Config.PINTEREST_ACCESS_TOKEN}"}
+        # Step 1: Get public image URL
+        if image_url_direct:
+            # AI-generated image already on GCS — use directly
+            public_image_url = image_url_direct
+        elif image_b64:
+            # Manual upload — encode and push to GCS
+            import base64, uuid
+            from google.cloud import storage as gcs
+            raw_b64 = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+            image_bytes = base64.b64decode(raw_b64)
+            bucket_name = "pinterest-automation-images-814656203168"
+            blob_name   = f"upload-pins/{uuid.uuid4().hex}.jpg"
+            gcs_client  = gcs.Client()
+            bucket      = gcs_client.bucket(bucket_name)
+            blob        = bucket.blob(blob_name)
+            blob.upload_from_string(image_bytes, content_type="image/jpeg")
+            public_image_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
+        else:
+            return jsonify({"ok": False, "error": "No image provided. Upload an image or generate one."}), 400
 
-        # Step 1: Upload image to Pinterest media
-        upload_resp = req.post(
-            "https://api.pinterest.com/v5/media",
-            headers=headers,
-            json={"media_type": "image"},
-            timeout=30,
+        # Save Pin to DB so we get a real ID → use for /shop/pin/<id> link
+        from datetime import datetime, timezone
+        scheduled_dt = None
+        if scheduled_time:
+            try:
+                scheduled_dt = datetime.fromisoformat(scheduled_time.replace("Z", "+00:00"))
+            except Exception:
+                pass
+
+        pin = Pin(
+            title=title,
+            description=description,
+            image_url=public_image_url,
+            board_name=board_name,
+            trend_keyword=trend_keyword,
+            status=Pin.STATUS_SCHEDULED if scheduled_dt else Pin.STATUS_POSTED,
+            scheduled_for=scheduled_dt,
         )
-        upload_resp.raise_for_status()
-        upload_data = upload_resp.json()
-        media_id    = upload_data["media_id"]
-        upload_url  = upload_data["upload_url"]
-        upload_params = upload_data.get("upload_parameters", {})
+        db.session.add(pin)
+        db.session.flush()  # assigns pin.id without committing yet
 
-        # Step 2: PUT image bytes to S3 upload URL
-        files = {k: (None, v) for k, v in upload_params.items()}
-        files["file"] = ("pin.jpg", image_bytes, "image/jpeg")
-        s3_resp = req.post(upload_url, files=files, timeout=60)
-        s3_resp.raise_for_status()
+        # /shop/pin/<id> is the specific product landing page for this pin
+        shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
+        pin.shop_url = shop_url
 
-        # Step 3: Create pin
-        board_id = Config.PINTEREST_BOARD_ID
-        pin_resp = req.post(
-            "https://api.pinterest.com/v5/pins",
-            headers={**headers, "Content-Type": "application/json"},
-            json={
-                "board_id": board_id,
-                "title": title,
-                "description": description,
-                "link": link,
-                "media_source": {
-                    "source_type": "media_id",
-                    "media_id": media_id,
+        # Append shop link to description
+        if "auragirlessentials.com" not in description and "benable.com" not in description:
+            pin.description = description + f"\n\nShop the list → {shop_url}"
+        else:
+            pin.description = description
+
+        db.session.commit()
+        description_with_link = pin.description
+
+        # Step 2: Pass public URL to Blotato media upload
+        media_resp = req.post(
+            "https://backend.blotato.com/v2/media",
+            headers=blotato_headers,
+            json={"url": public_image_url},
+            timeout=60,
+        )
+        media_resp.raise_for_status()
+        media_url = media_resp.json().get("url")
+        if not media_url:
+            return jsonify({"ok": False, "error": "Image upload to Blotato failed: " + str(media_resp.json())}), 500
+
+        # Step 3: Post to Pinterest via Blotato
+        payload = {
+            "post": {
+                "accountId": Config.BLOTATO_ACCOUNT_ID,
+                "content": {
+                    "text": description_with_link,
+                    "mediaUrls": [media_url],
+                    "platform": "pinterest",
                 },
-            },
+                "target": {
+                    "targetType": "pinterest",
+                    "boardId": board_id,
+                    "title": title,
+                    "link": shop_url,  # specific /shop/pin/<id> page, not generic category
+                },
+            }
+        }
+        if scheduled_time:
+            payload["scheduledTime"] = scheduled_time
+
+        post_resp = req.post(
+            "https://backend.blotato.com/v2/posts",
+            headers=blotato_headers,
+            json=payload,
             timeout=30,
         )
-        pin_resp.raise_for_status()
-        return jsonify({"ok": True, "pin_id": pin_resp.json().get("id")})
+        if not post_resp.ok:
+            # Roll back the Pin we saved so we don't leave a ghost record
+            try:
+                db.session.delete(pin)
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            return jsonify({"ok": False, "error": f"Blotato error: {post_resp.status_code} — {post_resp.text}"}), 500
+
+        blotato_post_id = post_resp.json().get("postSubmissionId")
+
+        # Mark pin with the blotato submission ID for reference
+        try:
+            pin.pinterest_pin_id = str(blotato_post_id) if blotato_post_id else None
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+        return jsonify({"ok": True, "post_id": blotato_post_id, "pin_id": pin.id, "shop_url": shop_url})
 
     except Exception as e:
-        logger.error(f"Pinterest publish failed: {e}", exc_info=True)
+        logger.error(f"Blotato publish failed: {e}", exc_info=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -762,7 +1132,11 @@ def pinterest_connect():
 
     state = secrets.token_urlsafe(16)
     session["pinterest_oauth_state"] = state
-    redirect_uri = url_for("main.pinterest_callback", _external=True)
+    from config import Config
+    redirect_uri = (
+        Config.PINTEREST_REDIRECT_URI
+        or url_for("main.pinterest_callback", _external=True)
+    ).replace("http://", "https://")
     from app.pinterest_api import get_access_token_url
     return redirect(get_access_token_url(redirect_uri=redirect_uri, state=state))
 
@@ -786,7 +1160,11 @@ def pinterest_callback():
 
     try:
         from app.pinterest_api import exchange_code_for_token
-        redirect_uri = url_for("main.pinterest_callback", _external=True)
+        from config import Config
+        redirect_uri = (
+            Config.PINTEREST_REDIRECT_URI
+            or url_for("main.pinterest_callback", _external=True)
+        ).replace("http://", "https://")
         token_data   = exchange_code_for_token(code=code, redirect_uri=redirect_uri)
 
         if token_data.get("access_token"):
@@ -908,6 +1286,84 @@ def trends_upload():
 
     cached = TrendCache.query.order_by(TrendCache.score.desc()).limit(50).all()
     return render_template("trends.html", trends=cached, analysis=analysis)
+
+
+# ── Public shop pages ─────────────────────────────────────────────────────
+
+SHOP_NICHES = {
+    "glam-home": {
+        "title": "Glam Home Decor Finds",
+        "description": "Curated home decor picks that make your space feel elevated.",
+        "categories": ["home_decor", "kitchen", "office"],
+        "emoji": "🏠",
+    },
+    "beauty": {
+        "title": "Beauty & Skincare Finds",
+        "description": "Affordable beauty essentials and skincare picks.",
+        "categories": ["beauty"],
+        "emoji": "💕",
+    },
+    "wellness": {
+        "title": "Wellness & Fitness Finds",
+        "description": "Self care and wellness essentials for your best life.",
+        "categories": ["fitness"],
+        "emoji": "✨",
+    },
+}
+
+def _affiliate_url(amazon_url, tag="auragirlcreat-20"):
+    """Append affiliate tag to Amazon URL."""
+    if not amazon_url:
+        return amazon_url
+    if tag in amazon_url:
+        return amazon_url
+    separator = "&" if "?" in amazon_url else "?"
+    return f"{amazon_url}{separator}tag={tag}"
+
+@bp.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
+
+@bp.route("/shop")
+def shop():
+    return render_template("shop.html", niches=SHOP_NICHES)
+
+@bp.route("/shop/<niche>")
+def shop_niche(niche):
+    if niche not in SHOP_NICHES:
+        return redirect(url_for("main.shop"))
+    niche_info = SHOP_NICHES[niche]
+    products = Product.query.filter(
+        Product.is_active == True,
+        Product.category.in_(niche_info["categories"])
+    ).order_by(Product.added_at.desc()).all()
+    for p in products:
+        p.affiliate_url = _affiliate_url(p.amazon_url)
+    return render_template("shop_niche.html", niche=niche, niche_info=niche_info, products=products)
+
+
+@bp.route("/shop/pin/<int:pin_id>")
+def shop_pin(pin_id):
+    """
+    'Shop the Pin' landing page — shows only the products featured in that specific pin.
+    This is the link we put in every Pinterest pin so visitors land on exactly
+    what they saw, not a wall of 50 products.
+    """
+    pin = Pin.query.filter_by(id=pin_id, status=Pin.STATUS_POSTED).first()
+    if not pin:
+        # Fallback: also show approved pins (not yet posted)
+        pin = Pin.query.filter(
+            Pin.id == pin_id,
+            Pin.status.in_([Pin.STATUS_APPROVED, Pin.STATUS_POSTED])
+        ).first()
+    if not pin:
+        return redirect(url_for("main.shop"))
+
+    products = [p for p in pin.products if p.is_active]
+    for p in products:
+        p.affiliate_url = _affiliate_url(p.amazon_url)
+
+    return render_template("shop_pin.html", pin=pin, products=products)
 
 
 # ── Health check ──────────────────────────────────────────────────────────
