@@ -256,9 +256,9 @@
   // Niche auto-detection from pasted text
   function autoSelectNiche(text) {
     const lower = text.toLowerCase();
-    const beautyWords   = ['beauty', 'skincare', 'makeup', 'nail', 'manicure', 'glow', 'serum', 'lipstick', 'blush', 'foundation', 'concealer', 'mascara'];
-    const fitnessWords  = ['fitness', 'workout', 'gym', 'yoga', 'pilates', 'wellness', 'self care', 'exercise', 'protein', 'health'];
-    const homeWords     = ['home', 'decor', 'interior', 'room', 'kitchen', 'bedroom', 'living room', 'furniture', 'shelf', 'vintage', 'cozy', 'aesthetic'];
+    const beautyWords   = ['beauty', 'skincare', 'makeup', 'nail', 'manicure', 'glow', 'serum', 'lipstick', 'blush', 'foundation', 'concealer', 'mascara', 'moisturizer', 'toner', 'retinol', 'lash', 'eyeshadow'];
+    const fitnessWords  = ['fitness', 'workout', 'gym', 'yoga', 'pilates', 'wellness', 'self care', 'exercise', 'protein', 'health', 'massage', 'massager', 'recovery', 'muscle', 'pain relief', 'stretching', 'supplement', 'collagen', 'vitamin', 'sunscreen', 'tanning', 'spf', 'glow up', 'self-care', 'relaxation', 'stress relief'];
+    const homeWords     = ['home', 'decor', 'interior', 'room', 'kitchen', 'bedroom', 'living room', 'furniture', 'shelf', 'vintage', 'cozy', 'aesthetic', 'candle', 'vase', 'wall art', 'rug', 'organizer'];
 
     const beautyScore  = beautyWords.filter(w => lower.includes(w)).length;
     const fitnessScore = fitnessWords.filter(w => lower.includes(w)).length;
@@ -510,6 +510,8 @@
       const names = successful.map(p => p.name).filter(Boolean);
       if (names.length) {
         document.getElementById('pppProducts').value = names.join('\n');
+        // Auto-detect niche from product name — more reliable than any keyword
+        autoSelectNiche(names.join(' '));
       }
 
       // NOW auto-fill keyword based on the actual product fetched
@@ -619,7 +621,9 @@
       if (data.hashtags)    document.getElementById('hashtagsInput').value = data.hashtags;
       if (data.board_name)  autoSelectBoard(data.board_name);
 
-      autoSelectNiche(keyword + ' ' + (data.board_name || ''));
+      // Use product name as primary signal — it's more reliable than the keyword
+      const productNicheText = products.join(' ') + ' ' + keyword + ' ' + (data.board_name || '');
+      autoSelectNiche(productNicheText);
 
       if (data.image_url) {
         uploadedImageBase64 = null;

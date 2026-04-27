@@ -37,7 +37,6 @@ NICHE_SEEDS = {
     ],
 }
 
-SERPAPI_PINTEREST_URL = "https://serpapi.com/search"
 PINTEREST_TRENDS_URL = "https://trends.pinterest.com/resource/ApiResource/get/"
 
 HEADERS = {
@@ -148,72 +147,78 @@ def run_keyword_research() -> list[dict]:
 
 def _get_pinterest_autocomplete_keywords() -> list[dict]:
     """
-    Use SerpAPI Pinterest engine to get autocomplete suggestions
-    for each niche seed term — these are exactly what people type
-    in the Pinterest search bar.
+    Pinterest's live search autocomplete endpoint — no auth needed, real-time search intent.
     """
-    try:
-        from config import Config
-        if not Config.SERP_API_KEY:
-            return []
+    results = []
+    results.extend(_pinterest_live_autocomplete())
+    logger.info(f"Pinterest autocomplete total: {len(results)} keywords")
+    return results
 
-        results = []
-        for niche, seeds in NICHE_SEEDS.items():
-            for seed in seeds[:3]:  # top 3 seeds per niche to save API calls
-                try:
-                    resp = requests.get(
-                        SERPAPI_PINTEREST_URL,
-                        params={
-                            "engine": "pinterest",
-                            "q": seed,
-                            "api_key": Config.SERP_API_KEY,
-                        },
-                        timeout=15,
-                    )
-                    if resp.status_code != 200:
-                        continue
 
-                    data = resp.json()
+def _pinterest_live_autocomplete() -> list[dict]:
+    """
+    Hit Pinterest's public autocomplete endpoint — the same dropdown that appears
+    when you type in Pinterest search. No login, no API key, completely free.
+    Returns what people are actively searching RIGHT NOW.
+    """
+    results = []
+    seen = set()
 
-                    # Extract pins and their titles as keyword signals
-                    pins = data.get("pins", [])
-                    for pin in pins[:10]:
-                        title = pin.get("title", "") or pin.get("description", "")
-                        if title and len(title) > 5:
-                            results.append({
-                                "keyword": title[:100].strip(),
-                                "niche": niche,
-                                "score": 60,
-                                "monthly_change": None,
-                                "yearly_change": None,
-                                "source": "pinterest_autocomplete",
-                                "seed": seed,
-                            })
-
-                    # Also grab related terms if available
-                    related = data.get("related_terms", [])
-                    for term in related[:5]:
-                        if isinstance(term, str) and term:
-                            results.append({
-                                "keyword": term.strip(),
-                                "niche": niche,
-                                "score": 70,  # higher — directly related
-                                "monthly_change": None,
-                                "yearly_change": None,
-                                "source": "pinterest_related",
-                                "seed": seed,
-                            })
-
-                except Exception as e:
-                    logger.error(f"Pinterest autocomplete failed for '{seed}': {e}")
+    for niche, seeds in NICHE_SEEDS.items():
+        for seed in seeds:  # all seeds — endpoint is fast and free
+            try:
+                resp = requests.get(
+                    "https://www.pinterest.com/api/v3/search/completions/",
+                    params={"q": seed},
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        "Accept": "application/json",
+                        "Referer": "https://www.pinterest.com/",
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                    timeout=8,
+                )
+                if resp.status_code != 200:
                     continue
 
-        logger.info(f"Pinterest autocomplete: {len(results)} keywords from SerpAPI.")
-        return results
+                data = resp.json()
+                completions = (
+                    data.get("data", {}).get("completions", []) or
+                    data.get("completions", []) or
+                    data.get("items", [])
+                )
 
-    except Exception as e:
-        logger.error(f"Pinterest autocomplete fetch failed: {e}")
-        return []
+                for i, item in enumerate(completions[:10]):
+                    # Response can be a string or a dict with a "query" key
+                    if isinstance(item, str):
+                        kw = item.strip()
+                    elif isinstance(item, dict):
+                        kw = (item.get("query") or item.get("display") or item.get("term") or "").strip()
+                    else:
+                        continue
+
+                    if not kw or kw.lower() in seen:
+                        continue
+                    seen.add(kw.lower())
+
+                    # Position 0 = most searched. Score decays by position.
+                    score = 90 - (i * 5)
+                    results.append({
+                        "keyword": kw,
+                        "niche": niche,
+                        "score": score,
+                        "monthly_change": None,
+                        "yearly_change": None,
+                        "source": "pinterest_live_autocomplete",
+                        "seed": seed,
+                    })
+
+            except Exception as e:
+                logger.debug(f"Live autocomplete failed for '{seed}': {e}")
+                continue
+
+    logger.info(f"Pinterest live autocomplete: {len(results)} keywords")
+    return results
 
 
 def _get_pinterest_trend_keywords() -> list[dict]:
@@ -267,12 +272,12 @@ def _get_pinterest_trend_keywords() -> list[dict]:
 def _guess_niche(text: str) -> str:
     """Guess which of the 3 niches a keyword belongs to."""
     t = text.lower()
-    if any(w in t for w in ["nail", "makeup", "beauty", "skincare", "hair", "lash", "lip", "glow skin", "foundation", "mascara", "blush"]):
-        return "beauty"
-    if any(w in t for w in ["home", "decor", "room", "bedroom", "candle", "cozy", "aesthetic", "wall art", "pillow", "vase", "mirror"]):
+    if any(w in t for w in ["home", "decor", "room", "bedroom", "candle", "cozy", "aesthetic", "wall art", "pillow", "vase", "mirror", "kitchen", "shelf", "rug", "furniture"]):
         return "home_decor"
-    if any(w in t for w in ["wellness", "supplement", "collagen", "vitamin", "self care", "sunscreen", "tanning", "spf", "glow up", "health", "fitness"]):
+    if any(w in t for w in ["massage", "massager", "recovery", "muscle", "pain relief", "wellness", "supplement", "collagen", "vitamin", "self care", "sunscreen", "tanning", "spf", "glow up", "health", "fitness", "workout", "gym", "yoga", "protein", "relaxation", "stress relief"]):
         return "fitness"
+    if any(w in t for w in ["nail", "makeup", "beauty", "skincare", "hair", "lash", "lip", "glow skin", "foundation", "mascara", "blush", "serum", "moisturizer", "toner"]):
+        return "beauty"
     return "beauty"  # default to beauty
 
 
@@ -318,6 +323,75 @@ def get_top_keywords_for_niche(niche: str, limit: int = 10) -> list[str]:
     except Exception as e:
         logger.error(f"get_top_keywords_for_niche failed: {e}")
         return []
+
+
+def pick_best_keyword_for_product(product_name: str, niche: str, content_type: str = "evergreen") -> str:
+    """
+    Pick the best Pinterest trending keyword for a specific product.
+
+    Strategy:
+    - Pull top keywords from TrendCache for this niche
+    - Score each keyword by how well it matches the product (word overlap)
+    - Seasonal products get seasonal keywords, trending products get high-score keywords
+    - Always prioritize buying intent over pure trend score
+    - Falls back to a generated buying-intent keyword if no good match found
+
+    Returns a single keyword string ready to use in pin title/description/hashtags.
+    """
+    try:
+        from app.models import TrendCache
+
+        # Pull top 20 cached keywords for this niche
+        rows = (
+            TrendCache.query
+            .filter_by(category=niche)
+            .order_by(TrendCache.score.desc())
+            .limit(20)
+            .all()
+        )
+
+        if rows:
+            product_words = set(product_name.lower().split())
+
+            # Score each keyword: trend score + word overlap with product name
+            scored = []
+            for row in rows:
+                kw = row.keyword.lower()
+                kw_words = set(kw.split())
+                overlap = len(product_words & kw_words)
+                # Weight: overlap matters more than raw trend score for relevance
+                relevance = overlap * 2 + (row.score or 0) * 0.01
+                scored.append((row.keyword, relevance, row.score or 0))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+
+            # For trending products: pick highest trend score keyword
+            if content_type == "trending":
+                scored.sort(key=lambda x: x[2], reverse=True)
+                return scored[0][0]
+
+            # For seasonal: prefer keywords that have seasonal terms
+            if content_type == "seasonal":
+                season_terms = {"summer", "winter", "fall", "spring", "holiday",
+                                "christmas", "halloween", "back to school", "new year"}
+                seasonal_hits = [s for s in scored if any(t in s[0].lower() for t in season_terms)]
+                if seasonal_hits:
+                    return seasonal_hits[0][0]
+
+            # For evergreen (or fallback): pick best relevance match
+            if scored[0][1] > 0:  # has some relevance
+                return scored[0][0]
+
+    except Exception as e:
+        logger.error(f"pick_best_keyword_for_product failed: {e}")
+
+    # Fallback: generate a buying-intent keyword from product name + niche
+    buying_intent_templates = {
+        "beauty":     f"{product_name.split()[0].lower()} amazon beauty finds",
+        "home_decor": f"aesthetic home decor amazon finds",
+        "fitness":    f"wellness amazon finds self care",
+    }
+    return buying_intent_templates.get(niche, f"amazon {niche} finds 2026")
 
 
 def get_keyword_driven_title_prompt(keyword: str, niche: str) -> str:
