@@ -115,7 +115,7 @@ def generate_claude_design_pin(
         import anthropic
         client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
         response = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             system=system_prompt,
             messages=[{"role": "user", "content": content}],
