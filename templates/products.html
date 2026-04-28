@@ -130,10 +130,11 @@
 {% if products %}
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
   <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
-  <button onclick="filterProducts('all')"      id="filter-all"      class="filter-btn active">All</button>
-  <button onclick="filterProducts('beauty')"   id="filter-beauty"   class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a22;">💄 Beauty 10%</button>
-  <button onclick="filterProducts('home_decor')" id="filter-home_decor" class="filter-btn" style="background:#fff3cd;color:#856404;border-color:#85640422;">🏠 Home 3%</button>
-  <button onclick="filterProducts('fitness')"  id="filter-fitness"  class="filter-btn" style="background:#fde8e8;color:#a42a2a;border-color:#a42a2a22;">🏋 Fitness 1%</button>
+  <button onclick="filterProducts('all')"    id="filter-all"    class="filter-btn active">All</button>
+  <button onclick="filterProducts('beauty')" id="filter-beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a22;">💄 Beauty 10%</button>
+  <button onclick="filterByPrice(15, 30)"    id="filter-1530"   class="filter-btn">$15–$30</button>
+  <button onclick="filterByPrice(30, 60)"    id="filter-3060"   class="filter-btn">$30–$60</button>
+  <button onclick="filterByPrice(60, 9999)"  id="filter-60plus" class="filter-btn">$60+</button>
 </div>
 <style>
   .filter-btn {
@@ -173,7 +174,7 @@
         </span>
         <span class="badge badge-blue">{{ product.category|replace('_',' ')|title }}</span>
         {% if product.price %}
-          <span style="font-weight:600;color:var(--gray-800);">${{ product.price }}</span>
+          <span style="font-weight:600;color:var(--gray-800);" data-price="{{ product.price | replace('$','') | replace(',','') }}">${{ product.price }}</span>
           {# Commission rate by Amazon category #}
           {% set rate = {'beauty': 10, 'home_decor': 3, 'fitness': 1}.get(product.category, 3) %}
           {% set price_num = product.price | replace('$','') | replace(',','') | float %}
@@ -270,22 +271,33 @@
 
 <script>
   function filterProducts(category) {
-    // Update active button
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('filter-' + category).classList.add('active');
-
-    // Show/hide cards
     document.querySelectorAll('#productList .product-card').forEach(card => {
       card.style.display = (category === 'all' || card.dataset.category === category) ? '' : 'none';
     });
+    updateCount();
+  }
 
-    // Update count badge
+  function filterByPrice(min, max) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    // Mark the matching price button active
+    const btnId = max >= 9999 ? 'filter-60plus' : `filter-${min}${max}`;
+    const btn = document.getElementById(btnId);
+    if (btn) btn.classList.add('active');
+
+    document.querySelectorAll('#productList .product-card').forEach(card => {
+      const priceEl = card.querySelector('[data-price]');
+      const price = priceEl ? parseFloat(priceEl.dataset.price) : 0;
+      card.style.display = (price >= min && price < max) ? '' : 'none';
+    });
+    updateCount();
+  }
+
+  function updateCount() {
     const visible = document.querySelectorAll('#productList .product-card:not([style*="none"])').length;
     const total   = document.querySelectorAll('#productList .product-card').length;
-    document.querySelector('.badge-gray').textContent =
-      category === 'all'
-        ? `${total} total · ${document.querySelectorAll('#productList .product-card:not(.inactive):not([style*="none"])').length} active`
-        : `${visible} shown`;
+    document.querySelector('.badge-gray').textContent = `${visible} of ${total} shown`;
   }
 </script>
 {% endblock %}

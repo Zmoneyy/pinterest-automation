@@ -128,12 +128,12 @@ def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
                     except Exception:
                         pass
 
-            # Skip very cheap items (under $5) — not worth promoting
+            # Only keep products $15+ — under $15 beauty commission not worth promoting
             try:
-                if price and float(price) < 5:
+                if not price or float(price) < 15:
                     continue
             except Exception:
-                pass
+                continue  # skip if price unparseable
 
             # Product image
             image_url = ""

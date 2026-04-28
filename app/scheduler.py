@@ -425,8 +425,9 @@ def _discover_and_queue_products(db):
 
     logger.info("Starting daily product discovery…")
 
-    # Pull top 2 keywords per niche (6 searches total)
-    niches = ["beauty", "home_decor", "fitness"]
+    # Only discover beauty products — 10% commission, best ROI
+    # home_decor (3%) and fitness (1%) not worth auto-discovering
+    niches = ["beauty"]
     total_added = 0
 
     # Get existing ASINs to avoid duplicates

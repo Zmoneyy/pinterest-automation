@@ -324,25 +324,40 @@ def delete_product(product_id):
 
 # ── Product discovery (Amazon PA API) ────────────────────────────────────
 
+def _price_float(price_str) -> float:
+    try:
+        return float(re.sub(r"[^\d.]", "", price_str or "0") or 0)
+    except Exception:
+        return 0.0
+
+
 @bp.route("/products/queue")
 @login_required
 def product_queue():
-    COMMISSION = {"beauty": 0.10, "home_decor": 0.03, "fitness": 0.01}
-
     def payout(c):
         try:
             price = float(re.sub(r"[^\d.]", "", c.price or "0") or 0)
-            rate  = COMMISSION.get(c.category, 0.03)
-            return price * rate
+            return price * 0.10  # beauty only, 10% commission
         except Exception:
             return 0.0
 
-    pending_all = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).all()
-    pending = sorted(pending_all, key=payout, reverse=True)
+    # Only show beauty candidates — 10% commission, $15+ price
+    pending_all = ProductCandidate.query.filter_by(
+        status=ProductCandidate.STATUS_PENDING, category="beauty"
+    ).all()
+    # Filter to $15+ and sort by payout descending
+    pending = sorted(
+        [c for c in pending_all if _price_float(c.price) >= 15],
+        key=payout, reverse=True
+    )
 
-    approved = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_APPROVED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
-    rejected = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_REJECTED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
-    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected, payout_fn=payout)
+    approved = ProductCandidate.query.filter_by(
+        status=ProductCandidate.STATUS_APPROVED, category="beauty"
+    ).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    rejected = ProductCandidate.query.filter_by(
+        status=ProductCandidate.STATUS_REJECTED
+    ).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected)
 
 
 @bp.route("/products/discover", methods=["POST"])
