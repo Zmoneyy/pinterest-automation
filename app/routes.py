@@ -327,10 +327,22 @@ def delete_product(product_id):
 @bp.route("/products/queue")
 @login_required
 def product_queue():
-    pending   = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).order_by(ProductCandidate.discovered_at.desc()).all()
-    approved  = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_APPROVED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
-    rejected  = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_REJECTED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
-    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected)
+    COMMISSION = {"beauty": 0.10, "home_decor": 0.03, "fitness": 0.01}
+
+    def payout(c):
+        try:
+            price = float(re.sub(r"[^\d.]", "", c.price or "0") or 0)
+            rate  = COMMISSION.get(c.category, 0.03)
+            return price * rate
+        except Exception:
+            return 0.0
+
+    pending_all = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).all()
+    pending = sorted(pending_all, key=payout, reverse=True)
+
+    approved = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_APPROVED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    rejected = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_REJECTED).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected, payout_fn=payout)
 
 
 @bp.route("/products/discover", methods=["POST"])
