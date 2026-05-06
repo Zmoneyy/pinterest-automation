@@ -196,9 +196,10 @@ def discover_products_for_trends(trends: list[dict], per_trend: int = 3) -> list
     all_products = []
     seen_asins = set()
 
-    for trend in trends[:5]:  # limit to top 5 trends to avoid hammering Amazon
-        keyword = trend.get("keyword", "")
-        niche = trend.get("niche", "beauty")
+    for trend in trends[:20]:  # support up to 20 trend entries
+        keyword         = trend.get("keyword", "")
+        niche           = trend.get("niche") or trend.get("category", "beauty")
+        source_category = trend.get("source_category", "")
         if not keyword:
             continue
 
@@ -207,10 +208,11 @@ def discover_products_for_trends(trends: list[dict], per_trend: int = 3) -> list
             asin = p.get("asin", "")
             if asin and asin not in seen_asins:
                 seen_asins.add(asin)
-                p["trend_keyword"] = keyword
+                p["trend_keyword"]   = keyword
+                p["source_category"] = source_category
                 all_products.append(p)
 
-        time.sleep(random.uniform(2, 4))  # polite delay between searches
+        time.sleep(random.uniform(2, 4))
 
     return all_products
 

@@ -177,16 +177,17 @@ class ProductCandidate(db.Model):
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
 
-    id            = db.Column(db.Integer, primary_key=True)
-    name          = db.Column(db.String(255), nullable=False)
-    asin          = db.Column(db.String(20), nullable=True)
-    amazon_url    = db.Column(db.Text, nullable=False)
-    category      = db.Column(db.String(100), nullable=True)
-    image_url     = db.Column(db.Text, nullable=True)
-    price         = db.Column(db.String(20), nullable=True)
-    trend_keyword = db.Column(db.String(255), nullable=True)
-    status        = db.Column(db.String(20), default="pending", nullable=False)
-    discovered_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    id              = db.Column(db.Integer, primary_key=True)
+    name            = db.Column(db.String(255), nullable=False)
+    asin            = db.Column(db.String(20), nullable=True)
+    amazon_url      = db.Column(db.Text, nullable=False)
+    category        = db.Column(db.String(100), nullable=True)
+    source_category = db.Column(db.String(255), nullable=True)   # the TrendEntry category name
+    image_url       = db.Column(db.Text, nullable=True)
+    price           = db.Column(db.String(20), nullable=True)
+    trend_keyword   = db.Column(db.String(255), nullable=True)
+    status          = db.Column(db.String(20), default="pending", nullable=False)
+    discovered_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {

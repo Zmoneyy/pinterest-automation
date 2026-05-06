@@ -608,25 +608,41 @@ def product_queue():
 @bp.route("/products/discover", methods=["POST"])
 @login_required
 def discover_products():
-    """Search Amazon for products based on top saved trends and add to approval queue."""
+    """Search Amazon for products based on TrendEntry categories + top TrendCache keywords."""
     from app.amazon_api import discover_products_for_trends
+    from app.models import TrendEntry
 
-    # Allow manual keyword search from the form
     manual_keyword = request.form.get("keyword", "").strip()
-    if manual_keyword:
-        trend_dicts = [{"keyword": manual_keyword, "category": "general"}]
-    else:
-        # Use top 5 saved trends
-        top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
-        if not top_trends:
-            return redirect(url_for("main.product_queue") + "?error=no_trends")
-        trend_dicts = [{"keyword": t.keyword, "category": t.category} for t in top_trends]
 
-    candidates  = discover_products_for_trends(trend_dicts, per_trend=5)
+    # Build search list: one entry per TrendEntry category using its top search queries
+    trend_dicts = []
+
+    if manual_keyword:
+        trend_dicts = [{"keyword": manual_keyword, "category": "general", "source_category": "Manual Search"}]
+    else:
+        # Use TrendEntry categories first — each gets its top search queries as keywords
+        entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
+        for entry in entries:
+            sqs = entry.sq_list()[:3]   # top 3 search queries per category
+            tps = entry.tp_list()[:2]   # top 2 product names as search terms
+            for kw in sqs + tps:
+                trend_dicts.append({
+                    "keyword": kw,
+                    "category": entry.category.lower().replace(" ", "_"),
+                    "source_category": entry.category,   # human-readable label
+                })
+
+        # Fallback: if no TrendEntries, use TrendCache
+        if not trend_dicts:
+            top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
+            if not top_trends:
+                return redirect(url_for("main.product_queue") + "?error=no_trends")
+            trend_dicts = [{"keyword": t.keyword, "category": t.category, "source_category": t.category} for t in top_trends]
+
+    candidates = discover_products_for_trends(trend_dicts, per_trend=3)
 
     added = 0
     for c in candidates:
-        # Skip if we already have this ASIN in queue or active products
         if c.get("asin"):
             already = ProductCandidate.query.filter_by(asin=c["asin"]).first()
             if not already:
@@ -634,7 +650,6 @@ def discover_products():
             if already:
                 continue
         else:
-            # No ASIN — deduplicate by name
             already = ProductCandidate.query.filter_by(name=c["name"]).first()
             if not already:
                 already = Product.query.filter_by(name=c["name"]).first()
@@ -646,6 +661,7 @@ def discover_products():
             asin=c.get("asin"),
             amazon_url=c["amazon_url"],
             category=c.get("category", "general"),
+            source_category=c.get("source_category", ""),
             image_url=c.get("image_url"),
             price=c.get("price"),
             trend_keyword=c.get("trend_keyword"),

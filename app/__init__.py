@@ -68,9 +68,11 @@ def _run_migrations():
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS alt_text TEXT",
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS shop_url TEXT",
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS post_error TEXT",
-        # trend_entries table (created by db.create_all, but ensure columns exist)
+        # trend_entries table
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS full_page_kws TEXT",
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS total_keywords INTEGER DEFAULT 0",
+        # product_candidates — source category tag
+        "ALTER TABLE product_candidates ADD COLUMN IF NOT EXISTS source_category VARCHAR(255)",
     ]
     for sql in migrations:
         try:
