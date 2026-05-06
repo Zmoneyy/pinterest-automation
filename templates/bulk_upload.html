@@ -601,17 +601,20 @@
           </div>
 
           <!-- Per-pin schedule row -->
-          <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 14px;border-top:1px solid var(--gray-100);flex-wrap:wrap;">
-            <div style="display:flex;flex-direction:column;gap:3px;">
-              <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.05em;">Schedule Date & Time</label>
-              <input type="datetime-local" id="sched-dt-${idx}"
-                style="font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;color:var(--gray-800);">
+          <div style="background:#f5f0ff;border:2px solid #c4b5fd;border-radius:10px;padding:14px 16px;margin-top:4px;">
+            <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">📅 When to post this pin</div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+              <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px;">
+                <label style="font-size:11px;font-weight:700;color:#6d28d9;">Date & Time (your local time)</label>
+                <input type="datetime-local" id="sched-dt-${idx}"
+                  style="font-size:14px;border:1.5px solid #a78bfa;border-radius:8px;padding:8px 12px;color:#3b0764;background:#fff;font-weight:600;">
+              </div>
+              <button type="button" onclick="schedulePin(${idx})" id="sched-btn-${idx}"
+                style="padding:10px 22px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">
+                📅 Schedule This Pin
+              </button>
             </div>
-            <button onclick="schedulePin(${idx})" id="sched-btn-${idx}"
-              style="margin-top:16px;padding:8px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
-              📅 Schedule This Pin
-            </button>
-            <span id="sched-status-${idx}" style="margin-top:16px;font-size:13px;display:none;"></span>
+            <div id="sched-status-${idx}" style="margin-top:8px;font-size:13px;display:none;"></div>
           </div>
 
         </div><!-- /pin-fields-col -->
@@ -750,12 +753,15 @@
       badge.textContent = '✅ Scheduled for ' + dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
       header.insertBefore(badge, header.querySelector('.slot-num').nextSibling);
 
-      status.style.display = 'inline';
+      status.style.display = 'block';
       status.style.color   = '#059669';
       const shopUrl = data.pins?.[0]?.shop_url;
       status.innerHTML = shopUrl
         ? `✅ Done! <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
         : '✅ Scheduled!';
+
+      // Update the sidebar calendar live
+      addSidebarSlot(schedDt, title);
 
     } catch(err) {
       btn.disabled    = false;
@@ -1047,26 +1053,55 @@ function updateCharCount(idx, field, max) {
 
   // ── Sidebar: add a new slot live when a pin gets scheduled ──
   function addSidebarSlot(isoDateTimeLocal, titleText) {
-    // isoDateTimeLocal is the value from datetime-local input (CST, local)
     if (!isoDateTimeLocal) return;
     const dt = new Date(isoDateTimeLocal);
     if (isNaN(dt)) return;
 
-    // Build date key in local (CST) date
     const year  = dt.getFullYear();
     const month = String(dt.getMonth() + 1).padStart(2, '0');
     const day   = String(dt.getDate()).padStart(2, '0');
     const key   = `${year}-${month}-${day}`;
 
-    const slotsEl = document.getElementById(`calslots-${key}`);
-    if (!slotsEl) return; // day not in sidebar (> 21 days out)
+    let slotsEl = document.getElementById(`calslots-${key}`);
+
+    // If day not in sidebar yet, create it
+    if (!slotsEl) {
+      const sidebar = document.getElementById('scheduleSidebar');
+      const today = new Date();
+      const isToday = (dt.toDateString() === today.toDateString());
+      const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+      const dayEl = document.createElement('div');
+      dayEl.className = 'cal-day';
+      dayEl.id = `calday-${key}`;
+      dayEl.innerHTML = `
+        <div class="cal-day-label ${isToday ? 'today' : ''}">
+          <span>${dayLabel}</span>
+          <span style="font-size:10px;font-weight:700;color:${isToday ? 'var(--red)' : 'var(--gray-400)'};">0📌</span>
+        </div>
+        <div class="cal-day-slots" id="calslots-${key}"></div>
+      `;
+
+      // Insert in date order
+      const days = sidebar.querySelectorAll('.cal-day');
+      let inserted = false;
+      for (const existing of days) {
+        if (existing.id > `calday-${key}`) {
+          sidebar.insertBefore(dayEl, existing);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) sidebar.appendChild(dayEl);
+      slotsEl = document.getElementById(`calslots-${key}`);
+    }
 
     // Remove "open" placeholder if present
     const openEl = slotsEl.querySelector('.cal-open');
     if (openEl) openEl.remove();
 
     // Format time
-    let h = dt.getHours(), m = dt.getMinutes();
+    const h = dt.getHours(), m = dt.getMinutes();
     const ampm = h < 12 ? 'am' : 'pm';
     const h12  = h % 12 || 12;
     const timeStr = `${h12}:${String(m).padStart(2,'0')}${ampm}`;
@@ -1076,38 +1111,16 @@ function updateCharCount(idx, field, max) {
     slot.innerHTML = `<span class="cal-slot-time">${timeStr}</span><span class="cal-slot-title" title="${titleText}">${titleText.slice(0,40)}</span>`;
     slotsEl.appendChild(slot);
 
-    // Update pin count badge
-    const label = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label span:last-child');
-    if (label) {
-      const existing = parseInt(label.textContent) || 0;
-      label.textContent = (existing + 1) + '📌';
-    } else {
-      // Add badge if not present
-      const labelEl = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label');
-      if (labelEl) {
-        const badge = document.createElement('span');
-        badge.style.cssText = 'font-size:10px;font-weight:700;color:var(--gray-400);';
-        badge.textContent = '1📌';
-        labelEl.appendChild(badge);
-      }
+    // Update pin count badge on this day
+    const badge = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label span:last-child');
+    if (badge) {
+      const existing = parseInt(badge.textContent) || 0;
+      badge.textContent = (existing + 1) + '📌';
     }
 
-    // Scroll sidebar to that day
+    // Scroll sidebar to show the newly scheduled day
     document.getElementById(`calday-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
-
-  // Patch schedulePin to also update the sidebar
-  const _origSchedulePin = schedulePin;
-  schedulePin = async function(idx) {
-    const schedDt = (document.getElementById(`sched-dt-${idx}`) || {}).value?.trim();
-    const title   = (document.getElementById(`title-${idx}`) || {}).value?.trim() || 'Untitled';
-    await _origSchedulePin(idx);
-    // Only add if scheduling succeeded (button text changed)
-    const btn = document.getElementById(`sched-btn-${idx}`);
-    if (btn && btn.textContent.includes('✓')) {
-      addSidebarSlot(schedDt, title);
-    }
-  };
 
   // Add first pin automatically
   addPin();
