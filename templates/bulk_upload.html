@@ -28,28 +28,46 @@
     min-width: 140px;
   }
 
-  .pins-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+  .pins-list { display: flex; flex-direction: column; gap: 20px; margin-bottom: 24px; }
 
+  /* ── Pin card ── */
   .pin-card {
     background: var(--white);
     border: 1px solid var(--gray-200);
     border-radius: var(--radius);
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 100px 1fr auto;
-    gap: 16px;
-    align-items: start;
+    overflow: hidden;
   }
-  .pin-card .slot-num {
-    font-size: 11px;
+  .pin-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    background: var(--gray-50);
+    border-bottom: 1px solid var(--gray-100);
+  }
+  .slot-num {
+    font-size: 12px;
     font-weight: 700;
-    color: var(--gray-400);
+    color: var(--gray-500);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: 6px;
+  }
+  .pin-card-body {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 0;
+  }
+
+  /* Left: image */
+  .pin-image-col {
+    padding: 16px 20px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-right: 1px solid var(--gray-100);
   }
   .pin-thumb {
-    width: 100px;
+    width: 110px;
     aspect-ratio: 2/3;
     border: 2px dashed var(--gray-200);
     border-radius: 8px;
@@ -62,48 +80,129 @@
     overflow: hidden;
     position: relative;
     transition: border-color 0.15s;
+    flex-shrink: 0;
   }
   .pin-thumb:hover { border-color: var(--red); }
   .pin-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .pin-thumb .thumb-label { font-size: 11px; color: var(--gray-400); text-align: center; padding: 8px; pointer-events: none; }
+  .pin-thumb .thumb-label { font-size: 11px; color: var(--gray-400); text-align: center; padding: 8px; pointer-events: none; line-height: 1.4; }
   .pin-thumb input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
-  .pin-fields { display: flex; flex-direction: column; gap: 10px; }
-  .pin-fields textarea {
+  /* PPP paste toggle */
+  .ppp-toggle {
+    font-size: 11px;
+    color: var(--red);
+    cursor: pointer;
+    text-align: center;
+    font-weight: 600;
+    padding: 2px 0;
+  }
+  .ppp-toggle:hover { text-decoration: underline; }
+
+  /* Right: fields */
+  .pin-fields-col {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* PPP paste area */
+  .ppp-area {
+    display: none;
+  }
+  .ppp-area.visible { display: block; }
+  .ppp-area textarea {
     width: 100%;
-    height: 180px;
-    font-size: 12px;
+    height: 130px;
+    font-size: 11px;
     font-family: monospace;
     resize: vertical;
-    border: 1px solid var(--gray-200);
+    border: 1px dashed var(--gray-300);
     border-radius: 6px;
-    padding: 10px;
+    padding: 8px;
     box-sizing: border-box;
+    background: var(--gray-50);
+    color: var(--gray-600);
   }
-  .pin-fields select {
+
+  /* Individual fields */
+  .field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-row label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .field-row label .char-count {
+    font-weight: 400;
+    color: var(--gray-300);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11px;
+  }
+  .field-row label .char-count.warn { color: #e07000; }
+  .field-row label .char-count.over { color: var(--red); font-weight: 600; }
+  .field-row label .req {
+    color: var(--red);
+    font-size: 10px;
+  }
+
+  .pin-input {
+    width: 100%;
     font-size: 13px;
     border: 1px solid var(--gray-200);
     border-radius: 6px;
     padding: 7px 10px;
-    width: 100%;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+    font-family: inherit;
   }
-  .parsed-preview {
-    font-size: 12px;
-    color: var(--gray-500);
-    background: var(--gray-50);
-    border-radius: 6px;
-    padding: 8px 10px;
-    display: none;
-  }
-  .parsed-preview strong { color: var(--gray-700); }
+  .pin-input:focus { border-color: var(--red); outline: none; }
+  .pin-input.missing { border-color: #e07000; background: #fffbf0; }
 
+  textarea.pin-input {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+  textarea.pin-input.description { min-height: 100px; }
+
+  .fields-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  /* Required badge */
+  .required-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #fde8e8;
+    color: var(--red);
+    margin-left: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  /* Remove btn */
   .remove-btn {
     background: none;
     border: none;
     color: var(--gray-300);
     font-size: 18px;
     cursor: pointer;
-    padding: 4px;
+    padding: 4px 8px;
     line-height: 1;
     transition: color 0.15s;
   }
@@ -143,17 +242,9 @@
   .submit-bar .summary { font-size: 14px; color: var(--gray-500); }
   .submit-bar .summary strong { color: var(--gray-800); }
 
-  .schedule-preview {
-    font-size: 12px;
-    color: var(--gray-400);
-    margin-top: 4px;
-  }
+  .schedule-preview { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
 
-  #scheduleStatus {
-    font-size: 13px;
-    margin-top: 12px;
-    display: none;
-  }
+  #scheduleStatus { font-size: 13px; margin-top: 12px; display: none; }
 
   .progress-bar-wrap {
     height: 4px;
@@ -169,14 +260,155 @@
     width: 0%;
     transition: width 0.3s;
   }
+
+  /* Pasted success flash */
+  @keyframes flashGreen {
+    0%   { border-color: #1a7a4a; background: #d4f4e8; }
+    100% { border-color: var(--gray-200); background: var(--white); }
+  }
+  .flash-ok { animation: flashGreen 1.2s ease forwards; }
+
+  /* ── Two-column layout ── */
+  .bulk-layout {
+    display: grid;
+    grid-template-columns: 230px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  /* ── Sticky schedule sidebar ── */
+  .schedule-sidebar {
+    position: sticky;
+    top: 72px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 14px;
+    scrollbar-width: thin;
+  }
+  .schedule-sidebar::-webkit-scrollbar { width: 4px; }
+  .schedule-sidebar::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 2px; }
+
+  .sidebar-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-400);
+    margin-bottom: 12px;
+  }
+
+  .cal-day {
+    margin-bottom: 10px;
+  }
+  .cal-day-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--gray-700);
+    padding: 4px 6px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .cal-day-label.today {
+    background: var(--red-light, #fde8e8);
+    color: var(--red);
+  }
+  .cal-day-slots {
+    padding-left: 6px;
+    margin-top: 3px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .cal-slot {
+    font-size: 11px;
+    color: var(--gray-500);
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    line-height: 1.4;
+  }
+  .cal-slot-time {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--red);
+    background: var(--red-light, #fde8e8);
+    padding: 1px 5px;
+    border-radius: 4px;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .cal-slot-title {
+    color: var(--gray-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 130px;
+  }
+  .cal-open {
+    font-size: 11px;
+    color: var(--gray-300);
+    padding-left: 6px;
+    font-style: italic;
+  }
+
+  /* ── New slot highlight (added from JS) ── */
+  .cal-slot.new-slot .cal-slot-time { background: #d4f4e8; color: #1a7a4a; }
+  .cal-slot.new-slot .cal-slot-title { color: #1a7a4a; }
+
+  @media (max-width: 860px) {
+    .bulk-layout { grid-template-columns: 1fr; }
+    .schedule-sidebar { position: static; max-height: 220px; }
+  }
+  @media (max-width: 600px) {
+    .pin-card-body { grid-template-columns: 1fr; }
+    .pin-image-col { border-right: none; border-bottom: 1px solid var(--gray-100); flex-direction: row; align-items: center; }
+    .fields-row-2 { grid-template-columns: 1fr; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="bulk-header">
   <h1>Bulk Schedule Pins</h1>
-  <p>Add your ChatGPT pin images + paste Pin Perfect Pro output for each. Set your schedule and submit — all pins queue automatically.</p>
+  <p>Upload your ChatGPT-generated images and fill in the pin details below. Paste Pin Perfect Pro output to auto-fill all fields, then review before scheduling.</p>
 </div>
+
+<div class="bulk-layout">
+
+{# ── LEFT: Sticky calendar sidebar ── #}
+<div class="schedule-sidebar" id="scheduleSidebar">
+  <div class="sidebar-title">📅 Schedule</div>
+  {% for day in calendar_days %}
+  <div class="cal-day" id="calday-{{ day.key }}">
+    <div class="cal-day-label {% if day.is_today %}today{% endif %}">
+      <span>{{ day.label }}</span>
+      {% if day.pins %}
+        <span style="font-size:10px;font-weight:700;color:{% if day.is_today %}var(--red){% else %}var(--gray-400){% endif %};">{{ day.pins|length }}📌</span>
+      {% endif %}
+    </div>
+    <div class="cal-day-slots" id="calslots-{{ day.key }}">
+      {% if day.pins %}
+        {% for p in day.pins %}
+        <div class="cal-slot">
+          <span class="cal-slot-time">{% set ampm = 'am' if p.hour < 12 else 'pm' %}{% set h12 = p.hour % 12 %}{% set h12 = 12 if h12 == 0 else h12 %}{{ '%d:%02d%s'|format(h12, p.minute, ampm) }}</span>
+          <span class="cal-slot-title" title="{{ p.title }}">{{ p.title }}</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="cal-open">open</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── RIGHT: Main content ── #}
+<div>
 
 {# ── Schedule settings ── #}
 <div class="schedule-bar">
@@ -194,8 +426,9 @@
     </select>
   </div>
   <div class="field">
-    <label>Post Times (UTC)</label>
-    <input type="text" id="postTimes" value="09:00, 13:00, 19:00" placeholder="09:00, 13:00, 19:00">
+    <label>Post Times (CST)</label>
+    <input type="text" id="postTimes" value="08:00, 12:00, 19:00" placeholder="08:00, 12:00, 19:00">
+    <span style="font-size:11px;color:var(--gray-400);">Enter your local CST times</span>
   </div>
   <div class="field" style="flex:1;">
     <label>Schedule Preview</label>
@@ -214,12 +447,12 @@
 <div class="submit-bar">
   <div>
     <div class="summary">
-      <strong id="pinCount">0 pins</strong> ready to schedule
+      <strong id="pinCount">0 pins</strong> ready to save
     </div>
   </div>
   <div style="text-align:right;">
     <button class="btn btn-red" id="scheduleBtn" onclick="scheduleAll()" style="min-width:160px;">
-      Schedule All Pins
+      Save as Drafts
     </button>
     <div id="scheduleStatus"></div>
     <div class="progress-bar-wrap" id="progressWrap">
@@ -227,6 +460,9 @@
     </div>
   </div>
 </div>
+
+</div>{# end right col #}
+</div>{# end bulk-layout #}
 {% endblock %}
 
 {% block scripts %}
@@ -234,63 +470,154 @@
   const BOARDS = {{ boards | tojson }};
   let pinCount = 0;
 
-  // Set default start date to tomorrow
+  // Default start date = tomorrow
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
   document.getElementById('startDate').value = tomorrow.toISOString().split('T')[0];
 
-  // Update schedule preview when settings change
-  ['startDate','pinsPerDay','postTimes'].forEach(id => {
-    document.getElementById(id).addEventListener('change', updatePreview);
-  });
+  ['startDate','pinsPerDay','postTimes'].forEach(id =>
+    document.getElementById(id).addEventListener('change', updatePreview)
+  );
 
   function updatePreview() {
-    const start   = document.getElementById('startDate').value;
-    const perDay  = parseInt(document.getElementById('pinsPerDay').value);
-    const total   = document.querySelectorAll('.pin-card').length;
-    if (!start || !total) {
-      document.getElementById('schedulePreview').textContent = '—';
-      return;
-    }
+    const start  = document.getElementById('startDate').value;
+    const perDay = parseInt(document.getElementById('pinsPerDay').value);
+    const total  = document.querySelectorAll('.pin-card').length;
+    if (!start || !total) { document.getElementById('schedulePreview').textContent = '—'; return; }
     const days = Math.ceil(total / perDay);
     const end  = new Date(start);
     end.setDate(end.getDate() + days - 1);
     document.getElementById('schedulePreview').textContent =
-      `${total} pins over ${days} day${days>1?'s':''} — ends ${end.toLocaleDateString('en-US', {month:'short',day:'numeric'})}`;
+      `${total} pins over ${days} day${days>1?'s':''} — ends ${end.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
   }
 
   function addPin() {
     pinCount++;
     const idx = pinCount;
 
-    const boardOptions = BOARDS.map(b =>
-      `<option value="${b}">${b}</option>`
-    ).join('');
+    const boardOptions = BOARDS.map(b => `<option value="${b}">${b}</option>`).join('');
 
     const card = document.createElement('div');
     card.className = 'pin-card';
     card.dataset.idx = idx;
     card.innerHTML = `
-      <div>
-        <div class="slot-num">Pin #${idx}</div>
-        <div class="pin-thumb" id="thumb-${idx}" onclick="document.getElementById('file-${idx}').click()">
-          <span class="thumb-label">Click to upload image</span>
-          <input type="file" id="file-${idx}" accept="image/*" onchange="handleImage(${idx}, this)">
+      <div class="pin-card-header">
+        <span class="slot-num">Pin #${idx}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button id="save-btn-${idx}" onclick="saveSingleDraft(${idx})" title="Save this pin as a draft"
+            style="font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;border:1.5px solid #7c3aed;background:#f5f0ff;color:#7c3aed;cursor:pointer;">
+            Save Draft
+          </button>
+          <span id="save-status-${idx}" style="font-size:11px;color:#7c3aed;display:none;"></span>
+          <button class="remove-btn" onclick="removePin(this)" title="Remove pin">✕</button>
         </div>
       </div>
-      <div class="pin-fields">
-        <textarea
-          id="ppp-${idx}"
-          placeholder="Paste Pin Perfect Pro output here — title, description, hashtags, board, alt text will all be auto-parsed."
-          oninput="parsePPP(${idx})"></textarea>
-        <div class="parsed-preview" id="preview-${idx}"></div>
-        <select id="board-${idx}">
-          <option value="">— board auto-detected from Pin Perfect Pro —</option>
-          ${boardOptions}
-        </select>
-      </div>
-      <button class="remove-btn" onclick="removePin(this)" title="Remove">✕</button>
+
+      <div class="pin-card-body">
+        <!-- Left: image upload -->
+        <div class="pin-image-col">
+          <div class="pin-thumb" id="thumb-${idx}">
+            <span class="thumb-label">Click to<br>upload<br>image</span>
+            <input type="file" id="file-${idx}" accept="image/*" onchange="handleImage(${idx}, this)">
+          </div>
+        </div>
+
+        <!-- Right: fields -->
+        <div class="pin-fields-col">
+
+          <!-- PPP paste area — always visible -->
+          <div class="field-row">
+            <label>📋 Paste Pin Perfect Pro output — fields auto-fill instantly</label>
+            <textarea
+              id="ppp-${idx}"
+              class="pin-input"
+              style="min-height:100px;font-size:12px;font-family:monospace;background:var(--gray-50);"
+              placeholder="Paste your full Pin Perfect Pro output here…"
+              onpaste="setTimeout(() => parsePPP(${idx}), 50)"
+            ></textarea>
+          </div>
+
+          <!-- TITLE (required, max 100) -->
+          <div class="field-row">
+            <label>
+              Title <span class="req">required</span>
+              <span class="char-count" id="title-count-${idx}">0 / 100</span>
+            </label>
+            <input type="text" class="pin-input" id="title-${idx}" maxlength="100"
+              placeholder="e.g. Best Vitamin C Serum on Amazon – Glowing Skin in 2 Weeks"
+              oninput="updateCharCount(${idx}, 'title', 100)">
+          </div>
+
+          <!-- DESCRIPTION (required, max 500) -->
+          <div class="field-row">
+            <label>
+              Description <span class="req">required for reach</span>
+              <span class="char-count" id="desc-count-${idx}">0 / 500</span>
+            </label>
+            <textarea class="pin-input description" id="desc-${idx}" maxlength="500"
+              placeholder="Write a keyword-rich description. Include your primary keyword in the first sentence, then benefits, then a soft CTA. Example: This vitamin C serum is a must-have for glowing skin. It fades dark spots, evens skin tone, and gives your face a natural glow. Shop it on Amazon via my link below ✨"
+              oninput="updateCharCount(${idx}, 'desc', 500)"></textarea>
+          </div>
+
+          <!-- HASHTAGS + ALT TEXT row -->
+          <div class="fields-row-2">
+            <div class="field-row">
+              <label>
+                Hashtags
+                <span class="char-count" id="tags-count-${idx}">0 / 20 tags</span>
+              </label>
+              <textarea class="pin-input" id="tags-${idx}" style="min-height:60px;"
+                placeholder="#skincare #amazonfinds #vitaminc"
+                oninput="updateTagCount(${idx})"></textarea>
+            </div>
+            <div class="field-row">
+              <label>
+                Alt Text <span class="req">SEO</span>
+                <span class="char-count" id="alt-count-${idx}">0 / 500</span>
+              </label>
+              <textarea class="pin-input" id="alt-${idx}" maxlength="500" style="min-height:60px;"
+                placeholder="Describe the image for accessibility + SEO"
+                oninput="updateCharCount(${idx}, 'alt', 500)"></textarea>
+            </div>
+          </div>
+
+          <!-- AMAZON URL + BOARD row -->
+          <div class="fields-row-2">
+            <div class="field-row">
+              <label>
+                Amazon Affiliate URL <span class="req">for shop page</span>
+              </label>
+              <input type="url" class="pin-input" id="amazon-url-${idx}"
+                placeholder="https://www.amazon.com/product-name/dp/... (full link from Amazon Associates)"
+                oninput="autoDetectBoard(${idx}, this.value)">
+            </div>
+            <div class="field-row">
+              <label>Board <span class="req">required</span></label>
+              <select class="pin-input" id="board-${idx}">
+                <option value="">— select board —</option>
+                ${boardOptions}
+              </select>
+            </div>
+          </div>
+
+          <!-- Per-pin schedule row -->
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 16px 14px;border-top:1px solid var(--gray-100);flex-wrap:wrap;">
+            <div style="display:flex;flex-direction:column;gap:3px;">
+              <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.05em;">Schedule Date & Time</label>
+              <input type="datetime-local" id="sched-dt-${idx}"
+                style="font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:6px 10px;color:var(--gray-800);">
+            </div>
+            <button onclick="schedulePin(${idx})" id="sched-btn-${idx}"
+              style="margin-top:16px;padding:8px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              📅 Schedule This Pin
+            </button>
+            <span id="sched-status-${idx}" style="margin-top:16px;font-size:13px;display:none;"></span>
+          </div>
+
+        </div><!-- /pin-fields-col -->
+      </div><!-- /pin-card-body -->
     `;
+
     document.getElementById('pinsList').appendChild(card);
     updateCount();
     updatePreview();
@@ -302,12 +629,190 @@
     updatePreview();
   }
 
+  async function saveSingleDraft(idx) {
+    const title    = (document.getElementById(`title-${idx}`) || {}).value?.trim();
+    const desc     = (document.getElementById(`desc-${idx}`) || {}).value?.trim();
+    const board    = (document.getElementById(`board-${idx}`) || {}).value?.trim();
+    const img      = _imageData[idx] || null;
+
+    const btn    = document.getElementById(`save-btn-${idx}`);
+    const status = document.getElementById(`save-status-${idx}`);
+
+    if (!title || !desc || !board) {
+      status.style.display = 'inline';
+      status.style.color   = 'var(--red)';
+      status.textContent   = '✗ Fill in Title, Description & Board first';
+      return;
+    }
+
+    btn.disabled     = true;
+    btn.textContent  = 'Saving…';
+    status.style.display = 'none';
+
+    const pin = {
+      title,
+      description: desc,
+      hashtags:    (document.getElementById(`tags-${idx}`) || {}).value?.trim() || '',
+      alt_text:    (document.getElementById(`alt-${idx}`) || {}).value?.trim() || '',
+      amazon_url:  (document.getElementById(`amazon-url-${idx}`) || {}).value?.trim() || '',
+      board_name:  board,
+      image_b64:   img,
+      ppp_text:    (document.getElementById(`ppp-${idx}`) || {}).value || '',
+    };
+
+    try {
+      const resp = await fetch('/bulk-upload/submit', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ pins: [pin], start_date: null, pins_per_day: 1, post_times: [] }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Save failed');
+
+      btn.textContent  = '✓ Saved!';
+      btn.style.background = '#e6f4ea';
+      btn.style.borderColor = '#1a7a4a';
+      btn.style.color = '#1a7a4a';
+      status.style.display = 'inline';
+      status.style.color   = '#1a7a4a';
+      const shopUrl = data.pins?.[0]?.shop_url;
+      status.innerHTML = shopUrl
+        ? `✓ Draft saved — <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
+        : '✓ Draft saved!';
+    } catch(err) {
+      btn.disabled    = false;
+      btn.textContent = 'Save Draft';
+      status.style.display = 'inline';
+      status.style.color   = 'var(--red)';
+      status.textContent   = '✗ ' + err.message;
+    }
+  }
+
+  async function schedulePin(idx) {
+    const title    = (document.getElementById(`title-${idx}`) || {}).value?.trim();
+    const desc     = (document.getElementById(`desc-${idx}`) || {}).value?.trim();
+    const board    = (document.getElementById(`board-${idx}`) || {}).value?.trim();
+    const schedDt  = (document.getElementById(`sched-dt-${idx}`) || {}).value?.trim();
+    const img      = _imageData[idx] || null;
+
+    const btn    = document.getElementById(`sched-btn-${idx}`);
+    const status = document.getElementById(`sched-status-${idx}`);
+
+    if (!title || !desc || !board) {
+      status.style.display = 'inline';
+      status.style.color   = 'var(--red)';
+      status.textContent   = '✗ Fill in Title, Description & Board first';
+      return;
+    }
+    if (!schedDt) {
+      status.style.display = 'inline';
+      status.style.color   = 'var(--red)';
+      status.textContent   = '✗ Pick a date & time first';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = 'Scheduling…';
+    status.style.display = 'none';
+
+    const pin = {
+      title,
+      description: desc,
+      hashtags:    (document.getElementById(`tags-${idx}`) || {}).value?.trim() || '',
+      alt_text:    (document.getElementById(`alt-${idx}`) || {}).value?.trim() || '',
+      amazon_url:  (document.getElementById(`amazon-url-${idx}`) || {}).value?.trim() || '',
+      board_name:  board,
+      image_b64:   img,
+      ppp_text:    (document.getElementById(`ppp-${idx}`) || {}).value || '',
+      scheduled_for: schedDt,
+    };
+
+    try {
+      const resp = await fetch('/bulk-upload/submit-scheduled', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ pins: [pin] }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Schedule failed');
+
+      // Green check — mark card as scheduled
+      btn.textContent = '✓ Scheduled!';
+      btn.style.background = '#059669';
+      btn.style.cursor = 'default';
+
+      // Green banner on the card header
+      const card = btn.closest('.pin-card');
+      const header = card.querySelector('.pin-card-header');
+      const badge = document.createElement('span');
+      badge.style.cssText = 'background:#d1fae5;color:#059669;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;';
+      const dt = new Date(schedDt);
+      badge.textContent = '✅ Scheduled for ' + dt.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' ' + dt.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      header.insertBefore(badge, header.querySelector('.slot-num').nextSibling);
+
+      status.style.display = 'inline';
+      status.style.color   = '#059669';
+      const shopUrl = data.pins?.[0]?.shop_url;
+      status.innerHTML = shopUrl
+        ? `✅ Done! <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
+        : '✅ Scheduled!';
+
+    } catch(err) {
+      btn.disabled    = false;
+      btn.textContent = '📅 Schedule This Pin';
+      status.style.display = 'inline';
+      status.style.color   = 'var(--red)';
+      status.textContent   = '✗ ' + err.message;
+    }
+  }
+
   function updateCount() {
     const n = document.querySelectorAll('.pin-card').length;
     document.getElementById('pinCount').textContent = `${n} pin${n !== 1 ? 's' : ''}`;
   }
 
-  const _imageData = {}; // idx → base64
+function autoDetectBoard(idx, url) {
+    if (!url) return;
+    const u = url.toLowerCase();
+    const sel = document.getElementById(`board-${idx}`);
+    if (!sel) return;
+
+    // Keyword → board name mapping
+    const rules = [
+      { keywords: ['greens', 'supplement', 'collagen', 'protein', 'vitamin', 'probiotic', 'wellness', 'health', 'bloom', 'matcha', 'adaptogen'], board: 'Wellness & Self Care Essentials' },
+      { keywords: ['nail', 'polish', 'manicure', 'press-on', 'press+on', 'gel-nail', 'nail-art'], board: 'Nail Inspo & Nail Art Ideas' },
+      { keywords: ['skincare', 'serum', 'moisturizer', 'cleanser', 'toner', 'spf', 'sunscreen', 'retinol', 'makeup', 'foundation', 'mascara', 'lipstick', 'blush', 'beauty', 'perfume', 'fragrance'], board: 'Affordable Beauty Essentials' },
+      { keywords: ['luxury', 'la-mer', 'tatcha', 'charlotte-tilbury', 'sk-ii', 'drunk-elephant', 'dyson', 'nars', 'hourglass'], board: 'Affordable Beauty Essentials' },
+      { keywords: ['decor', 'candle', 'vase', 'throw', 'blanket', 'rug', 'lamp', 'shelf', 'pillow', 'frame', 'wall-art', 'aesthetic', 'home'], board: 'Glam Home Decor Ideas' },
+      { keywords: ['luxury-home', 'luxury+home', 'gold', 'marble', 'velvet', 'designer-home'], board: 'Luxury Look for Less Home Decor' },
+    ];
+
+    for (const rule of rules) {
+      if (rule.keywords.some(k => u.includes(k))) {
+        const opt = Array.from(sel.options).find(o => o.value === rule.board);
+        if (opt) { sel.value = rule.board; return; }
+      }
+    }
+  }
+
+function updateCharCount(idx, field, max) {
+    const fieldMap = { title: `title-${idx}`, desc: `desc-${idx}`, alt: `alt-${idx}` };
+    const countMap = { title: `title-count-${idx}`, desc: `desc-count-${idx}`, alt: `alt-count-${idx}` };
+    const val = document.getElementById(fieldMap[field]).value.length;
+    const el  = document.getElementById(countMap[field]);
+    el.textContent = `${val} / ${max}`;
+    el.className = 'char-count' + (val > max * 0.9 ? (val >= max ? ' over' : ' warn') : '');
+  }
+
+  function updateTagCount(idx) {
+    const val  = document.getElementById(`tags-${idx}`).value;
+    const tags = (val.match(/#\w+/g) || []).length;
+    const el   = document.getElementById(`tags-count-${idx}`);
+    el.textContent = `${tags} / 20 tags`;
+    el.className = 'char-count' + (tags > 20 ? ' over' : tags >= 18 ? ' warn' : '');
+  }
+
+  const _imageData = {};
 
   function handleImage(idx, input) {
     const file = input.files[0];
@@ -316,7 +821,6 @@
     reader.onload = e => {
       _imageData[idx] = e.target.result;
       const thumb = document.getElementById(`thumb-${idx}`);
-      // Remove old img if any
       const old = thumb.querySelector('img');
       if (old) old.remove();
       const img = document.createElement('img');
@@ -329,27 +833,54 @@
 
   function parsePPP(idx) {
     const text = document.getElementById(`ppp-${idx}`).value;
-    const parsed = parsePPPText(text);
-    const preview = document.getElementById(`preview-${idx}`);
+    if (!text.trim()) return;
 
+    const parsed = parsePPPText(text);
+
+    // Fill each field only if we got a value
     if (parsed.title) {
-      preview.style.display = 'block';
-      preview.innerHTML = `
-        <strong>Title:</strong> ${parsed.title}<br>
-        ${parsed.board_name ? `<strong>Board:</strong> ${parsed.board_name}<br>` : ''}
-        ${parsed.hashtags ? `<strong>Tags:</strong> ${parsed.hashtags.substring(0, 80)}…` : ''}
-      `;
-      // Auto-select board if it matches one we have
-      if (parsed.board_name) {
-        const sel = document.getElementById(`board-${idx}`);
-        // Try exact match first
-        const opt = Array.from(sel.options).find(o =>
+      document.getElementById(`title-${idx}`).value = parsed.title.substring(0, 100);
+      updateCharCount(idx, 'title', 100);
+    }
+    if (parsed.description) {
+      document.getElementById(`desc-${idx}`).value = parsed.description.substring(0, 500);
+      updateCharCount(idx, 'desc', 500);
+    }
+    if (parsed.hashtags) {
+      document.getElementById(`tags-${idx}`).value = parsed.hashtags;
+      updateTagCount(idx);
+    }
+    if (parsed.alt_text) {
+      document.getElementById(`alt-${idx}`).value = parsed.alt_text.substring(0, 500);
+      updateCharCount(idx, 'alt', 500);
+    }
+    if (parsed.board_name) {
+      const sel = document.getElementById(`board-${idx}`);
+      const pWords = parsed.board_name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+      let bestOpt = null, bestScore = 0;
+      Array.from(sel.options).forEach(o => {
+        const oLower = o.value.toLowerCase();
+        const score = pWords.filter(w => oLower.includes(w)).length;
+        if (score > bestScore) { bestScore = score; bestOpt = o; }
+      });
+      // Also try substring match as fallback
+      if (!bestOpt) {
+        bestOpt = Array.from(sel.options).find(o =>
           o.value.toLowerCase().includes(parsed.board_name.toLowerCase().split(' ')[0])
         );
-        if (opt) sel.value = opt.value;
       }
-    } else {
-      preview.style.display = 'none';
+      if (bestOpt) sel.value = bestOpt.value;
+    }
+    if (parsed.amazon_url) {
+      document.getElementById(`amazon-url-${idx}`).value = parsed.amazon_url;
+    }
+
+    // Flash the fields col green to show it worked
+    const col = document.querySelector(`[data-idx="${idx}"] .pin-fields-col`);
+    if (col) {
+      col.classList.remove('flash-ok');
+      void col.offsetWidth;
+      col.classList.add('flash-ok');
     }
   }
 
@@ -358,30 +889,54 @@
       for (const pat of patterns) {
         const re = new RegExp(pat + '\\s*\\n+([\\s\\S]+?)(?=\\n---|\\n##|\\n###|$)', 'i');
         const m = text.match(re);
-        if (m) return m[1].trim().replace(/\*+/g, '').split('\n')[0].trim().replace(/^-+\s*/, '');
+        if (m) {
+          // For description, return the full block (multi-line)
+          return m[1].trim().replace(/\*+/g, '');
+        }
       }
       return '';
     }
 
-    const title       = extract(['##[^#]*Pin Title[^#\\n]*']);
-    const description = extract(['##[^#]*Pin Description[^#\\n]*']);
-    const alt_text    = extract(['##[^#]*Alt Text[^#\\n]*']);
-    const board_name  = extract(['##[^#]*Board Name[^#\\n]*']);
+    function extractFirstLine(patterns) {
+      const block = extract(patterns);
+      if (!block) return '';
+      return block.split('\n')[0].trim().replace(/^-+\s*/, '');
+    }
 
-    // Supporting keywords → hashtags
-    const kwSection = extract(['###[^#]*Supporting Keywords']);
+    const title      = extractFirstLine(['##[^#]*Pin Title[^#\\n]*']);
+    const alt_text   = extractFirstLine(['##[^#]*Alt Text[^#\\n]*']);
+    const board_name = extractFirstLine(['##[^#]*Board Name[^#\\n]*']);
+
+    // Description: collect all lines from the section
+    const descBlock = extract(['##[^#]*Pin Description[^#\\n]*', '##[^#]*Description[^#\\n]*']);
+    const description = descBlock
+      ? descBlock.split('\n').map(l => l.trim().replace(/^-+\s*/, '')).filter(Boolean).join(' ')
+      : '';
+
+    // Hashtags from Supporting Keywords section
+    const kwSection = extract(['###[^#]*Supporting Keywords', '##[^#]*Supporting Keywords']);
     let hashtags = '';
     if (kwSection) {
-      const kws = kwSection.split(/[,\n]/).map(k => k.trim().replace(/^-+\s*/, '').trim()).filter(Boolean);
+      const kws = kwSection.split(/[,\n]/).map(k => k.trim().replace(/^-+\s*/, '').trim()).filter(k => k && !k.startsWith('#'));
       hashtags = kws.map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
     }
-    const primaryKw = extract(['##[^#]*Primary Keyword']);
+    // Also catch already-formatted hashtags
+    const hashMatch = text.match(/#\w[\w]*/g);
+    if (hashMatch && !hashtags) {
+      hashtags = [...new Set(hashMatch)].slice(0, 20).join(' ');
+    }
+    const primaryKw = extractFirstLine(['##[^#]*Primary Keyword']);
     if (primaryKw) {
       const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
-      if (!hashtags.includes(tag)) hashtags = tag + ' ' + hashtags;
+      if (hashtags && !hashtags.includes(tag)) hashtags = tag + ' ' + hashtags;
+      else if (!hashtags) hashtags = tag;
     }
 
-    return { title, description, alt_text, board_name, hashtags: hashtags.trim() };
+    // Extract any Amazon URL in the pasted text
+    const amazonMatch = text.match(/https?:\/\/(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')]+/);
+    const amazon_url = amazonMatch ? amazonMatch[0].trim() : '';
+
+    return { title, description, alt_text, board_name, hashtags: hashtags.trim(), amazon_url };
   }
 
   async function scheduleAll() {
@@ -393,20 +948,51 @@
 
     const pinsPerDay = parseInt(document.getElementById('pinsPerDay').value);
     const timesRaw   = document.getElementById('postTimes').value;
-    const postTimes  = timesRaw.split(',').map(t => t.trim()).filter(Boolean);
+    // Convert CST (UTC-6) to UTC by adding 6 hours
+    const postTimes  = timesRaw.split(',').map(t => {
+      const [h, m] = t.trim().split(':').map(Number);
+      const utcH = (h + 6) % 24;
+      return String(utcH).padStart(2,'0') + ':' + String(m || 0).padStart(2,'0');
+    }).filter(Boolean);
 
-    // Build pins payload
+    // Validate + collect pins
     const pins = [];
+    let hasErrors = false;
     for (const card of cards) {
-      const idx  = card.dataset.idx;
-      const text = document.getElementById(`ppp-${idx}`).value.trim();
-      const img  = _imageData[idx] || '';
+      const idx   = card.dataset.idx;
+      const title = document.getElementById(`title-${idx}`).value.trim();
+      const desc  = document.getElementById(`desc-${idx}`).value.trim();
       const board = document.getElementById(`board-${idx}`).value;
+      const img   = _imageData[idx] || '';
 
-      if (!text && !img) continue;  // skip empty slots
-      pins.push({ ppp_text: text, image_b64: img, board_name: board });
+      // Highlight missing required fields
+      const titleEl = document.getElementById(`title-${idx}`);
+      const descEl  = document.getElementById(`desc-${idx}`);
+      const boardEl = document.getElementById(`board-${idx}`);
+
+      titleEl.classList.toggle('missing', !title);
+      descEl.classList.toggle('missing', !desc);
+      boardEl.classList.toggle('missing', !board);
+
+      if (!title || !desc || !board) { hasErrors = true; continue; }
+
+      pins.push({
+        title,
+        description: desc,
+        hashtags:    document.getElementById(`tags-${idx}`).value.trim(),
+        alt_text:    document.getElementById(`alt-${idx}`).value.trim(),
+        amazon_url:  document.getElementById(`amazon-url-${idx}`).value.trim(),
+        board_name:  board,
+        image_b64:   img,
+        // Also send raw PPP for server-side fallback parsing
+        ppp_text:    (document.getElementById(`ppp-${idx}`) || {}).value || '',
+      });
     }
 
+    if (hasErrors) {
+      alert('Some pins are missing required fields (highlighted in orange). Please fill in Title, Description, and Board for every pin.');
+      return;
+    }
     if (!pins.length) { alert('No pins to schedule — add some content first.'); return; }
 
     const btn    = document.getElementById('scheduleBtn');
@@ -416,46 +1002,114 @@
 
     btn.disabled = true;
     btn.textContent = 'Scheduling…';
-    status.style.display  = 'block';
-    status.style.color    = 'var(--gray-400)';
-    status.textContent    = `Uploading ${pins.length} pins…`;
-    wrap.style.display    = 'block';
-    fill.style.width      = '10%';
+    status.style.display = 'block';
+    status.style.color   = 'var(--gray-400)';
+    status.textContent   = `Uploading ${pins.length} pins…`;
+    wrap.style.display   = 'block';
+    fill.style.width     = '10%';
 
     try {
       const resp = await fetch('/bulk-upload/submit', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pins, start_date: startDate, pins_per_day: pinsPerDay, post_times: postTimes }),
+        body:    JSON.stringify({ pins, start_date: startDate, pins_per_day: pinsPerDay, post_times: postTimes }),
       });
       fill.style.width = '80%';
       const data = await resp.json();
-
       fill.style.width = '100%';
       if (!data.ok) throw new Error(data.error || 'Schedule failed');
 
-      status.style.color = 'var(--green)';
-      status.textContent = `✓ ${data.saved} pins scheduled! ${data.errors > 0 ? `(${data.errors} failed)` : ''}`;
-      btn.textContent    = `✓ ${data.saved} Scheduled!`;
+      status.style.color = '#1a7a4a';
+      btn.textContent    = `✓ ${data.saved} Saved as Drafts!`;
 
-      // Show first/last schedule dates
+      // Build links to each draft's shop page for review
+      let html = `<div style="margin-top:12px;font-size:13px;">`;
+      html += `<strong style="color:#1a7a4a;">✓ ${data.saved} draft${data.saved !== 1 ? 's' : ''} saved!</strong> `;
+      html += `Review each shop page before scheduling:<br><br>`;
       if (data.pins && data.pins.length) {
-        const first = new Date(data.pins[0].scheduled_for).toLocaleDateString('en-US', {month:'short', day:'numeric'});
-        const last  = new Date(data.pins[data.pins.length-1].scheduled_for).toLocaleDateString('en-US', {month:'short', day:'numeric'});
-        status.textContent += ` • ${first} → ${last}`;
+        data.pins.forEach((p, i) => {
+          html += `<a href="${p.shop_url}" target="_blank" rel="noopener"
+            style="display:inline-block;margin:3px 4px;padding:5px 10px;background:#f5f0ff;border:1px solid #d4b8ff;border-radius:6px;color:#6d28d9;font-size:12px;text-decoration:none;">
+            Pin ${i+1}: ${p.title.slice(0,30)}${p.title.length>30?'…':''} →</a>`;
+        });
       }
-
+      html += `<br><br><a href="/dashboard?status=draft" style="color:#6d28d9;font-weight:600;font-size:13px;">→ Go to Drafts tab to schedule them</a>`;
+      html += `</div>`;
+      status.innerHTML = html;
     } catch(err) {
-      fill.style.width = '100%';
       fill.style.background = 'var(--red)';
-      status.style.color = 'var(--red)';
-      status.textContent = '✗ ' + err.message;
-      btn.disabled = false;
-      btn.textContent = 'Schedule All Pins';
+      status.style.color    = 'var(--red)';
+      status.textContent    = '✗ ' + err.message;
+      btn.disabled          = false;
+      btn.textContent       = 'Save as Drafts';
     }
   }
 
-  // Add first pin automatically on load
+  // ── Sidebar: add a new slot live when a pin gets scheduled ──
+  function addSidebarSlot(isoDateTimeLocal, titleText) {
+    // isoDateTimeLocal is the value from datetime-local input (CST, local)
+    if (!isoDateTimeLocal) return;
+    const dt = new Date(isoDateTimeLocal);
+    if (isNaN(dt)) return;
+
+    // Build date key in local (CST) date
+    const year  = dt.getFullYear();
+    const month = String(dt.getMonth() + 1).padStart(2, '0');
+    const day   = String(dt.getDate()).padStart(2, '0');
+    const key   = `${year}-${month}-${day}`;
+
+    const slotsEl = document.getElementById(`calslots-${key}`);
+    if (!slotsEl) return; // day not in sidebar (> 21 days out)
+
+    // Remove "open" placeholder if present
+    const openEl = slotsEl.querySelector('.cal-open');
+    if (openEl) openEl.remove();
+
+    // Format time
+    let h = dt.getHours(), m = dt.getMinutes();
+    const ampm = h < 12 ? 'am' : 'pm';
+    const h12  = h % 12 || 12;
+    const timeStr = `${h12}:${String(m).padStart(2,'0')}${ampm}`;
+
+    const slot = document.createElement('div');
+    slot.className = 'cal-slot new-slot';
+    slot.innerHTML = `<span class="cal-slot-time">${timeStr}</span><span class="cal-slot-title" title="${titleText}">${titleText.slice(0,40)}</span>`;
+    slotsEl.appendChild(slot);
+
+    // Update pin count badge
+    const label = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label span:last-child');
+    if (label) {
+      const existing = parseInt(label.textContent) || 0;
+      label.textContent = (existing + 1) + '📌';
+    } else {
+      // Add badge if not present
+      const labelEl = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label');
+      if (labelEl) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:10px;font-weight:700;color:var(--gray-400);';
+        badge.textContent = '1📌';
+        labelEl.appendChild(badge);
+      }
+    }
+
+    // Scroll sidebar to that day
+    document.getElementById(`calday-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // Patch schedulePin to also update the sidebar
+  const _origSchedulePin = schedulePin;
+  schedulePin = async function(idx) {
+    const schedDt = (document.getElementById(`sched-dt-${idx}`) || {}).value?.trim();
+    const title   = (document.getElementById(`title-${idx}`) || {}).value?.trim() || 'Untitled';
+    await _origSchedulePin(idx);
+    // Only add if scheduling succeeded (button text changed)
+    const btn = document.getElementById(`sched-btn-${idx}`);
+    if (btn && btn.textContent.includes('✓')) {
+      addSidebarSlot(schedDt, title);
+    }
+  };
+
+  // Add first pin automatically
   addPin();
 </script>
 {% endblock %}

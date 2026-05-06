@@ -2,9 +2,11 @@
 Flask routes: auth, dashboard, products, API, Pinterest OAuth.
 Updated for collage/roundup pins (Pin.products is now a list, not a single FK).
 """
+import base64
 import json
 import logging
 import os
+import random
 import secrets
 from datetime import datetime, timezone
 from functools import wraps
@@ -28,21 +30,90 @@ logger = logging.getLogger(__name__)
 bp = Blueprint("main", __name__)
 
 # Routes that are visible on the public domain (auragirlessentials.com)
-PUBLIC_PATHS = ("/shop", "/privacy", "/health")
+PUBLIC_PATHS = ("/shop", "/privacy", "/health", "/")
+
+# Rotating CTAs — kept fresh so pins don't all sound the same (better for algorithm)
+PIN_CTAS = [
+    "See why everyone's obsessed →",
+    "You need this in your life →",
+    "This is the one everyone's buying →",
+    "Girls are going crazy for this →",
+    "Don't sleep on this find →",
+    "This is your sign to treat yourself →",
+    "Already sold out once — grab it now →",
+    "The hype is real →",
+    "This one's worth every penny →",
+    "Your future self will thank you →",
+]
+
+def _random_cta():
+    return random.choice(PIN_CTAS)
+
+def _cst_to_utc(dt_str: str):
+    """Parse a naive datetime string entered in CST and return UTC datetime.
+    CST = UTC-6. Handles both 'YYYY-MM-DDTHH:MM' and 'YYYY-MM-DD HH:MM' formats.
+    """
+    from datetime import timedelta
+    if not dt_str:
+        return None
+    try:
+        dt = datetime.fromisoformat(dt_str.replace("Z", ""))
+        if dt.tzinfo is None:
+            dt = dt + timedelta(hours=6)  # CST → UTC
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
 PUBLIC_DOMAIN = "auragirlessentials.com"
 
 
 @bp.before_request
 def block_admin_on_public_domain():
     """
-    auragirlessentials.com is the public shop — no admin routes exposed there.
-    Dashboard, setup, upload-pin, etc. are only accessible via the Cloud Run URL.
+    auragirlessentials.com → only /shop routes are visible.
+    Admin Cloud Run URL → requires HTTP Basic Auth before anything loads.
     """
-    host = request.host.split(":")[0]  # strip port if present
+    host = request.host.split(":")[0]
+
+    # Public domain: block all non-shop routes
     if host == PUBLIC_DOMAIN:
         path = request.path
         if not any(path.startswith(p) for p in PUBLIC_PATHS):
             return "", 404
+        return  # public domain: no basic auth needed
+
+    # Admin URL: require HTTP Basic Auth as first gate
+    # Skip for /shop paths (in case someone hits admin URL for shop pages)
+    path = request.path
+    if any(path.startswith(p) for p in PUBLIC_PATHS):
+        return  # public paths never need basic auth
+
+    admin_user = os.environ.get("ADMIN_BASIC_USER", "aura")
+    admin_pass = os.environ.get("ADMIN_BASIC_PASS", "")
+
+    if not admin_pass:
+        return  # no basic auth configured — fall through to Flask login
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+            user, pw = decoded.split(":", 1)
+            if user == admin_user and pw == admin_pass:
+                return  # ✅ basic auth passed
+        except Exception:
+            pass
+
+    # Not authorized — show browser's native login prompt
+    return (
+        "Private — Authorized Access Only",
+        401,
+        {
+            "WWW-Authenticate": 'Basic realm="Aura Girl Admin"',
+            "Content-Type": "text/plain",
+        },
+    )
 
 
 # ── Auth helpers ──────────────────────────────────────────────────────────
@@ -116,16 +187,70 @@ def dashboard():
         Pin.query.filter_by(status=Pin.STATUS_REJECTED)
         .order_by(Pin.created_at.desc()).limit(20).all()
     )
+    scheduled_pins = (
+        Pin.query.filter_by(status=Pin.STATUS_SCHEDULED)
+        .order_by(Pin.scheduled_for.asc()).all()
+    )
+    draft_pins = (
+        Pin.query.filter_by(status=Pin.STATUS_DRAFT)
+        .order_by(Pin.created_at.desc()).all()
+    )
 
+    from config import Config
+    # Check Pinterest connection status for the warning banner
+    pinterest_connected = bool(Config.is_configured().get("pinterest_token"))
     return render_template(
         "dashboard.html",
         pending_pins=pending_pins,
         approved_pins=approved_pins,
         posted_pins=posted_pins,
         rejected_pins=rejected_pins,
+        scheduled_pins=scheduled_pins,
+        draft_pins=draft_pins,
+        scheduled_boards=list(Config.PINTEREST_BOARDS.keys()),
         active_tab=status_filter,
         now=datetime.now(timezone.utc),
+        pinterest_connected=pinterest_connected,
     )
+
+
+@bp.route("/pin/<int:pin_id>/delete", methods=["POST"])
+@login_required
+def delete_pin(pin_id):
+    pin = Pin.query.get_or_404(pin_id)
+    was_draft = pin.status == Pin.STATUS_DRAFT
+    db.session.delete(pin)
+    db.session.commit()
+    return redirect(url_for("main.dashboard", status="draft" if was_draft else "scheduled"))
+
+
+@bp.route("/pin/<int:pin_id>/schedule-draft", methods=["POST"])
+@login_required
+def schedule_draft_pin(pin_id):
+    pin = Pin.query.get_or_404(pin_id)
+    sched_str = request.form.get("scheduled_for", "").strip()
+    pin.scheduled_for = _cst_to_utc(sched_str)
+    pin.status = Pin.STATUS_SCHEDULED
+    db.session.commit()
+    return redirect(url_for("main.dashboard", status="scheduled"))
+
+
+@bp.route("/pin/<int:pin_id>/edit-scheduled", methods=["POST"])
+@login_required
+def edit_scheduled_pin(pin_id):
+    pin = Pin.query.get_or_404(pin_id)
+    was_draft = pin.status == Pin.STATUS_DRAFT
+    pin.title       = request.form.get("title", pin.title).strip()
+    pin.description = request.form.get("description", pin.description).strip()
+    pin.hashtags    = request.form.get("hashtags", pin.hashtags or "").strip()
+    pin.alt_text    = request.form.get("alt_text", pin.alt_text or "").strip() or None
+    pin.amazon_url  = request.form.get("amazon_url", "").strip() or None
+    pin.board_name  = request.form.get("board_name", pin.board_name or "").strip() or None
+    sched_str = request.form.get("scheduled_for", "").strip()
+    if sched_str:
+        pin.scheduled_for = _cst_to_utc(sched_str)
+    db.session.commit()
+    return redirect(url_for("main.dashboard", status="draft" if was_draft else "scheduled"))
 
 
 @bp.route("/pin/<int:pin_id>/approve", methods=["POST"])
@@ -135,10 +260,7 @@ def approve_pin(pin_id):
     scheduled_str = request.form.get("scheduled_for", "").strip()
     if scheduled_str:
         try:
-            scheduled_for = datetime.fromisoformat(scheduled_str)
-            if scheduled_for.tzinfo is None:
-                scheduled_for = scheduled_for.replace(tzinfo=timezone.utc)
-            pin.scheduled_for = scheduled_for
+            pin.scheduled_for = _cst_to_utc(scheduled_str)
         except ValueError:
             pin.scheduled_for = None
     else:
@@ -263,11 +385,134 @@ VALID_CATEGORIES = [
 ]
 
 
+def _score_products_against_trends(products, trends):
+    """
+    Score each product against real Pinterest trend keywords from TrendCache.
+
+    Scoring:
+    - Trend keyword match in product name → up to 60 pts (weighted by trend score)
+    - Commission rate (luxury_beauty 10% > beauty/home 3% > fitness 1%)
+    - Price (higher price = more $ per sale at same rate)
+
+    Also returns the matching trend keyword for display.
+    """
+    # Normalise trend keywords once
+    # Each entry: (keyword_lower, trend_score_normalised_0_to_1)
+    max_trend_score = max((t.score or 1 for t in trends), default=1) or 1
+    trend_data = [
+        (t.keyword.lower().strip(), (t.score or 0) / max_trend_score)
+        for t in trends
+        if t.keyword
+    ]
+
+    results = []
+    for product in products:
+        name = (product.name or "").lower()
+        cat  = (product.category or "general").lower()
+        try:
+            price = float(str(product.price or "0").replace("$", "").replace(",", ""))
+        except Exception:
+            price = 0.0
+
+        score = 0
+        matched_trend = ""
+        matched_trend_score = 0.0
+
+        # ── 1. Pinterest trend match (real data) ──
+        # Check if any trend keyword appears in the product name (or vice versa)
+        for kw, t_score in trend_data:
+            # Split trend keyword into words and check partial matches
+            kw_words = kw.split()
+            hit = (
+                kw in name or                            # full keyword match
+                any(w in name for w in kw_words if len(w) > 3)  # any significant word
+            )
+            if hit:
+                pts = int(t_score * 60)  # up to 60 pts based on trend strength
+                if pts > matched_trend_score:
+                    matched_trend = kw
+                    matched_trend_score = pts
+        score += int(matched_trend_score)
+
+        # ── 2. Commission rate ──
+        if cat == "luxury_beauty":
+            score += 30
+        elif cat in ("beauty", "home_decor"):
+            score += 18
+        elif cat == "fitness":
+            score += 8
+        else:
+            score += 10
+
+        # ── 3. Price (higher → more $ per sale) ──
+        if price >= 60:
+            score += 22
+        elif price >= 30:
+            score += 14
+        elif price >= 15:
+            score += 7
+
+        # ── Badge ──
+        if matched_trend_score > 0:
+            # Has a real trend signal
+            if score >= 70:
+                badge = "🔥 Trending Now"
+                badge_style = "background:#fde8e8;color:#b91c1c;"
+            elif score >= 45:
+                badge = "📈 Rising"
+                badge_style = "background:#fff3cd;color:#856404;"
+            else:
+                badge = "✨ On Trend"
+                badge_style = "background:#d4f4e8;color:#1a7a4a;"
+        else:
+            badge = ""
+            badge_style = ""
+
+        product._rec_score = score
+        product._rec_badge = badge
+        product._rec_badge_style = badge_style
+        product._rec_trend = matched_trend  # the actual Pinterest keyword that matched
+        results.append(product)
+
+    results.sort(key=lambda p: p._rec_score, reverse=True)
+    return results
+
+
 @bp.route("/products")
 @login_required
 def products():
     all_products = Product.query.order_by(Product.added_at.desc()).all()
-    return render_template("products.html", products=all_products, categories=VALID_CATEGORIES)
+    trends = TrendCache.query.order_by(TrendCache.score.desc()).all()
+
+    if trends:
+        all_products = _score_products_against_trends(all_products, trends)
+        trend_keywords = [t.keyword for t in trends[:10]]  # top 10 for the banner
+        trend_source = "pinterest"
+    else:
+        # No trends uploaded yet — just show products sorted by commission × price
+        for p in all_products:
+            cat = (p.category or "general").lower()
+            try:
+                price = float(str(p.price or "0").replace("$", "").replace(",", ""))
+            except Exception:
+                price = 0.0
+            commission = {"luxury_beauty": 10, "beauty": 3, "home_decor": 3, "fitness": 1}.get(cat, 3)
+            p._rec_score = commission * price
+            p._rec_badge = ""
+            p._rec_badge_style = ""
+            p._rec_trend = ""
+        all_products.sort(key=lambda p: p._rec_score, reverse=True)
+        trend_keywords = []
+        trend_source = "none"
+
+    return render_template(
+        "products.html",
+        products=all_products,
+        categories=VALID_CATEGORIES,
+        trend_keywords=trend_keywords,
+        trend_source=trend_source,
+        trend_count=len(trends),
+    )
 
 
 @bp.route("/products/add", methods=["POST"])
@@ -334,30 +579,30 @@ def _price_float(price_str) -> float:
 @bp.route("/products/queue")
 @login_required
 def product_queue():
+    # Commission rates by category
+    COMMISSION = {"beauty": 0.10, "home_decor": 0.08, "fitness": 0.05, "general": 0.05}
+
     def payout(c):
         try:
             price = float(re.sub(r"[^\d.]", "", c.price or "0") or 0)
-            return price * 0.10  # beauty only, 10% commission
+            rate = COMMISSION.get(c.category or "general", 0.05)
+            return price * rate
         except Exception:
             return 0.0
 
-    # Only show beauty candidates — 10% commission, $15+ price
+    # Show ALL categories, sorted by estimated commission payout
     pending_all = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_PENDING, category="beauty"
+        status=ProductCandidate.STATUS_PENDING
     ).all()
-    # Filter to $15+ and sort by payout descending
-    pending = sorted(
-        [c for c in pending_all if _price_float(c.price) >= 15],
-        key=payout, reverse=True
-    )
+    pending = sorted(pending_all, key=payout, reverse=True)
 
     approved = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_APPROVED, category="beauty"
-    ).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
+        status=ProductCandidate.STATUS_APPROVED
+    ).order_by(ProductCandidate.discovered_at.desc()).limit(30).all()
     rejected = ProductCandidate.query.filter_by(
         status=ProductCandidate.STATUS_REJECTED
-    ).order_by(ProductCandidate.discovered_at.desc()).limit(20).all()
-    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected)
+    ).order_by(ProductCandidate.discovered_at.desc()).limit(30).all()
+    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected, commission=COMMISSION)
 
 
 @bp.route("/products/discover", methods=["POST"])
@@ -480,6 +725,30 @@ def approve_all_candidates():
 
 # ── Setup wizard ──────────────────────────────────────────────────────────
 
+@bp.route("/setup/sync-boards")
+@login_required
+def sync_boards():
+    """
+    Fetch all boards from Pinterest API and return them as JSON.
+    Also identifies which ones aren't yet in config (new boards to add).
+    """
+    from app.pinterest_api import get_boards
+    from config import Config
+    try:
+        boards = get_boards()
+        existing_ids = set(Config.PINTEREST_BOARDS.values())
+        existing_names = set(Config.PINTEREST_BOARDS.keys())
+        new_boards = [b for b in boards if b["id"] not in existing_ids]
+        return jsonify({
+            "ok": True,
+            "all_boards": boards,
+            "new_boards": new_boards,
+            "existing_names": list(existing_names),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @bp.route("/setup")
 @login_required
 def setup():
@@ -513,6 +782,9 @@ def setup():
 
     stored_cookie = Setting.get("pinterest_session_cookie", "")
 
+    from config import Config
+    config_board_ids = set(Config.PINTEREST_BOARDS.values())
+
     return render_template(
         "setup.html",
         config_status=config_status,
@@ -522,6 +794,7 @@ def setup():
         latest_trend=latest_trend,
         cookie_status=cookie_status,
         stored_cookie=stored_cookie,
+        config_board_ids=config_board_ids,
     )
 
 
@@ -894,11 +1167,18 @@ def fetch_amazon_images():
             blob.upload_from_string(img_resp.content, content_type=content_type)
             gcs_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
 
+            # Use the full resolved URL — Pinterest trusts long amazon.com URLs more than short links
+            # Strip tracking params that change but keep the affiliate tag
+            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+            parsed = urlparse(url)
+            # Keep only the path (which has the ASIN) + affiliate tag
+            full_affiliate_url = f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+
             results.append({
                 "asin": asin,
                 "name": str(product_title),
                 "image_url": gcs_url,
-                "amazon_url": f"https://www.amazon.com/dp/{asin}",
+                "amazon_url": full_affiliate_url,
                 "error": None,
             })
             logger.info(f"Product image uploaded to GCS: {gcs_url}")
@@ -1073,14 +1353,21 @@ def upload_pin_publish():
         shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
         pin.shop_url = shop_url
 
-        # Append shop link to description
+        # Append CTA to description
         if "auragirlessentials.com" not in description and "benable.com" not in description:
-            pin.description = description + f"\n\nShop the list → {shop_url}"
+            pin.description = description + f"\n{_random_cta()}"
         else:
             pin.description = description
 
         db.session.commit()
-        description_with_link = pin.description
+        # Append hashtags + FTC disclosure to description for Pinterest
+        description_with_link = pin.description or ""
+        hashtags = data.get("hashtags", "").strip()
+        if hashtags and hashtags not in description_with_link:
+            description_with_link = description_with_link + "\n" + hashtags
+        disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
+        if disclosure not in description_with_link:
+            description_with_link = description_with_link + "\n" + disclosure
 
         # Step 2: Pass public URL to Blotato media upload
         media_resp = req.post(
@@ -1107,7 +1394,7 @@ def upload_pin_publish():
                     "targetType": "pinterest",
                     "boardId": board_id,
                     "title": title,
-                    "link": shop_url,  # specific /shop/pin/<id> page, not generic category
+                    "link": pin.amazon_url or shop_url,  # direct Amazon link if available
                 },
             }
         }
@@ -1153,8 +1440,50 @@ def upload_pin_publish():
 @login_required
 def bulk_upload():
     from config import Config
+    from datetime import timedelta, date
     boards = list(Config.PINTEREST_BOARDS.keys())
-    return render_template("bulk_upload.html", boards=boards)
+
+    # Upcoming scheduled pins for the sidebar calendar (next 60 days)
+    today = datetime.now(timezone.utc).date()
+    cutoff = today + timedelta(days=60)
+    upcoming = (
+        Pin.query
+        .filter(
+            Pin.status.in_([Pin.STATUS_SCHEDULED, Pin.STATUS_APPROVED]),
+            Pin.scheduled_for.isnot(None),
+            Pin.scheduled_for >= datetime.combine(today, datetime.min.time()),
+            Pin.scheduled_for <= datetime.combine(cutoff, datetime.max.time()),
+        )
+        .order_by(Pin.scheduled_for.asc())
+        .all()
+    )
+
+    # Group by date (CST = UTC-6) → {date_str: [{hour_cst, minute, title}]}
+    from collections import defaultdict
+    schedule_by_date = defaultdict(list)
+    for p in upcoming:
+        if p.scheduled_for:
+            cst = p.scheduled_for - timedelta(hours=6)
+            date_key = cst.strftime("%Y-%m-%d")
+            schedule_by_date[date_key].append({
+                "hour": cst.hour,
+                "minute": cst.minute,
+                "title": (p.title or "Untitled")[:40],
+            })
+
+    # Build list of next 21 days with their pins
+    calendar_days = []
+    for i in range(21):
+        d = today + timedelta(days=i)
+        key = d.strftime("%Y-%m-%d")
+        calendar_days.append({
+            "key": key,
+            "label": d.strftime("%a, %b %-d"),
+            "is_today": i == 0,
+            "pins": schedule_by_date.get(key, []),
+        })
+
+    return render_template("bulk_upload.html", boards=boards, calendar_days=calendar_days)
 
 
 @bp.route("/bulk-upload/submit", methods=["POST"])
@@ -1179,24 +1508,24 @@ def bulk_upload_submit():
 
         if not pins_data:
             return jsonify({"ok": False, "error": "No pins provided"}), 400
-        if not start_date:
-            return jsonify({"ok": False, "error": "Start date required"}), 400
 
-        # Build the schedule slots: date × time
-        start_dt = datetime.fromisoformat(start_date)
+        # If no start_date, save as drafts (no schedule)
+        save_as_draft = not start_date
         schedule_slots = []
-        day = 0
-        while len(schedule_slots) < len(pins_data):
-            for t in post_times:
-                if len(schedule_slots) >= len(pins_data):
-                    break
-                h, m = int(t.split(":")[0]), int(t.split(":")[1])
-                slot = (start_dt + timedelta(days=day)).replace(
-                    hour=h, minute=m, second=0, microsecond=0,
-                    tzinfo=timezone.utc
-                )
-                schedule_slots.append(slot)
-            day += 1
+        if not save_as_draft:
+            start_dt = datetime.fromisoformat(start_date)
+            day = 0
+            while len(schedule_slots) < len(pins_data):
+                for t in post_times:
+                    if len(schedule_slots) >= len(pins_data):
+                        break
+                    h, m = int(t.split(":")[0]), int(t.split(":")[1])
+                    slot = (start_dt + timedelta(days=day)).replace(
+                        hour=h, minute=m, second=0, microsecond=0,
+                        tzinfo=timezone.utc
+                    )
+                    schedule_slots.append(slot)
+                day += 1
 
         # Upload images to GCS
         gcs_client = gcs.Client()
@@ -1211,14 +1540,23 @@ def bulk_upload_submit():
                 image_b64  = pin_data.get("image_b64", "")
                 board_name = pin_data.get("board_name", "")
 
-                # Parse Pin Perfect Pro output
-                parsed = _parse_ppp_output(ppp_text)
+                # Prefer pre-filled fields from frontend; fall back to PPP parsing
+                title       = pin_data.get("title", "").strip()
+                description = pin_data.get("description", "").strip()
+                hashtags    = pin_data.get("hashtags", "").strip()
+                alt_text    = pin_data.get("alt_text", "").strip()
+                link_url    = pin_data.get("link_url", "").strip()
+                amazon_url  = pin_data.get("amazon_url", "").strip()
 
-                title       = parsed.get("title", f"Pin {i+1}")
-                description = parsed.get("description", "")
-                hashtags    = parsed.get("hashtags", "")
-                alt_text    = parsed.get("alt_text", "")
-                board_name  = board_name or parsed.get("board_name", "Beauty Finds & Skincare")
+                if not title or not description:
+                    parsed = _parse_ppp_output(ppp_text)
+                    title       = title or parsed.get("title", f"Pin {i+1}")
+                    description = description or parsed.get("description", "")
+                    hashtags    = hashtags or parsed.get("hashtags", "")
+                    alt_text    = alt_text or parsed.get("alt_text", "")
+                    board_name  = board_name or parsed.get("board_name", "Beauty Finds & Skincare")
+                else:
+                    board_name = board_name or "Beauty Finds & Skincare"
 
                 # Upload image to GCS
                 image_url = None
@@ -1230,9 +1568,7 @@ def bulk_upload_submit():
                     blob.upload_from_string(img_bytes, content_type="image/jpeg")
                     image_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
 
-                scheduled_for = schedule_slots[i]
-
-                # Save pin to DB
+                # Save pin to DB as draft — user reviews before scheduling
                 pin = Pin(
                     title=title,
                     description=description,
@@ -1240,22 +1576,23 @@ def bulk_upload_submit():
                     alt_text=alt_text,
                     board_name=board_name,
                     image_url=image_url,
-                    status=Pin.STATUS_SCHEDULED,
-                    scheduled_for=scheduled_for,
+                    amazon_url=amazon_url or None,
+                    status=Pin.STATUS_DRAFT,
+                    scheduled_for=None,
                 )
                 db.session.add(pin)
                 db.session.flush()
 
-                shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
+                shop_url = link_url or f"https://auragirlessentials.com/shop/pin/{pin.id}"
                 pin.shop_url = shop_url
-                if "auragirlessentials.com" not in description and "benable.com" not in description:
-                    pin.description = description + f"\n\nShop the list → {shop_url}"
+                if not link_url and "auragirlessentials.com" not in description and "benable.com" not in description:
+                    pin.description = description + f"\n{_random_cta()}"
 
                 db.session.commit()
                 saved.append({
                     "pin_id": pin.id,
                     "title": title,
-                    "scheduled_for": scheduled_for.isoformat(),
+                    "shop_url": f"/shop/pin/{pin.id}",
                 })
 
             except Exception as e:
@@ -1273,6 +1610,85 @@ def bulk_upload_submit():
 
     except Exception as e:
         logger.error(f"Bulk upload submit failed: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@bp.route("/bulk-upload/submit-scheduled", methods=["POST"])
+@login_required
+def bulk_upload_submit_scheduled():
+    """Save a single pin as STATUS_SCHEDULED with a specific date/time chosen by the user."""
+    import base64 as _b64
+    import uuid as _uuid
+    from google.cloud import storage as _gcs
+
+    try:
+        data = request.get_json(force=True)
+        pins = data.get("pins", [])
+        if not pins:
+            return jsonify({"ok": False, "error": "No pin data"}), 400
+
+        pin_data = pins[0]
+        title       = pin_data.get("title", "").strip()
+        description = pin_data.get("description", "").strip()
+        hashtags    = pin_data.get("hashtags", "").strip()
+        alt_text    = pin_data.get("alt_text", "").strip()
+        amazon_url  = pin_data.get("amazon_url", "").strip()
+        board_name  = pin_data.get("board_name", "").strip()
+        image_b64   = pin_data.get("image_b64", "")
+        scheduled_for_str = pin_data.get("scheduled_for", "").strip()
+
+        if not title or not description or not board_name:
+            return jsonify({"ok": False, "error": "Title, description and board are required"}), 400
+        if not scheduled_for_str:
+            return jsonify({"ok": False, "error": "Scheduled date/time is required"}), 400
+
+        try:
+            scheduled_for = _cst_to_utc(scheduled_for_str)
+            if not scheduled_for:
+                raise ValueError("Invalid date")
+        except ValueError:
+            return jsonify({"ok": False, "error": "Invalid date/time format"}), 400
+
+        # Upload image to GCS
+        image_url = None
+        if image_b64:
+            raw = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+            img_bytes = _b64.b64decode(raw)
+            bucket_name = "pinterest-automation-images-814656203168"
+            blob_name = f"bulk-upload/{_uuid.uuid4().hex}.jpg"
+            gcs_client = _gcs.Client()
+            bucket = gcs_client.bucket(bucket_name)
+            blob = bucket.blob(blob_name)
+            blob.upload_from_string(img_bytes, content_type="image/jpeg")
+            image_url = f"https://storage.googleapis.com/{bucket_name}/{blob_name}"
+
+        pin = Pin(
+            title=title,
+            description=description,
+            hashtags=hashtags,
+            alt_text=alt_text or None,
+            board_name=board_name,
+            image_url=image_url,
+            amazon_url=amazon_url or None,
+            status=Pin.STATUS_SCHEDULED,
+            scheduled_for=scheduled_for,
+        )
+        db.session.add(pin)
+        db.session.flush()
+
+        shop_url = f"https://auragirlessentials.com/shop/pin/{pin.id}"
+        pin.shop_url = shop_url
+        if "auragirlessentials.com" not in description and "benable.com" not in description:
+            pin.description = description + f"\n{_random_cta()}"
+
+        db.session.commit()
+        return jsonify({
+            "ok": True,
+            "pins": [{"pin_id": pin.id, "title": title, "shop_url": f"/shop/pin/{pin.id}", "scheduled_for": scheduled_for.isoformat()}],
+        })
+
+    except Exception as e:
+        logger.error(f"Bulk upload submit-scheduled failed: {e}", exc_info=True)
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
@@ -1436,11 +1852,291 @@ def _guess_category(keyword: str) -> str:
     return "general"
 
 
+def _suggest_boards_from_trends(trends):
+    """
+    Cluster trend keywords into Pinterest board suggestions.
+    Returns list of {name, emoji, reason, keywords, priority}
+    """
+    if not trends:
+        return []
+
+    all_kws = [t.keyword.lower() for t in trends]
+
+    # Board clusters: each has trigger words and a board template
+    clusters = [
+        {
+            "triggers": ["mother", "mom", "gift", "mothers day", "gift set", "gift idea"],
+            "name": "Mother's Day Gift Ideas 🎁",
+            "emoji": "🎁",
+            "reason": "Mother's Day is May 11 — this board peaks right now and drives serious gift clicks.",
+            "priority": 1,
+        },
+        {
+            "triggers": ["spf", "sunscreen", "self tanner", "bronzer", "sun", "tanning", "summer skin"],
+            "name": "Summer Skin Essentials ☀️",
+            "emoji": "☀️",
+            "reason": "Sun care searches spike May–August. High commission + high price products.",
+            "priority": 1,
+        },
+        {
+            "triggers": ["plant", "garden", "flower", "indoor plant", "outdoor", "landscaping", "perennial", "lily", "hydrangea"],
+            "name": "Garden & Plant Inspo 🌿",
+            "emoji": "🌿",
+            "reason": "Plants are trending in your analytics — home & garden has strong spring engagement.",
+            "priority": 2,
+        },
+        {
+            "triggers": ["serum", "retinol", "vitamin c", "niacinamide", "skincare routine", "moisturizer", "cleanser", "toner", "glow"],
+            "name": "Skincare That Actually Works 💧",
+            "emoji": "💧",
+            "reason": "Skincare routines are evergreen and your highest-commission category.",
+            "priority": 1,
+        },
+        {
+            "triggers": ["makeup", "foundation", "concealer", "blush", "mascara", "lip", "lip gloss", "lip oil", "eyeshadow"],
+            "name": "Makeup Finds Under $50 💄",
+            "emoji": "💄",
+            "reason": "Affordable makeup drives high click volume on Pinterest.",
+            "priority": 2,
+        },
+        {
+            "triggers": ["collagen", "supplement", "probiotic", "wellness", "protein", "vitamin", "gut health"],
+            "name": "Wellness & Supplements ✨",
+            "emoji": "✨",
+            "reason": "Wellness supplements are a growing category — lower commission but high search volume.",
+            "priority": 3,
+        },
+        {
+            "triggers": ["home decor", "candle", "vase", "aesthetic", "room decor", "wall art", "cozy", "living room"],
+            "name": "Aesthetic Home Finds 🏠",
+            "emoji": "🏠",
+            "reason": "Home decor drives strong saves and repins — great for reach.",
+            "priority": 2,
+        },
+        {
+            "triggers": ["hair", "hair mask", "hair oil", "shampoo", "frizz", "curly", "hair care", "scalp"],
+            "name": "Hair Care Essentials 💇‍♀️",
+            "emoji": "💇‍♀️",
+            "reason": "Hair care spikes in summer due to heat and humidity searches.",
+            "priority": 2,
+        },
+        {
+            "triggers": ["fragrance", "perfume", "body mist", "body spray", "scent"],
+            "name": "Perfumes & Fragrances 🌸",
+            "emoji": "🌸",
+            "reason": "Fragrance is a high-commission luxury beauty category.",
+            "priority": 2,
+        },
+        {
+            "triggers": ["body care", "body butter", "body oil", "body lotion", "body scrub", "body wash"],
+            "name": "Body Care Routine 🛁",
+            "emoji": "🛁",
+            "reason": "Body care searches peak in spring and summer — links well to Amazon finds.",
+            "priority": 2,
+        },
+    ]
+
+    keyword_set = set(all_kws)
+    suggestions = []
+
+    for cluster in clusters:
+        matched_kws = []
+        for trigger in cluster["triggers"]:
+            for kw in all_kws:
+                if trigger in kw or kw in trigger:
+                    if kw not in matched_kws:
+                        matched_kws.append(kw)
+        if matched_kws:
+            suggestions.append({
+                "name": cluster["name"],
+                "emoji": cluster["emoji"],
+                "reason": cluster["reason"],
+                "priority": cluster["priority"],
+                "keywords": matched_kws[:6],
+                "match_count": len(matched_kws),
+            })
+
+    suggestions.sort(key=lambda s: (s["priority"], -s["match_count"]))
+    return suggestions
+
+
 @bp.route("/trends")
 @login_required
 def trends():
-    cached = TrendCache.query.order_by(TrendCache.score.desc(), TrendCache.cached_at.desc()).limit(50).all()
-    return render_template("trends.html", trends=cached, analysis=None)
+    cached = TrendCache.query.order_by(TrendCache.score.desc(), TrendCache.cached_at.desc()).limit(100).all()
+    board_suggestions = _suggest_boards_from_trends(cached)
+    return render_template("trends.html", trends=cached[:50], analysis=None, board_suggestions=board_suggestions)
+
+
+@bp.route("/trends/paste", methods=["POST"])
+@login_required
+def trends_paste():
+    """
+    Accept pasted text from Pinterest Analytics search queries section.
+    Extracts keywords (one per line, comma-separated, or raw block text),
+    saves to TrendCache (merges with existing), and archives raw paste to disk.
+    """
+    import re
+    import os
+
+    payload = request.get_json(force=True) or {}
+    search_queries_raw = (payload.get("text") or "").strip()
+    products_raw       = (payload.get("products") or "").strip()
+    full_page_raw      = (payload.get("full_page") or "").strip()
+    category_label     = (payload.get("category") or "pinterest analytics").strip()
+
+    if not search_queries_raw and not products_raw and not full_page_raw:
+        return jsonify({"ok": False, "error": "Paste something into at least one box."})
+
+    def clean_kw(line):
+        kw = line.strip().lower()
+        kw = re.sub(r'[^\w\s\-]', '', kw).strip()
+        return kw if (kw and 3 <= len(kw) <= 80) else ""
+
+    ui_noise = re.compile(
+        r'^(copy keywords?|view (less|more)|people engaging|people interested|'
+        r'related|other product categor|performance|demographics|forecast|outbound clicks?|'
+        r'engagement|pin saves?|key metric|top products on pinterest|products based on|explore top|'
+        r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger|fast growing trees|'
+        r'great garden plants.*|heirloom|seedssun|ejuqi|seed therapy|opens a new tab|'
+        r'opens a|; opens|volume indexed|date range|past \d+|age|gender|female|male|'
+        r'unspecified|relative interest|view all|opens a new tab|review (how|other)|'
+        r'expected to grow|forecast magic|age and gender|distribution of pinners|'
+        r'people engaging with this|commonly search for|also interested|'
+        r'aura girl.*|pinbot|pinterest|\d+%|\d+|\s*)$',
+        re.IGNORECASE
+    )
+
+    seen = set()
+
+    # ── Box 2: Search queries (user pasted exact section — trust every line) ──
+    search_queries_kws = []
+    for line in re.split(r'[\n,;]+', search_queries_raw):
+        kw = clean_kw(line)
+        if kw and kw not in seen:
+            seen.add(kw)
+            search_queries_kws.append(kw)
+
+    # ── Box 3: Top products ──
+    top_products_kws = []
+    for line in re.split(r'[\n;]+', products_raw):
+        kw = clean_kw(line)
+        if kw and kw not in seen and not ui_noise.match(kw):
+            seen.add(kw)
+            top_products_kws.append(kw)
+
+    # ── Full page dump: auto-detect Search queries and Top products sections ──
+    full_page_sq_kws = []
+    full_page_context_kws = []
+    if full_page_raw:
+        # Try to find "Search queries" section
+        sq_match = re.search(
+            r'(?:search queries?[^\n]*\n(?:people engaging[^\n]*\n)?(?:copy keywords?[^\n]*\n)?)([\s\S]+?)(?=\n(?:other product|people interested|demographics|performance|related to|view less|view all|$))',
+            full_page_raw, re.IGNORECASE
+        )
+        if sq_match:
+            for line in re.split(r'[\n,;]+', sq_match.group(1)):
+                kw = clean_kw(line)
+                if kw and kw not in seen and not ui_noise.match(kw):
+                    seen.add(kw)
+                    full_page_sq_kws.append(kw)
+
+        # Everything else from the full page (lower priority context)
+        for line in re.split(r'[\n,;]+', full_page_raw):
+            kw = clean_kw(line)
+            if kw and kw not in seen and not ui_noise.match(kw):
+                seen.add(kw)
+                full_page_context_kws.append(kw)
+
+    # ── Category auto-detect from full page if not provided ──
+    if (not category_label or category_label == "pinterest analytics") and full_page_raw:
+        # First non-noise line is usually the category
+        for line in full_page_raw.split('\n'):
+            candidate = line.strip()
+            if candidate and 2 < len(candidate) < 40 and not ui_noise.match(candidate.lower()):
+                category_label = candidate
+                break
+
+    # Priority order: explicit search queries > full page search queries > top products > full page context
+    keywords = search_queries_kws + full_page_sq_kws + top_products_kws + full_page_context_kws
+
+    if not keywords:
+        return jsonify({"ok": False, "error": "No valid keywords found. Check what you pasted."})
+
+    # ── Archive raw paste to disk (dated, never deleted) ──
+    archive_dir = os.path.join(os.path.dirname(__file__), "..", "trend_archive")
+    os.makedirs(archive_dir, exist_ok=True)
+    from datetime import date
+    today_str = date.today().strftime("%Y-%m-%d")
+    archive_path = os.path.join(archive_dir, f"{today_str}_{category_label.replace(' ','_').lower()}.txt")
+    # Append so multiple pastes same day don't overwrite each other
+    with open(archive_path, "a", encoding="utf-8") as f:
+        f.write(f"\n=== {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} — {category_label} ===\n")
+        f.write(f"[SEARCH QUERIES]\n{search_queries_raw}\n[TOP PRODUCTS]\n{products_raw}\n")
+
+    # ── Merge into TrendCache ──
+    # Search queries: 100→80, top products hints: 60→20
+    sq_set = set(search_queries_kws)
+    sq_total = len(search_queries_kws) or 1
+    prod_total = len(top_products_kws) or 1
+    saved = 0
+
+    for i, kw in enumerate(search_queries_kws):
+        score = round(100 - (20 * i / sq_total), 1)
+        existing = TrendCache.query.filter_by(keyword=kw).first()
+        if existing:
+            if score > (existing.score or 0):
+                existing.score = score
+                existing.cached_at = datetime.now(timezone.utc)
+        else:
+            db.session.add(TrendCache(keyword=kw, category=_guess_category(kw), score=score, cached_at=datetime.now(timezone.utc)))
+            saved += 1
+
+    def _save_kws(kw_list, score_high, score_low):
+        nonlocal saved
+        total_n = len(kw_list) or 1
+        for i, kw in enumerate(kw_list):
+            score = round(score_high - ((score_high - score_low) * i / total_n), 1)
+            existing = TrendCache.query.filter_by(keyword=kw).first()
+            if existing:
+                if score > (existing.score or 0):
+                    existing.score = score
+                    existing.cached_at = datetime.now(timezone.utc)
+            else:
+                db.session.add(TrendCache(keyword=kw, category=_guess_category(kw), score=score, cached_at=datetime.now(timezone.utc)))
+                saved += 1
+
+    _save_kws(top_products_kws,      60, 20)
+    _save_kws(full_page_sq_kws,      85, 70)   # full page search queries: slightly below explicit box
+    _save_kws(full_page_context_kws, 40, 10)   # full page context: lowest priority
+
+    db.session.commit()
+
+    # ── Build by_category for understanding panel ──
+    from collections import defaultdict
+
+    def _categorize_kw(kw):
+        if any(w in kw for w in ["plant", "garden", "flower", "lily", "hydrangea", "perennial", "landscap", "grass", "fertiliz", "rose", "cherry tree", "shrub", "tree", "outdoor plant", "potted"]):
+            return "garden"
+        return _guess_category(kw)
+
+    by_category = defaultdict(list)
+    for kw in keywords:
+        by_category[_categorize_kw(kw)].append(kw)
+
+    ignored = []  # nothing is ignored now — user controls what goes in each box
+
+    return jsonify({
+        "ok": True,
+        "saved": saved,
+        "total": len(keywords),
+        "category": category_label,
+        "search_queries": search_queries_kws + full_page_sq_kws,
+        "top_products": top_products_kws,
+        "full_page_context": full_page_context_kws[:20],
+        "by_category": {k: v for k, v in by_category.items()},
+        "ignored": [],
+    })
 
 
 @bp.route("/trends/upload", methods=["POST"])
@@ -1521,8 +2217,9 @@ def trends_upload():
         ))
     db.session.commit()
 
-    cached = TrendCache.query.order_by(TrendCache.score.desc()).limit(50).all()
-    return render_template("trends.html", trends=cached, analysis=analysis)
+    cached = TrendCache.query.order_by(TrendCache.score.desc()).limit(100).all()
+    board_suggestions = _suggest_boards_from_trends(cached)
+    return render_template("trends.html", trends=cached[:50], analysis=analysis, board_suggestions=board_suggestions)
 
 
 # ── Public shop pages ─────────────────────────────────────────────────────
@@ -1563,7 +2260,16 @@ def privacy():
 
 @bp.route("/shop")
 def shop():
-    return render_template("shop.html", niches=SHOP_NICHES)
+    recent_pins = (
+        Pin.query.filter(
+            Pin.status.in_([Pin.STATUS_POSTED, Pin.STATUS_SCHEDULED, Pin.STATUS_DRAFT]),
+            Pin.image_url.isnot(None),
+        )
+        .order_by(Pin.created_at.desc())
+        .limit(6)
+        .all()
+    )
+    return render_template("shop.html", niches=SHOP_NICHES, recent_pins=recent_pins)
 
 @bp.route("/shop/<niche>")
 def shop_niche(niche):
@@ -1586,13 +2292,10 @@ def shop_pin(pin_id):
     This is the link we put in every Pinterest pin so visitors land on exactly
     what they saw, not a wall of 50 products.
     """
-    pin = Pin.query.filter_by(id=pin_id, status=Pin.STATUS_POSTED).first()
-    if not pin:
-        # Fallback: also show approved pins (not yet posted)
-        pin = Pin.query.filter(
-            Pin.id == pin_id,
-            Pin.status.in_([Pin.STATUS_APPROVED, Pin.STATUS_POSTED])
-        ).first()
+    pin = Pin.query.filter(
+        Pin.id == pin_id,
+        Pin.status.in_([Pin.STATUS_DRAFT, Pin.STATUS_POSTED, Pin.STATUS_APPROVED, Pin.STATUS_SCHEDULED])
+    ).first()
     if not pin:
         return redirect(url_for("main.shop"))
 

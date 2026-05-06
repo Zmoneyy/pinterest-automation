@@ -39,7 +39,8 @@ AMAZON_HEADERS = {
 
 
 def _build_affiliate_url(asin: str, associate_tag: str) -> str:
-    return f"https://www.amazon.com/dp/{asin}?tag={associate_tag}"
+    # Full amazon.com URL — Pinterest trusts these more than amzn.to short links
+    return f"https://www.amazon.com/dp/{asin}?tag={associate_tag}&linkCode=ll1&language=en_US&ref_=as_li_ss_tl"
 
 
 def search_products(
@@ -238,9 +239,25 @@ def discover_evergreen_products(per_query: int = 3) -> list[dict]:
     return all_products
 
 
+# Luxury Beauty brands on Amazon → 10% commission
+LUXURY_BEAUTY_BRANDS = [
+    "la mer", "tatcha", "charlotte tilbury", "sk-ii", "sk ii", "sisley",
+    "sulwhasoo", "valmont", "dr. barbara sturm", "barbara sturm", "augustinus bader",
+    "dyson", "nars", "pat mcgrath", "pat mcgrath labs", "hourglass", "by terry",
+    "drunk elephant", "de la mer", "cle de peau", "clé de peau", "shiseido",
+    "estee lauder", "estée lauder", "lancome", "lancôme", "ysl beauty",
+    "yves saint laurent", "giorgio armani beauty", "dior beauty", "chanel beauty",
+    "givenchy beauty", "tom ford beauty", "guerlain", "la prairie",
+    "peter thomas roth", "sunday riley", "kate somerville", "perricone md",
+    "tata harper", "ilia", "westman atelier", "merit", "rare beauty",
+]
+
 def _guess_category(name: str) -> str:
-    """Guess niche from product name."""
+    """Guess niche from product name. Detects luxury beauty brands for accurate 10% commission."""
     n = name.lower()
+    # Check luxury beauty brands first — 10% commission
+    if any(brand in n for brand in LUXURY_BEAUTY_BRANDS):
+        return "luxury_beauty"
     if any(w in n for w in ["nail", "makeup", "serum", "moisturizer", "cleanser", "toner", "mask", "lash", "lip", "foundation", "concealer", "blush", "skincare", "retinol", "vitamin c", "niacinamide", "spf", "sunscreen"]):
         return "beauty"
     if any(w in n for w in ["home", "decor", "candle", "vase", "throw", "blanket", "rug", "lamp", "shelf", "organizer", "pillow", "frame", "wall art"]):

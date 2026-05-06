@@ -120,6 +120,10 @@
     font-weight: 400;
     margin-top: 2px;
   }
+  .board-card.board-new {
+    border-color: #f59e0b;
+    background: #fffbeb;
+  }
 
   .stat-row {
     display: flex;
@@ -326,13 +330,25 @@
 
     {% if boards %}
       <div style="margin-top:16px;">
-        <div style="font-size:13px;font-weight:600;color:var(--gray-600);margin-bottom:8px;">Your Boards</div>
-        <div class="boards-grid">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+          <div style="font-size:13px;font-weight:600;color:var(--gray-600);">Your Boards ({{ boards|length }})</div>
+          <button type="button" onclick="syncBoards()" id="syncBtn"
+            style="font-size:12px;font-weight:700;padding:6px 14px;background:#e53e3e;color:#fff;border:none;border-radius:8px;cursor:pointer;">
+            🔄 Sync New Boards from Pinterest
+          </button>
+        </div>
+        <div id="syncStatus" style="display:none;font-size:13px;margin-bottom:10px;padding:10px 14px;border-radius:8px;background:#f0fdf4;color:#1a7a4a;border:1px solid #bbf7d0;"></div>
+        <div class="boards-grid" id="boardsGrid">
           {% for board in boards %}
-          <div class="board-card">
-            <div>{{ board.name }}</div>
-            <div class="pin-count">ID: {{ board.id }}</div>
+          <div class="board-card {% if board.id not in config_board_ids %}board-new{% endif %}">
+            <div style="font-weight:600;">{{ board.name }}</div>
             <div class="pin-count">{{ board.pin_count }} pins</div>
+            <div class="pin-count" style="font-family:monospace;font-size:10px;color:#999;user-select:all;">{{ board.id }}</div>
+            {% if board.id not in config_board_ids %}
+              <div style="font-size:10px;font-weight:700;color:#d97706;background:#fff3cd;padding:2px 6px;border-radius:4px;margin-top:4px;display:inline-block;">⚠️ Not wired up yet</div>
+            {% else %}
+              <div style="font-size:10px;font-weight:700;color:#1a7a4a;background:#d4f4e8;padding:2px 6px;border-radius:4px;margin-top:4px;display:inline-block;">✓ Active</div>
+            {% endif %}
           </div>
           {% endfor %}
         </div>
@@ -465,6 +481,47 @@
   if (btnRefresh) {
     btnRefresh.addEventListener('click', () =>
       runAction('{{ url_for("main.refresh_trends") }}', 'btn-refresh-trends', 'refresh-result'));
+  }
+
+  async function syncBoards() {
+    const btn    = document.getElementById('syncBtn');
+    const status = document.getElementById('syncStatus');
+    btn.disabled = true;
+    btn.textContent = '⏳ Syncing…';
+    status.style.display = 'none';
+    try {
+      const resp = await fetch('{{ url_for("main.sync_boards") }}');
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Failed');
+
+      if (data.new_boards && data.new_boards.length) {
+        let html = `<strong>✓ Found ${data.new_boards.length} new board(s) not yet wired up:</strong><br><br>`;
+        data.new_boards.forEach(b => {
+          html += `<div style="margin-bottom:6px;padding:8px 12px;background:#fff;border:1px solid #bbf7d0;border-radius:6px;">
+            <strong>${b.name}</strong> &nbsp;
+            <code style="font-size:11px;color:#666;user-select:all;">${b.id}</code>
+            &nbsp;<span style="font-size:11px;color:#666;">(${b.pin_count} pins)</span>
+          </div>`;
+        });
+        html += `<div style="margin-top:8px;font-size:12px;color:#666;">Send these board names + IDs to Claude to wire them up.</div>`;
+        status.innerHTML = html;
+        status.style.background = '#f0fdf4';
+        status.style.color = '#1a7a4a';
+        status.style.border = '1px solid #bbf7d0';
+      } else {
+        status.textContent = '✓ All your Pinterest boards are already wired up!';
+      }
+      status.style.display = 'block';
+    } catch(e) {
+      status.textContent = '✗ ' + e.message;
+      status.style.background = '#fef2f2';
+      status.style.color = '#b91c1c';
+      status.style.border = '1px solid #fecaca';
+      status.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🔄 Sync New Boards from Pinterest';
+    }
   }
 </script>
 {% endblock %}

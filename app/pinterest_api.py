@@ -287,7 +287,7 @@ def get_access_token_url(redirect_uri: str, state: str = "state") -> str:
         "client_id": Config.PINTEREST_APP_ID,
         "redirect_uri": redirect_uri,
         "response_type": "code",
-        "scope": "boards:read,pins:read,pins:write,user_accounts:read",
+        "scope": "boards:read,boards:write,pins:read,pins:write,user_accounts:read",
         "state": state,
     }
     return f"{PINTEREST_AUTH_URL}?{urllib.parse.urlencode(params)}"

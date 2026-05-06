@@ -194,6 +194,51 @@
   </div>
 {% endif %}
 
+<!-- Filter tabs -->
+{% if pending %}
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;align-items:center;">
+  <span style="font-size:12px;font-weight:600;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.05em;">Filter:</span>
+  <select onchange="sortQueue(this.value)" style="padding:7px 12px;border:1.5px solid var(--gray-200);border-radius:var(--radius-pill);font-size:13px;font-weight:600;color:var(--gray-600);background:var(--white);cursor:pointer;margin-right:8px;">
+    <option value="commission">💰 Highest Commission First</option>
+    <option value="price_high">💲 Highest Price First</option>
+    <option value="price_low">💲 Lowest Price First</option>
+  </select>
+  <button onclick="filterQueue('all')" id="tab-all" class="queue-tab active">
+    All <span class="badge badge-red" style="margin-left:4px;">{{ pending|length }}</span>
+  </button>
+  <button onclick="filterQueue('luxury_beauty')" id="tab-luxury_beauty" class="queue-tab">
+    💎 Luxury Beauty (10%)
+    <span class="badge" style="margin-left:4px;background:#d4f4e8;color:#1a7a4a;">{{ pending|selectattr('category','equalto','luxury_beauty')|list|length }}</span>
+  </button>
+  <button onclick="filterQueue('beauty')" id="tab-beauty" class="queue-tab">
+    💄 Beauty (3%)
+    <span class="badge" style="margin-left:4px;background:#fde8e8;color:#a42a2a;">{{ pending|selectattr('category','equalto','beauty')|list|length }}</span>
+  </button>
+  <button onclick="filterQueue('home_decor')" id="tab-home_decor" class="queue-tab">
+    🏠 Home Decor (3%)
+    <span class="badge" style="margin-left:4px;background:#fff3cd;color:#856404;">{{ pending|selectattr('category','equalto','home_decor')|list|length }}</span>
+  </button>
+  <button onclick="filterQueue('fitness')" id="tab-fitness" class="queue-tab">
+    ✨ Wellness (1%)
+    <span class="badge" style="margin-left:4px;background:#fde8e8;color:#a42a2a;">{{ pending|selectattr('category','equalto','fitness')|list|length }}</span>
+  </button>
+  <button onclick="filterQueue('general')" id="tab-general" class="queue-tab">
+    📦 Other (3%)
+    <span class="badge" style="margin-left:4px;">{{ pending|rejectattr('category','in',['luxury_beauty','beauty','home_decor','fitness'])|list|length }}</span>
+  </button>
+</div>
+<style>
+  .queue-tab {
+    padding:7px 14px;border:1.5px solid var(--gray-200);background:var(--white);
+    border-radius:var(--radius-pill);font-size:13px;font-weight:600;cursor:pointer;
+    color:var(--gray-600);transition:all 0.15s;display:flex;align-items:center;
+  }
+  .queue-tab:hover { border-color:var(--red);color:var(--red); }
+  .queue-tab.active { background:var(--red);color:var(--white);border-color:var(--red); }
+  .queue-tab.active .badge { background:rgba(255,255,255,0.3);color:#fff; }
+</style>
+{% endif %}
+
 <!-- Pending -->
 {% if pending %}
 <div class="section-label">
@@ -202,7 +247,9 @@
 </div>
 <div class="product-grid">
   {% for c in pending %}
-  <div class="product-card">
+  {% set _rate = {'luxury_beauty': 10, 'beauty': 3, 'home_decor': 3, 'fitness': 1}.get(c.category or 'general', 3) %}
+  {% set _price = (c.price | replace('$','') | replace(',','') | float) if c.price else 0 %}
+  <div class="product-card" data-category="{{ c.category or 'general' }}" data-price="{{ _price }}" data-commission="{{ (_price * _rate / 100) | round(2) }}">
     {% if c.image_url %}
       <img src="{{ c.image_url }}" alt="{{ c.name }}" class="product-card-img" loading="lazy"
            onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
@@ -216,7 +263,7 @@
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px;">
         {% if c.price %}
           <div class="product-card-price">${{ c.price }}</div>
-          {% set rate = {'beauty': 10, 'home_decor': 3, 'fitness': 1}.get(c.category, 3) %}
+          {% set rate = {'luxury_beauty': 10, 'beauty': 3, 'home_decor': 3, 'fitness': 1}.get(c.category, 3) %}
           {% set est = ((c.price | replace('$','') | replace(',','') | float) * rate / 100) | round(2) %}
           <span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;
             background:{{ '#d4f4e8' if rate >= 10 else '#fff3cd' if rate >= 3 else '#fde8e8' }};
@@ -231,6 +278,12 @@
       {% endif %}
     </div>
 
+    <div style="padding:6px 10px;">
+      <a href="{{ c.amazon_url }}" target="_blank" rel="noopener"
+        style="display:block;text-align:center;font-size:11px;font-weight:600;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:5px;text-decoration:none;">
+        🔗 Test Link on Amazon
+      </a>
+    </div>
     <div class="product-card-actions">
       <form method="POST" action="{{ url_for('main.approve_candidate', candidate_id=c.id) }}" style="flex:1;display:flex;">
         <button type="submit" class="btn-approve">Approve</button>
@@ -305,4 +358,44 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let _currentFilter = 'all';
+
+  function filterQueue(cat) {
+    _currentFilter = cat;
+    document.querySelectorAll('.queue-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + cat).classList.add('active');
+    document.querySelectorAll('.product-card[data-category]').forEach(card => {
+      if (cat === 'all') {
+        card.style.display = '';
+      } else if (cat === 'general') {
+        const c = card.dataset.category;
+        card.style.display = ['beauty','home_decor','fitness'].includes(c) ? 'none' : '';
+      } else {
+        card.style.display = card.dataset.category === cat ? '' : 'none';
+      }
+    });
+  }
+
+  function sortQueue(by) {
+    const grid = document.querySelector('.product-grid');
+    if (!grid) return;
+    const cards = [...grid.querySelectorAll('.product-card[data-category]')];
+    cards.sort((a, b) => {
+      if (by === 'commission') return parseFloat(b.dataset.commission) - parseFloat(a.dataset.commission);
+      if (by === 'price_high') return parseFloat(b.dataset.price) - parseFloat(a.dataset.price);
+      if (by === 'price_low')  return parseFloat(a.dataset.price) - parseFloat(b.dataset.price);
+      return 0;
+    });
+    cards.forEach(c => grid.appendChild(c));
+    // Re-apply current filter after sort
+    filterQueue(_currentFilter);
+  }
+
+  // Default: sort by commission on load
+  window.addEventListener('DOMContentLoaded', () => sortQueue('commission'));
+</script>
 {% endblock %}

@@ -88,3 +88,6 @@ application_default_credentials.json
 
 # Gunicorn
 gunicorn.pid
+
+# Pinterest Analytics raw paste archive
+trend_archive/

@@ -126,15 +126,43 @@
   <div class="alert alert-error">Please fill in all required fields (name, Amazon URL, Benable URL).</div>
 {% endif %}
 
-{# ── Filter bar ── #}
+{# ── Filter + Sort bar ── #}
 {% if products %}
-<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
-  <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
-  <button onclick="filterProducts('all')"    id="filter-all"    class="filter-btn active">All</button>
-  <button onclick="filterProducts('beauty')" id="filter-beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a22;">💄 Beauty 10%</button>
-  <button onclick="filterByPrice(15, 30)"    id="filter-1530"   class="filter-btn">$15–$30</button>
-  <button onclick="filterByPrice(30, 60)"    id="filter-3060"   class="filter-btn">$30–$60</button>
-  <button onclick="filterByPrice(60, 9999)"  id="filter-60plus" class="filter-btn">$60+</button>
+{% if trend_source == "pinterest" %}
+<div style="background:#f0f7ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#1e3a5f;">
+  📊 <strong>Ranked by your Pinterest Trends data</strong> ({{ trend_count }} keywords) — products that match your uploaded trends are ranked first.
+  {% if trend_keywords %}
+    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:5px;">
+      {% for kw in trend_keywords %}
+        <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">{{ kw }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% else %}
+<div style="background:#fff8f0;border:1px solid #fde8d0;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;">
+  ⚠️ <strong>No Pinterest Trends data uploaded yet.</strong> Products are sorted by estimated commission value.
+  <a href="{{ url_for('main.trends') }}" style="color:#b45309;font-weight:700;margin-left:6px;">Upload trends CSV →</a>
+</div>
+{% endif %}
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;justify-content:space-between;">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
+    <button onclick="filterProducts('all')"    id="filter-all"    class="filter-btn active">All</button>
+    <button onclick="filterProducts('beauty')" id="filter-beauty" class="filter-btn">💄 Beauty</button>
+    <button onclick="filterProducts('luxury_beauty')" id="filter-luxury_beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a44;">💎 Luxury (10%)</button>
+    <button onclick="filterProducts('home_decor')" id="filter-home_decor" class="filter-btn">🏠 Home</button>
+    <button onclick="filterByPrice(60, 9999)"  id="filter-60plus" class="filter-btn">$60+</button>
+  </div>
+  <div style="display:flex;gap:6px;align-items:center;">
+    <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Sort:</span>
+    <select onchange="sortProducts(this.value)" style="font-size:12px;font-weight:600;padding:5px 10px;border:1px solid var(--gray-200);border-radius:20px;color:var(--gray-700);background:var(--white);cursor:pointer;">
+      <option value="recommended" selected>⭐ Recommended</option>
+      <option value="commission">💰 Commission %</option>
+      <option value="price_high">💲 Price High→Low</option>
+      <option value="newest">🕐 Newest First</option>
+    </select>
+  </div>
 </div>
 <style>
   .filter-btn {
@@ -161,13 +189,28 @@
     'travel': '✈', 'garden': '🌿', 'pets': '🐾',
     'tech': '📱', 'art': '🎨', 'general': '🛍'
   } %}
-  <div class="product-card {% if not product.is_active %}inactive{% endif %}" data-category="{{ product.category }}">
+  <div class="product-card {% if not product.is_active %}inactive{% endif %}"
+       data-category="{{ product.category }}"
+       data-score="{{ product._rec_score }}"
+       data-price="{{ product.price | replace('$','') | replace(',','') if product.price else '0' }}"
+       data-added="{{ product.added_at.isoformat() if product.added_at else '' }}"
+       data-commission="{{ {'luxury_beauty':10,'beauty':3,'home_decor':3,'fitness':1}.get(product.category,3) }}">
     <div class="product-icon">
       {{ icons.get(product.category, '🛍') }}
     </div>
 
     <div class="product-info">
-      <div class="product-name">{{ product.name }}</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="product-name" style="flex:1;min-width:0;">{{ product.name }}</div>
+        {% if product._rec_badge %}
+          <span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;flex-shrink:0;{{ product._rec_badge_style }}">{{ product._rec_badge }}</span>
+        {% endif %}
+      </div>
+      {% if product._rec_trend %}
+        <div style="font-size:11px;color:#1d4ed8;margin-top:2px;margin-bottom:4px;">
+          📌 Matches Pinterest trend: <strong>{{ product._rec_trend }}</strong>
+        </div>
+      {% endif %}
       <div class="product-meta">
         <span class="badge badge-{{ 'green' if product.is_active else 'gray' }}">
           {{ 'Active' if product.is_active else 'Inactive' }}
@@ -281,17 +324,27 @@
 
   function filterByPrice(min, max) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-    // Mark the matching price button active
     const btnId = max >= 9999 ? 'filter-60plus' : `filter-${min}${max}`;
     const btn = document.getElementById(btnId);
     if (btn) btn.classList.add('active');
-
     document.querySelectorAll('#productList .product-card').forEach(card => {
-      const priceEl = card.querySelector('[data-price]');
-      const price = priceEl ? parseFloat(priceEl.dataset.price) : 0;
+      const price = parseFloat(card.dataset.price || '0');
       card.style.display = (price >= min && price < max) ? '' : 'none';
     });
     updateCount();
+  }
+
+  function sortProducts(by) {
+    const list = document.getElementById('productList');
+    const cards = [...list.querySelectorAll('.product-card')];
+    cards.sort((a, b) => {
+      if (by === 'recommended') return parseFloat(b.dataset.score||0) - parseFloat(a.dataset.score||0);
+      if (by === 'commission')  return parseFloat(b.dataset.commission||0) - parseFloat(a.dataset.commission||0);
+      if (by === 'price_high')  return parseFloat(b.dataset.price||0) - parseFloat(a.dataset.price||0);
+      if (by === 'newest')      return (b.dataset.added||'').localeCompare(a.dataset.added||'');
+      return 0;
+    });
+    cards.forEach(c => list.appendChild(c));
   }
 
   function updateCount() {

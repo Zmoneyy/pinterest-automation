@@ -52,6 +52,7 @@ class Product(db.Model):
 class Pin(db.Model):
     __tablename__ = "pins"
 
+    STATUS_DRAFT = "draft"
     STATUS_PENDING = "pending"
     STATUS_APPROVED = "approved"
     STATUS_REJECTED = "rejected"
@@ -76,6 +77,8 @@ class Pin(db.Model):
     board_name    = db.Column(db.String(255), nullable=True)   # Pinterest board name for posting
     alt_text      = db.Column(db.Text, nullable=True)          # SEO alt text for the pin
     shop_url      = db.Column(db.Text, nullable=True)          # shop page link (auragirlessentials.com/shop/...)
+    amazon_url    = db.Column(db.Text, nullable=True)          # direct Amazon affiliate URL (for bulk-uploaded pins)
+    post_error    = db.Column(db.Text, nullable=True)          # last posting error message (cleared on success)
 
     # Many-to-many: each collage pin features 5-8 products
     products = db.relationship(

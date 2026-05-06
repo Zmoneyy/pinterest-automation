@@ -4,395 +4,376 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ pin.title }} | Aura Girl Essentials</title>
+    <meta name="description" content="{{ pin.description[:160] if pin.description else pin.title }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'DM Sans', sans-serif;
-            background-color: #faf7f5;
+            font-family: 'Inter', sans-serif;
+            background: #fff;
             color: #1a1a1a;
-            line-height: 1.6;
             -webkit-font-smoothing: antialiased;
-        }
-
-        .container {
-            max-width: 480px;
+            max-width: 430px;
             margin: 0 auto;
-            padding: 0 20px;
         }
 
-        /* Header */
-        header {
-            padding: 24px 0 20px;
-            text-align: center;
-            position: relative;
+        /* ── Top bar ── */
+        .topbar {
+            background: #fff;
+            border-bottom: 1px solid #f0e8e4;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
-
-        .back-link {
-            position: absolute;
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 13px;
+        .topbar-brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 17px;
+            font-weight: 700;
             color: #1a1a1a;
+            text-decoration: none;
+        }
+        .topbar-back {
+            font-size: 12px;
+            color: #999;
             text-decoration: none;
             display: flex;
             align-items: center;
             gap: 4px;
-            opacity: 0.7;
-            transition: opacity 0.2s ease;
         }
 
-        .back-link:hover {
-            opacity: 1;
-        }
-
-        .back-link svg {
-            width: 16px;
-            height: 16px;
-        }
-
-        .brand-name {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 22px;
-            font-weight: 500;
-            letter-spacing: 0.02em;
-            color: #1a1a1a;
-        }
-
-        .header-rule {
-            width: 60px;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, #b89a6a, transparent);
-            margin: 16px auto 0;
-        }
-
-        /* Hero Section */
-        .hero {
-            padding: 32px 0 40px;
+        /* ── Urgency banner ── */
+        .urgency-banner {
+            background: #e8192c;
+            color: #fff;
             text-align: center;
-        }
-
-        .eyebrow {
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: #c9728a;
-            margin-bottom: 12px;
-        }
-
-        .pin-title {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 32px;
-            font-weight: 600;
-            line-height: 1.2;
-            color: #1a1a1a;
-            margin-bottom: 16px;
-        }
-
-        .pin-description {
-            font-size: 15px;
-            color: #5a5a5a;
-            line-height: 1.7;
-            max-width: 380px;
-            margin: 0 auto;
-        }
-
-        .trend-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            margin-top: 20px;
-            padding: 8px 16px;
-            background: rgba(185, 154, 106, 0.1);
-            border: 1px solid rgba(185, 154, 106, 0.3);
-            border-radius: 100px;
+            padding: 9px 16px;
             font-size: 12px;
-            font-weight: 500;
-            color: #8a7355;
-        }
-
-        .trend-tag svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        /* Products Section */
-        .products-section {
-            padding-bottom: 40px;
-        }
-
-        .products-grid {
-            display: flex;
-            flex-direction: column;
-            gap: 24px;
-        }
-
-        .product-card {
-            display: block;
-            text-decoration: none;
-            color: inherit;
-            background: #ffffff;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid #ede8e5;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
-        }
-
-        .product-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
-            border-color: #c9728a;
-        }
-
-        .product-image-wrapper {
-            position: relative;
-            width: 100%;
-            padding-top: 100%;
-            background: #f5f2ef;
-            overflow: hidden;
-        }
-
-        .product-image {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transition: transform 0.4s ease;
-        }
-
-        .product-card:hover .product-image {
-            transform: scale(1.05);
-        }
-
-        .product-content {
-            padding: 20px 24px 24px;
-        }
-
-        .product-name {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 20px;
-            font-weight: 600;
-            line-height: 1.3;
-            color: #1a1a1a;
-            margin-bottom: 16px;
-        }
-
-        .cta-button {
+            font-weight: 700;
+            letter-spacing: 0.04em;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
+        }
+        .urgency-dot {
+            width: 7px;
+            height: 7px;
+            background: #fff;
+            border-radius: 50%;
+            animation: pulse 1.4s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.7); }
+        }
+
+        /* ── Full pin image — NO CROP ── */
+        .pin-image {
             width: 100%;
-            padding: 16px 24px;
-            background: #c9728a;
-            color: #ffffff;
-            font-family: 'DM Sans', sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-            border: none;
-            border-radius: 100px;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            display: block;
+            background: #f8f4f2;
         }
 
-        .product-card:hover .cta-button {
-            background: #b85d75;
+        /* ── CTA block — right after image ── */
+        .cta-block {
+            padding: 20px 16px 16px;
+            background: #fff;
         }
 
-        .cta-button svg {
-            width: 16px;
-            height: 16px;
-            transition: transform 0.2s ease;
-        }
-
-        .product-card:hover .cta-button svg {
-            transform: translateX(4px);
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-
-        .empty-icon {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 20px;
-            color: #c9728a;
-            opacity: 0.6;
-        }
-
-        .empty-title {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 24px;
-            font-weight: 600;
-            color: #1a1a1a;
-            margin-bottom: 12px;
-        }
-
-        .empty-text {
-            font-size: 15px;
-            color: #5a5a5a;
-            margin-bottom: 24px;
-        }
-
-        .empty-link {
-            display: inline-flex;
+        .social-proof {
+            display: flex;
             align-items: center;
             gap: 8px;
-            padding: 14px 28px;
-            background: #c9728a;
-            color: #ffffff;
-            font-size: 14px;
-            font-weight: 600;
+            margin-bottom: 14px;
+            font-size: 13px;
+            color: #555;
+        }
+        .stars { color: #f59e0b; font-size: 15px; letter-spacing: 1px; }
+        .review-count { font-weight: 600; color: #1a1a1a; }
+
+        .cta-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 20px 24px;
+            background: #e8192c;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            border-radius: 12px;
             text-decoration: none;
-            border-radius: 100px;
-            transition: background 0.2s ease;
+            transition: background 0.15s, transform 0.1s;
+            box-shadow: 0 4px 20px rgba(232, 25, 44, 0.35);
+            margin-bottom: 10px;
         }
+        .cta-btn:hover { background: #c9001a; transform: translateY(-1px); }
+        .cta-btn:active { transform: translateY(0); }
+        .cta-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 
-        .empty-link:hover {
-            background: #b85d75;
-        }
-
-        /* Footer */
-        footer {
-            padding: 32px 0 40px;
-            text-align: center;
-            border-top: 1px solid #ede8e5;
-        }
-
-        .disclosure {
+        .cta-sub {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
             font-size: 12px;
-            color: #8a8a8a;
-            line-height: 1.7;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .cta-sub span { display: flex; align-items: center; gap: 4px; }
+
+        /* ── Scarcity bar ── */
+        .scarcity-bar {
+            background: #fff8e1;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 12px 14px;
+            margin: 16px 16px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+        .scarcity-icon { font-size: 18px; flex-shrink: 0; }
+        .scarcity-text { color: #92400e; font-weight: 600; line-height: 1.4; }
+        .scarcity-text span { color: #d97706; }
+
+        /* ── Divider ── */
+        .divider {
+            height: 8px;
+            background: #f8f4f2;
+            margin: 20px 0;
+        }
+
+        /* ── Product info section ── */
+        .info-section { padding: 0 16px; }
+
+        .section-label {
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #e8192c;
+            margin-bottom: 10px;
+        }
+
+        .pin-title-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 22px;
+            font-weight: 700;
+            line-height: 1.3;
+            color: #1a1a1a;
+            margin-bottom: 14px;
+            letter-spacing: -0.01em;
+        }
+
+        .pin-desc-text {
+            font-size: 14px;
+            line-height: 1.75;
+            color: #555;
             margin-bottom: 20px;
         }
 
-        .footer-links {
+        /* ── Why I love this ── */
+        .love-list {
+            list-style: none;
             display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+        .love-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+        .check-icon {
+            width: 20px;
+            height: 20px;
+            background: #e8192c;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
             justify-content: center;
-            gap: 24px;
+            flex-shrink: 0;
+            margin-top: 2px;
         }
+        .check-icon svg { width: 11px; height: 11px; color: #fff; }
 
-        .footer-links a {
-            font-size: 13px;
-            color: #5a5a5a;
+        /* ── Second CTA ── */
+        .cta-btn-2 {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 18px 24px;
+            background: #e8192c;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 700;
+            border-radius: 12px;
             text-decoration: none;
-            transition: color 0.2s ease;
+            box-shadow: 0 4px 20px rgba(232, 25, 44, 0.3);
+            margin-bottom: 12px;
+        }
+        .cta-btn-2:hover { background: #c9001a; }
+
+        /* ── Loss aversion block ── */
+        .loss-block {
+            background: #fff8f6;
+            border-left: 3px solid #e8192c;
+            border-radius: 0 10px 10px 0;
+            padding: 12px 14px;
+            margin-bottom: 24px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #444;
         }
 
-        .footer-links a:hover {
-            color: #c9728a;
+        /* ── Footer ── */
+        .page-footer {
+            padding: 24px 16px 40px;
+            border-top: 1px solid #f0e8e4;
+            text-align: center;
         }
-
-        .footer-brand {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 16px;
-            font-weight: 500;
-            color: #1a1a1a;
-            margin-top: 24px;
-            opacity: 0.6;
-        }
-
-        /* Decorative Elements */
-        .sparkle {
-            display: inline-block;
-            color: #b89a6a;
-        }
+        .disclosure { font-size: 11px; color: #bbb; line-height: 1.7; margin-bottom: 14px; }
+        .footer-links { display: flex; justify-content: center; gap: 20px; margin-bottom: 12px; }
+        .footer-links a { font-size: 12px; color: #999; text-decoration: none; }
+        .footer-brand { font-family: 'Playfair Display', serif; font-size: 13px; color: #ccc; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header>
-            <a href="/shop" class="back-link">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 12H5M12 19l-7-7 7-7"/>
-                </svg>
-                Shop
-            </a>
-            <div class="brand-name">Aura Girl Essentials</div>
-            <div class="header-rule"></div>
-        </header>
 
-        <!-- Hero Section -->
-        <section class="hero">
-            <p class="eyebrow"><span class="sparkle">✦</span> Shop the Pin <span class="sparkle">✦</span></p>
-            <h1 class="pin-title">{{ pin.title }}</h1>
-            <p class="pin-description">{{ pin.description[:160] if pin.description else pin.title }}</p>
-            {% if pin.trend_keyword %}
-            <div class="trend-tag">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                    <polyline points="17 6 23 6 23 12"/>
-                </svg>
-                Trending: {{ pin.trend_keyword }}
-            </div>
-            {% endif %}
-        </section>
-
-        <!-- Products Section -->
-        <section class="products-section">
-            {% if products %}
-            <div class="products-grid">
-                {% for product in products %}
-                <a href="{{ product.affiliate_url }}" class="product-card" target="_blank" rel="noopener noreferrer">
-                    <div class="product-image-wrapper">
-                        <img src="{{ product.image_url }}" alt="{{ product.name }}" class="product-image" loading="lazy">
-                    </div>
-                    <div class="product-content">
-                        <h2 class="product-name">{{ product.name }}</h2>
-                        <div class="cta-button">
-                            Shop on Amazon
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                            </svg>
-                        </div>
-                    </div>
-                </a>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="empty-state">
-                <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M8 12h8M12 8v8"/>
-                </svg>
-                <h2 class="empty-title">Products Coming Soon</h2>
-                <p class="empty-text">We're curating the perfect finds for this collection. Explore our shop in the meantime!</p>
-                <a href="/shop" class="empty-link">
-                    Browse All Finds
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                </a>
-            </div>
-            {% endif %}
-        </section>
-
-        <!-- Footer -->
-        <footer>
-            <p class="disclosure">As an Amazon Associate, I earn from qualifying purchases. This means I may receive a small commission at no extra cost to you when you shop through my links. Thank you for supporting Aura Girl Essentials! 💕</p>
-            <div class="footer-links">
-                <a href="/shop">Shop All</a>
-                <a href="/privacy">Privacy Policy</a>
-            </div>
-            <p class="footer-brand">Aura Girl Essentials</p>
-        </footer>
+    <!-- Sticky top bar -->
+    <div class="topbar">
+        <a href="/shop" class="topbar-back">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+            Back
+        </a>
+        <a href="/" class="topbar-brand">Aura Girl Essentials 💕</a>
+        <div style="width:40px;"></div>
     </div>
+
+    <!-- Urgency banner -->
+    <div class="urgency-banner">
+        <span class="urgency-dot"></span>
+        People are viewing this right now — don't miss out
+    </div>
+
+    {% if products %}
+    {% for product in products %}
+
+    <!-- Full product image — no crop, clickable to affiliate link -->
+    <a href="{{ product.affiliate_url }}" target="_blank" rel="noopener noreferrer">
+        <img src="{{ product.image_url }}" alt="{{ product.name }}" class="pin-image" loading="eager">
+    </a>
+
+    <!-- CTA immediately after image -->
+    <div class="cta-block">
+        <div class="social-proof">
+            <span class="stars">★★★★★</span>
+            <span class="review-count">Thousands of reviews</span>
+            <span style="color:#aaa;">· Amazon verified</span>
+        </div>
+        <a href="{{ product.affiliate_url }}" class="cta-btn" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Shop on Amazon — Get It Now
+        </a>
+        <div class="cta-sub">
+            <span>🚚 Free Prime shipping</span>
+            <span>🔒 Secure checkout</span>
+            <span>↩️ Easy returns</span>
+        </div>
+    </div>
+
+    <!-- Scarcity bar -->
+    <div class="scarcity-bar">
+        <span class="scarcity-icon">🔥</span>
+        <div class="scarcity-text">This is trending on Pinterest right now — <span>prices can change any time</span>. Grab it while it's still available.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Product details -->
+    <div class="info-section">
+        <div class="section-label">Aura Girl Finds 💕</div>
+        <h1 class="pin-title-text">{{ product.name }}</h1>
+        {% if pin.description %}
+        <p class="pin-desc-text">{{ pin.description | replace('\nShop it here →', '') | replace('Shop it here →', '') | truncate(350, True, '…') }}</p>
+        {% endif %}
+
+        <div class="section-label" style="margin-bottom:12px;">Why you'll love it</div>
+        <ul class="love-list">
+            <li>
+                <span class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                Top-rated with thousands of real Amazon reviews — not just hype
+            </li>
+            <li>
+                <span class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                Ships fast with Prime — arrives quickly, ready to use
+            </li>
+            <li>
+                <span class="check-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+                Exactly what you saw on Pinterest — hand-picked by Aura Girl Essentials
+            </li>
+        </ul>
+
+        <!-- Loss aversion -->
+        <div class="loss-block">
+            💭 <strong>Still thinking about it?</strong> Amazon prices and availability change daily. The girls who grabbed this last week are already seeing results — don't be the one who waited too long.
+        </div>
+
+        <!-- Second CTA -->
+        <a href="{{ product.affiliate_url }}" class="cta-btn-2" target="_blank" rel="noopener noreferrer">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Yes, I Want This → Shop on Amazon
+        </a>
+    </div>
+
+    {% endfor %}
+
+    {% elif pin.amazon_url %}
+    <!-- Redirect directly to Amazon affiliate link -->
+    <script>window.location.replace("{{ pin.amazon_url }}");</script>
+    <div style="padding:60px 20px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:16px;">↗️</div>
+        <p style="font-size:15px;color:#888;">Taking you to Amazon…</p>
+        <a href="{{ pin.amazon_url }}" style="display:inline-block;margin-top:16px;font-size:13px;color:#e8192c;">Click here if not redirected</a>
+    </div>
+
+    {% else %}
+    <!-- Under construction -->
+    <div style="padding:60px 20px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:16px;">🛍️</div>
+        <h2 style="font-family:'Playfair Display',serif;font-size:22px;margin-bottom:12px;">Something Beautiful is Coming</h2>
+        <p style="font-size:14px;color:#888;max-width:280px;margin:0 auto 20px;line-height:1.7;">We're putting the finishing touches on our shop. Check back soon!</p>
+        <span style="display:inline-block;background:#f0e8e4;color:#c9728a;font-size:13px;font-weight:600;padding:8px 20px;border-radius:999px;">Under Construction</span>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <div class="page-footer">
+        <p class="disclosure">As an Amazon Associate I earn from qualifying purchases. This means I may receive a small commission at no extra cost to you. Thank you for supporting Aura Girl Essentials 💕</p>
+        <div class="footer-links">
+            <a href="/shop">Shop All</a>
+            <a href="/privacy">Privacy</a>
+        </div>
+        <p class="footer-brand">Aura Girl Essentials</p>
+    </div>
+
 </body>
 </html>

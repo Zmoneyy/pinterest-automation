@@ -47,6 +47,11 @@ class Config:
         "Aesthetic Home Decor for Cozy Spaces": os.environ.get("PINTEREST_BOARD_AESTHETIC_HOME",   "1140044161863463154"),
         "Affordable Beauty Essentials":         os.environ.get("PINTEREST_BOARD_AFFORDABLE_BEAUTY","1140044161863463155"),
         "Fitness Finds on Amazon":              os.environ.get("PINTEREST_BOARD_FITNESS",          "1140044161863463156"),
+        "Aesthetic Home Finds":                 os.environ.get("PINTEREST_BOARD_AESTHETIC_FINDS",  "1140044161863515409"),
+        "Garden & Plant Inspo":                 os.environ.get("PINTEREST_BOARD_GARDEN",           "1140044161863515416"),
+        "Hair Care Essentials":                 os.environ.get("PINTEREST_BOARD_HAIR",             "1140044161863515412"),
+        "Makeup Finds Under $50":               os.environ.get("PINTEREST_BOARD_MAKEUP",           "1140044161863515414"),
+        "Mother's Day Gift Ideas":              os.environ.get("PINTEREST_BOARD_MOTHERS_DAY",      "1140044161863515413"),
     }
     FAL_API_KEY       = os.environ.get("FAL_API_KEY", "")
 

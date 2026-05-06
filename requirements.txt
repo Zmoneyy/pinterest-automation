@@ -5,12 +5,10 @@ apscheduler==3.10.4
 anthropic>=0.40.0
 requests==2.32.3
 pillow==10.4.0
-google-cloud-aiplatform==1.65.0
-google-genai>=0.7.0
 google-auth==2.35.0
 python-dotenv==1.0.1
 gunicorn==23.0.0
 google-cloud-storage==2.18.2
 psycopg2-binary==2.9.9
 beautifulsoup4==4.12.3
-playwright==1.44.0
+# playwright disabled — DALL-E 3 is primary, no Chromium needed

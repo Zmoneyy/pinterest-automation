@@ -23,6 +23,19 @@ logger = logging.getLogger(__name__)
 
 PINS_PER_DAY = 3   # 3 pins/day — safe for affiliate accounts
 
+PIN_CTAS = [
+    "See why everyone's obsessed →",
+    "You need this in your life →",
+    "This is the one everyone's buying →",
+    "Girls are going crazy for this →",
+    "Don't sleep on this find →",
+    "This is your sign to treat yourself →",
+    "Already sold out once — grab it now →",
+    "The hype is real →",
+    "This one's worth every penny →",
+    "Your future self will thank you →",
+]
+
 # One pin per niche per day
 DAILY_NICHES = ["beauty", "home_decor", "fitness"]
 
@@ -90,26 +103,33 @@ def run_daily_pin_generation():
 
 
 def schedule_approved_pins():
-    """Post approved pins whose scheduled_for time has arrived (or immediately if unscheduled)."""
+    """Post approved + bulk-scheduled pins whose scheduled_for time has arrived."""
     from app import db
     from app.models import Pin
 
     now = datetime.now(timezone.utc)
 
-    due = Pin.query.filter(
+    # Approved pins (from dashboard approval flow)
+    approved_due = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for <= now,
     ).all()
-    immediate = Pin.query.filter(
+    approved_immediate = Pin.query.filter(
         Pin.status == Pin.STATUS_APPROVED,
         Pin.scheduled_for.is_(None),
     ).all()
 
-    to_post = due + immediate
+    # Bulk-scheduled pins (from Bulk Schedule tab) whose time has arrived
+    scheduled_due = Pin.query.filter(
+        Pin.status == Pin.STATUS_SCHEDULED,
+        Pin.scheduled_for <= now,
+    ).all()
+
+    to_post = approved_due + approved_immediate + scheduled_due
     if not to_post:
         return
 
-    logger.info(f"Posting {len(to_post)} approved pins via Pinterest API…")
+    logger.info(f"Posting {len(to_post)} pins ({len(scheduled_due)} bulk-scheduled)…")
     for pin in to_post:
         try:
             _post_pin_pinterest(pin, db, now)
@@ -350,22 +370,38 @@ def _next_peak_slot(now: datetime) -> datetime:
 
 
 def _post_pin_pinterest(pin, db, now):
-    """Post a pin to Pinterest directly via Pinterest API v5 and update DB status."""
+    """Post a pin to Pinterest via Blotato and update DB status."""
+    import requests as req
     from app.models import Pin
-    from app import pinterest_api
+    from config import Config
 
     if not pin.image_url:
+        pin.post_error = "No image uploaded — please add an image and re-schedule."
+        db.session.commit()
         logger.error(f"Pin #{pin.id} has no image URL — cannot post.")
         return
 
     # Build full description with hashtags
-    hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list())
+    raw_hashtags = pin.hashtags or ""
+    if raw_hashtags.startswith("["):
+        hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list())
+    else:
+        hashtag_str = raw_hashtags.strip()
+
     full_desc = pin.description or ""
-    if hashtag_str:
-        full_desc = f"{full_desc}\n\n{hashtag_str}"
+    if hashtag_str and hashtag_str not in full_desc:
+        full_desc = f"{full_desc}\n{hashtag_str}"
+
+    # CTA
+    if not any(cta in full_desc for cta in PIN_CTAS):
+        full_desc = f"{full_desc}\n{random.choice(PIN_CTAS)}"
+
+    # FTC disclosure
+    disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
+    if disclosure not in full_desc:
+        full_desc = f"{full_desc}\n{disclosure}"
 
     # Get board ID
-    from config import Config
     board_name = pin.board_name or ""
     board_id = Config.PINTEREST_BOARDS.get(board_name)
     if not board_id:
@@ -379,32 +415,87 @@ def _post_pin_pinterest(pin, db, now):
         board_id = niche_boards.get(niche, Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"))
 
     if not board_id:
+        pin.post_error = "No Pinterest board configured — set board IDs in Setup."
+        db.session.commit()
         logger.error(f"Pin #{pin.id}: no board ID found.")
         return
 
-    link = pin.shop_url or Config.benable_url_for_niche("beauty")
+    link = pin.amazon_url or pin.shop_url or Config.benable_url_for_niche("beauty")
 
-    # Schedule for next peak slot if no schedule set
-    publish_at = pin.scheduled_for or _next_peak_slot(now)
+    # If scheduled time is in the past, post immediately (5 min from now)
+    scheduled = pin.scheduled_for or _next_peak_slot(now)
+    # Make scheduled timezone-aware if it isn't
+    if scheduled.tzinfo is None:
+        scheduled = scheduled.replace(tzinfo=timezone.utc)
+    if scheduled <= now:
+        publish_at = now + timedelta(minutes=5)
+    else:
+        publish_at = scheduled
+
+    blotato_headers = {
+        "blotato-api-key": Config.BLOTATO_API_KEY,
+        "Content-Type": "application/json",
+    }
 
     try:
-        result = pinterest_api.post_pin(
-            title=pin.title or "",
-            description=full_desc,
-            image_url=pin.image_url,
-            link=link,
-            board_id=board_id,
-            alt_text=pin.alt_text or "",
-            publish_date=publish_at,
+        # Step 1: Upload image to Blotato
+        media_resp = req.post(
+            "https://backend.blotato.com/v2/media",
+            headers=blotato_headers,
+            json={"url": pin.image_url},
+            timeout=60,
         )
+        media_resp.raise_for_status()
+        media_url = media_resp.json().get("url")
+        if not media_url:
+            raise ValueError(f"Blotato media upload returned no URL: {media_resp.text}")
+
+        # Step 2: Post via Blotato
+        payload = {
+            "post": {
+                "accountId": Config.BLOTATO_ACCOUNT_ID,
+                "content": {
+                    "text": full_desc[:500],
+                    "mediaUrls": [media_url],
+                    "platform": "pinterest",
+                },
+                "target": {
+                    "targetType": "pinterest",
+                    "boardId": board_id,
+                    "title": (pin.title or "")[:100],
+                    "link": link,
+                },
+            },
+            "scheduledTime": publish_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+
+        post_resp = req.post(
+            "https://backend.blotato.com/v2/posts",
+            headers=blotato_headers,
+            json=payload,
+            timeout=30,
+        )
+        if not post_resp.ok:
+            logger.error(f"Blotato post error {post_resp.status_code}: {post_resp.text[:500]}")
+        post_resp.raise_for_status()
+
+        blotato_id = post_resp.json().get("postSubmissionId", "")
         pin.status = Pin.STATUS_POSTED
         pin.posted_at = now
         pin.scheduled_for = publish_at
-        pin.pinterest_pin_id = result.get("id", "")
+        pin.pinterest_pin_id = str(blotato_id)
+        pin.post_error = None
         db.session.commit()
-        logger.info(f"Pin #{pin.id} posted via Pinterest API ✓  board={board_id}  scheduled={publish_at.isoformat()}")
+        logger.info(f"Pin #{pin.id} posted via Blotato ✓  board={board_id}  scheduled={publish_at.isoformat()}")
+
     except Exception as e:
-        logger.error(f"Pinterest API post failed for pin #{pin.id}: {e}", exc_info=True)
+        error_msg = str(e)
+        try:
+            pin.post_error = error_msg[:500]
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+        logger.error(f"Blotato post failed for pin #{pin.id}: {e}", exc_info=True)
         raise
 
 

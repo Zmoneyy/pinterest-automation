@@ -50,6 +50,10 @@ def create_app(config_object=None):
 
         app.register_blueprint(bp)
 
+        # Expose APP_ENV to all templates
+        app_env = os.environ.get("APP_ENV", "prod")
+        app.jinja_env.globals["APP_ENV"] = app_env
+
         # Start the scheduler
         _start_scheduler(app)
 
@@ -63,6 +67,7 @@ def _run_migrations():
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS board_name VARCHAR(255)",
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS alt_text TEXT",
         "ALTER TABLE pins ADD COLUMN IF NOT EXISTS shop_url TEXT",
+        "ALTER TABLE pins ADD COLUMN IF NOT EXISTS post_error TEXT",
     ]
     for sql in migrations:
         try:
