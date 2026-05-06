@@ -188,30 +188,66 @@ def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
     return results[:max_results]
 
 
+# Luxury beauty searches that reliably return 10% commission products
+LUXURY_BEAUTY_SEARCHES = [
+    ("charlotte tilbury amazon", "Charlotte Tilbury"),
+    ("tatcha skincare amazon", "Tatcha"),
+    ("drunk elephant serum amazon", "Drunk Elephant"),
+    ("rare beauty selena gomez amazon", "Rare Beauty"),
+    ("merit beauty amazon", "Merit"),
+    ("nars cosmetics amazon", "NARS"),
+    ("dyson airwrap amazon", "Dyson"),
+    ("sunday riley amazon", "Sunday Riley"),
+    ("peter thomas roth amazon", "Peter Thomas Roth"),
+    ("ilia beauty amazon", "ILIA"),
+    ("kate somerville amazon", "Kate Somerville"),
+    ("pat mcgrath amazon", "Pat McGrath"),
+    ("shiseido amazon", "Shiseido"),
+    ("estee lauder amazon", "Estée Lauder"),
+    ("lancôme amazon", "Lancôme"),
+    ("ysl beauty amazon", "YSL Beauty"),
+    ("tom ford beauty amazon", "Tom Ford Beauty"),
+    ("la mer moisturizer amazon", "La Mer"),
+    ("sk-ii facial treatment amazon", "SK-II"),
+    ("westman atelier amazon", "Westman Atelier"),
+]
+
+
 def discover_products_for_trends(trends: list[dict], per_trend: int = 3) -> list[dict]:
     """
-    Given a list of trend dicts (from TrendCache), search Amazon for each
-    and return product candidates.
+    Search Amazon for products. ALWAYS leads with luxury beauty (10% commission)
+    searches first, then trend-matched products.
     """
     all_products = []
     seen_asins = set()
 
-    for trend in trends[:20]:  # support up to 20 trend entries
+    def _add_products(products, trend_keyword, source_category):
+        for p in products:
+            asin = p.get("asin", "")
+            if asin and asin not in seen_asins:
+                seen_asins.add(asin)
+                p["trend_keyword"]   = trend_keyword
+                p["source_category"] = source_category
+                all_products.append(p)
+
+    # ── STEP 1: Always search luxury beauty brands first (10% commission) ──
+    # Shuffle so we don't always get the same brands
+    luxury_searches = list(LUXURY_BEAUTY_SEARCHES)
+    random.shuffle(luxury_searches)
+    for query, brand in luxury_searches[:8]:   # top 8 luxury brands per run
+        products = search_products(query, category="luxury_beauty", max_results=3)
+        _add_products(products, brand, "Luxury Beauty (10%)")
+        time.sleep(random.uniform(1.5, 3))
+
+    # ── STEP 2: Trend-matched searches from TrendEntry categories ──
+    for trend in trends[:15]:
         keyword         = trend.get("keyword", "")
         niche           = trend.get("niche") or trend.get("category", "beauty")
         source_category = trend.get("source_category", "")
         if not keyword:
             continue
-
         products = search_products(keyword, category=niche, max_results=per_trend)
-        for p in products:
-            asin = p.get("asin", "")
-            if asin and asin not in seen_asins:
-                seen_asins.add(asin)
-                p["trend_keyword"]   = keyword
-                p["source_category"] = source_category
-                all_products.append(p)
-
+        _add_products(products, keyword, source_category)
         time.sleep(random.uniform(2, 4))
 
     return all_products
