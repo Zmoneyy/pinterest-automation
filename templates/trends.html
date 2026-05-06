@@ -233,9 +233,9 @@
 
     {# Category name — prominent #}
     <div style="margin-bottom:14px;">
-      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">📂 Category Name <span style="color:var(--red);">*</span></label>
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">🛍️ Pinterest Product Category <span style="color:var(--red);">*</span></label>
       <input type="text" id="pasteCategory"
-        placeholder='e.g. Skincare, Home Decor, Fitness, Garden…'
+        placeholder='e.g. Skincare, Home Decor, Fitness, Garden, Nails…'
         style="margin-top:5px;font-size:14px;padding:10px 12px;border:2px solid #bfdbfe;border-radius:8px;width:100%;box-sizing:border-box;font-family:inherit;font-weight:600;">
     </div>
 
@@ -294,7 +294,7 @@
     {% for e in entries %}
     <div class="entry-card" id="entry-{{ e.id }}">
       <div class="entry-card-header">
-        <div class="entry-cat-name">📂 {{ e.category }}</div>
+        <div class="entry-cat-name">🛍️ {{ e.category }}</div>
         {% if e.saved_at %}
           <span class="entry-date-badge">
             {{ e.saved_at.strftime('%b %-d, %Y') }}
@@ -481,7 +481,7 @@
       // Build understanding panel
       let html = '';
       if (data.category) {
-        html += `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">📂 ${data.category}</div>`;
+        html += `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">🛍️ Product Category: ${data.category}</div>`;
       }
       if (data.search_queries?.length) {
         html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:5px;">🔍 ${data.search_queries.length} Search Queries</div>
