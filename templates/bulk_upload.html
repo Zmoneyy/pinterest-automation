@@ -269,12 +269,17 @@
   }
   .flash-ok { animation: flashGreen 1.2s ease forwards; }
 
+  /* ── Break out of the 900px page container ── */
+  .page { max-width: 100% !important; padding-left: 32px !important; padding-right: 32px !important; }
+
   /* ── Two-column layout ── */
   .bulk-layout {
     display: grid;
-    grid-template-columns: 260px 1fr;
-    gap: 20px;
+    grid-template-columns: 420px 1fr;
+    gap: 28px;
     align-items: start;
+    max-width: 1400px;
+    margin: 0 auto;
   }
 
   /* ── Sticky calendar sidebar ── */
@@ -338,9 +343,9 @@
   /* ── Each day cell ── */
   .cal-cell {
     border: 1px solid var(--gray-200);
-    border-radius: 5px;
-    padding: 3px;
-    min-height: 74px;
+    border-radius: 7px;
+    padding: 5px;
+    min-height: 88px;
     background: var(--white);
     position: relative;
     min-width: 0;
@@ -348,7 +353,7 @@
   .cal-cell.empty {
     background: var(--gray-50);
     border-color: transparent;
-    min-height: 74px;
+    min-height: 88px;
   }
   .cal-cell.is-today {
     border-color: var(--red);
@@ -358,39 +363,39 @@
   .cal-cell.past { opacity: 0.38; }
 
   .cal-cell-num {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--gray-500);
-    margin-bottom: 3px;
+    margin-bottom: 4px;
     line-height: 1;
   }
   .cal-cell.is-today .cal-cell-num {
     background: var(--red);
     color: #fff;
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 9px;
+    font-size: 10px;
   }
 
   /* ── Time slots inside each cell ── */
   .cal-time-slots {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
   }
   .cal-time-pill {
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
-    padding: 1px 3px;
-    border-radius: 3px;
+    padding: 2px 4px;
+    border-radius: 4px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.6;
+    line-height: 1.5;
     cursor: default;
     transition: background 0.2s;
   }
@@ -409,9 +414,10 @@
     text-decoration: line-through;
   }
 
-  @media (max-width: 1000px) {
+  @media (max-width: 900px) {
     .bulk-layout { grid-template-columns: 1fr; }
     .schedule-sidebar { position: static; }
+    .page { padding-left: 16px !important; padding-right: 16px !important; }
   }
   @media (max-width: 600px) {
     .pin-card-body { grid-template-columns: 1fr; }
