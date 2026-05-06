@@ -284,16 +284,11 @@
   .schedule-sidebar {
     position: sticky;
     top: 72px;
-    max-height: calc(100vh - 90px);
-    overflow-y: auto;
     background: var(--white);
     border: 1px solid var(--gray-200);
     border-radius: var(--radius);
     padding: 16px;
-    scrollbar-width: thin;
   }
-  .schedule-sidebar::-webkit-scrollbar { width: 4px; }
-  .schedule-sidebar::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 2px; }
 
   /* ── Month header ── */
   .cal-month-header {
@@ -417,7 +412,7 @@
 
   @media (max-width: 1000px) {
     .bulk-layout { grid-template-columns: 1fr; }
-    .schedule-sidebar { position: static; max-height: 400px; }
+    .schedule-sidebar { position: static; }
   }
   @media (max-width: 600px) {
     .pin-card-body { grid-template-columns: 1fr; }
