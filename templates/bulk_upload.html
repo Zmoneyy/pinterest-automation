@@ -269,14 +269,11 @@
   }
   .flash-ok { animation: flashGreen 1.2s ease forwards; }
 
-  /* ── Widen page for this view ── */
-  .page { max-width: 1200px !important; }
-
   /* ── Two-column layout ── */
   .bulk-layout {
     display: grid;
-    grid-template-columns: 380px 1fr;
-    gap: 24px;
+    grid-template-columns: 260px 1fr;
+    gap: 20px;
     align-items: start;
   }
 
@@ -334,22 +331,24 @@
   .cal-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 3px;
+    gap: 2px;
+    min-width: 0;
   }
 
   /* ── Each day cell ── */
   .cal-cell {
     border: 1px solid var(--gray-200);
-    border-radius: 7px;
-    padding: 5px 5px 6px;
-    min-height: 90px;
+    border-radius: 5px;
+    padding: 3px;
+    min-height: 74px;
     background: var(--white);
     position: relative;
+    min-width: 0;
   }
   .cal-cell.empty {
     background: var(--gray-50);
     border-color: transparent;
-    min-height: 90px;
+    min-height: 74px;
   }
   .cal-cell.is-today {
     border-color: var(--red);
@@ -359,39 +358,39 @@
   .cal-cell.past { opacity: 0.38; }
 
   .cal-cell-num {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     color: var(--gray-500);
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     line-height: 1;
   }
   .cal-cell.is-today .cal-cell-num {
     background: var(--red);
     color: #fff;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 10px;
+    font-size: 9px;
   }
 
   /* ── Time slots inside each cell ── */
   .cal-time-slots {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
   }
   .cal-time-pill {
-    font-size: 10px;
+    font-size: 8px;
     font-weight: 700;
-    padding: 2px 5px;
-    border-radius: 4px;
+    padding: 1px 3px;
+    border-radius: 3px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.5;
+    line-height: 1.6;
     cursor: default;
     transition: background 0.2s;
   }
