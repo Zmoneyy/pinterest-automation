@@ -137,6 +137,37 @@ class TrendCache(db.Model):
         return f"<TrendCache {self.keyword} ({self.category})>"
 
 
+class TrendEntry(db.Model):
+    """One dated paste session per product category from Pinterest Analytics."""
+    __tablename__ = "trend_entries"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    category         = db.Column(db.String(255), nullable=False)
+    saved_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    search_queries   = db.Column(db.Text)   # JSON list of keyword strings
+    top_products     = db.Column(db.Text)   # JSON list of product strings
+    full_page_kws    = db.Column(db.Text)   # JSON list of keywords from full page dump
+    total_keywords   = db.Column(db.Integer, default=0)
+
+    def sq_list(self):
+        import json
+        try: return json.loads(self.search_queries or "[]")
+        except: return []
+
+    def tp_list(self):
+        import json
+        try: return json.loads(self.top_products or "[]")
+        except: return []
+
+    def fp_list(self):
+        import json
+        try: return json.loads(self.full_page_kws or "[]")
+        except: return []
+
+    def __repr__(self):
+        return f"<TrendEntry {self.category} @ {self.saved_at}>"
+
+
 class ProductCandidate(db.Model):
     """Amazon products discovered automatically, waiting for user approval."""
 

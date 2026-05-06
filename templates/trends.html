@@ -3,102 +3,198 @@
 
 {% block head %}
 <style>
-  .upload-zone {
+  /* ── Page layout ── */
+  .trends-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 860px) { .trends-layout { grid-template-columns: 1fr; } }
+
+  /* ── Add category button ── */
+  .add-cat-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    background: var(--white);
     border: 2px dashed var(--gray-200);
     border-radius: var(--radius);
-    padding: 40px 24px;
-    text-align: center;
-    background: var(--white);
     cursor: pointer;
-    transition: border-color 0.2s, background 0.2s;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gray-500);
+    width: 100%;
+    margin-bottom: 20px;
+    transition: border-color 0.15s, color 0.15s;
   }
-  .upload-zone:hover, .upload-zone.drag-over {
-    border-color: var(--red);
-    background: var(--red-light);
-  }
-  .upload-icon { font-size: 40px; margin-bottom: 12px; }
-  .upload-label { font-size: 16px; font-weight: 600; color: var(--gray-800); margin-bottom: 6px; }
-  .upload-sub { font-size: 13px; color: var(--gray-400); }
-  .file-list { margin-top: 12px; font-size: 13px; color: var(--gray-600); }
+  .add-cat-btn:hover { border-color: var(--red); color: var(--red); }
 
-  .opportunity-card {
+  /* ── Paste form panel ── */
+  .paste-panel {
     background: var(--white);
+    border: 2px solid #dbeafe;
     border-radius: var(--radius);
-    padding: 16px 20px;
-    box-shadow: var(--shadow);
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    margin-bottom: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    display: none;
   }
-  .opportunity-rank {
-    font-size: 22px;
-    font-weight: 800;
-    color: var(--red);
-    min-width: 32px;
-    line-height: 1;
-    padding-top: 2px;
-  }
-  .opportunity-body { flex: 1; }
-  .opportunity-keyword { font-size: 16px; font-weight: 700; color: var(--gray-800); text-transform: capitalize; }
-  .opportunity-reason { font-size: 13px; color: var(--gray-600); margin-top: 3px; }
-  .opportunity-change { font-size: 12px; font-weight: 600; color: var(--green); background: var(--green-light); padding: 2px 8px; border-radius: var(--radius-pill); }
+  .paste-panel.open { display: block; }
 
-  .pin-idea-card {
+  /* ── Category library cards ── */
+  .entry-card {
     background: var(--white);
+    border: 1px solid var(--gray-200);
     border-radius: var(--radius);
-    padding: 16px 20px;
-    box-shadow: var(--shadow);
-    margin-bottom: 12px;
-    border-left: 3px solid var(--red);
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    position: relative;
+    transition: box-shadow 0.15s;
   }
-  .pin-idea-theme { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--red); margin-bottom: 4px; }
-  .pin-idea-title { font-size: 15px; font-weight: 600; color: var(--gray-800); }
-  .pin-idea-trend { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+  .entry-card:hover { box-shadow: var(--shadow); }
 
-  .product-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 6px 12px;
-    background: var(--gray-100);
-    border-radius: var(--radius-pill);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--gray-800);
-    margin: 4px;
-    text-transform: capitalize;
-  }
-
-  .trend-row {
+  .entry-card-header {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 0;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .entry-cat-name {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--gray-800);
+    flex: 1;
+  }
+  .entry-date-badge {
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--gray-100);
+    color: var(--gray-500);
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .entry-kw-count {
+    font-size: 11px;
+    font-weight: 700;
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 3px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .entry-delete-btn {
+    background: none;
+    border: none;
+    color: var(--gray-300);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .entry-delete-btn:hover { color: var(--red); }
+
+  .entry-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 5px;
+    margin-top: 10px;
+  }
+  .entry-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .pill-sq {
+    font-size: 11px;
+    font-weight: 600;
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .pill-tp {
+    font-size: 11px;
+    background: #f5f0ff;
+    color: #7c3aed;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .pill-fp {
+    font-size: 11px;
+    background: var(--gray-100);
+    color: var(--gray-500);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .pill-more {
+    font-size: 11px;
+    color: var(--gray-400);
+    padding: 2px 6px;
+    font-style: italic;
+  }
+
+  /* ── Right column: board suggestions + saved keywords ── */
+  .sidebar-section {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .sidebar-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--gray-400);
+    margin-bottom: 12px;
+  }
+
+  /* board suggestion rows */
+  .board-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-100);
+    flex-wrap: wrap;
+  }
+  .board-row:last-child { border-bottom: none; }
+  .board-row-name { font-size: 13px; font-weight: 600; color: var(--gray-800); flex: 1; }
+
+  /* keyword table */
+  .trend-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 0;
     border-bottom: 1px solid var(--gray-100);
   }
   .trend-row:last-child { border-bottom: none; }
-  .trend-rank { font-size: 13px; color: var(--gray-400); min-width: 28px; text-align: right; }
-  .trend-name { flex: 1; font-size: 14px; font-weight: 500; text-transform: capitalize; }
-  .trend-score {
-    width: 80px;
-    height: 6px;
-    background: var(--gray-100);
-    border-radius: 99px;
-    overflow: hidden;
-  }
-  .trend-score-fill { height: 100%; background: var(--red); border-radius: 99px; }
-  .trend-cat { font-size: 11px; color: var(--gray-400); min-width: 70px; text-align: right; }
+  .trend-rank { font-size: 12px; color: var(--gray-400); min-width: 22px; text-align: right; }
+  .trend-name { flex: 1; font-size: 13px; font-weight: 500; text-transform: capitalize; }
+  .trend-bar { width: 60px; height: 5px; background: var(--gray-100); border-radius: 99px; overflow: hidden; }
+  .trend-bar-fill { height: 100%; background: var(--red); border-radius: 99px; }
+  .trend-cat { font-size: 10px; color: var(--gray-400); min-width: 60px; text-align: right; }
 
-  .section-title {
-    font-size: 18px;
-    font-weight: 700;
-    margin-bottom: 14px;
-    margin-top: 28px;
-    color: var(--gray-800);
+  /* understanding panel */
+  .understanding-panel {
+    display: none;
+    margin-top: 16px;
+    background: #f8faff;
+    border: 1px solid #dbeafe;
+    border-radius: 10px;
+    padding: 16px;
   }
-
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
+  .understanding-panel.visible { display: block; }
 </style>
 {% endblock %}
 
@@ -112,242 +208,212 @@
   <div class="alert alert-error">Couldn't read the CSV. Make sure you're uploading a Pinterest Trends export.</div>
 {% endif %}
 
-<!-- ── Paste from Pinterest Analytics ── -->
-<div class="card" style="margin-bottom:20px;border:2px solid #dbeafe;">
-  <div class="card-body">
+<div class="trends-layout">
+
+{# ── LEFT: category library ── #}
+<div>
+
+  {# Add Category button #}
+  <button class="add-cat-btn" type="button" onclick="togglePastePanel()">
+    <span style="font-size:20px;">+</span>
+    <span>Add Category Data</span>
+    <span style="font-size:12px;font-weight:400;color:var(--gray-400);margin-left:auto;">Paste from Pinterest Analytics</span>
+  </button>
+
+  {# Paste form panel #}
+  <div class="paste-panel" id="pastePanel">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-      <span style="font-size:24px;">📋</span>
+      <span style="font-size:20px;">📋</span>
       <div>
-        <div style="font-size:16px;font-weight:700;color:var(--gray-800);">Paste from Pinterest Analytics</div>
-        <div style="font-size:13px;color:var(--gray-400);">Go to a product category page → paste each section into the right box below. You can fill just one or all three.</div>
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800);">Paste from Pinterest Analytics</div>
+        <div style="font-size:12px;color:var(--gray-400);">Fill one or all boxes — category name is required</div>
       </div>
+      <button type="button" onclick="togglePastePanel()" style="margin-left:auto;background:none;border:none;font-size:20px;color:var(--gray-400);cursor:pointer;">✕</button>
     </div>
 
-    <!-- Full page dump -->
-    <div style="margin-bottom:16px;">
-      <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:6px;">
-        📄 Full Page Dump <span style="font-size:10px;color:var(--gray-400);text-transform:none;font-weight:400;">— select all & paste the entire Pinterest Analytics page here</span>
+    {# Category name — prominent #}
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">📂 Category Name <span style="color:var(--red);">*</span></label>
+      <input type="text" id="pasteCategory"
+        placeholder='e.g. Skincare, Home Decor, Fitness, Garden…'
+        style="margin-top:5px;font-size:14px;padding:10px 12px;border:2px solid #bfdbfe;border-radius:8px;width:100%;box-sizing:border-box;font-family:inherit;font-weight:600;">
+    </div>
+
+    {# Full page dump #}
+    <div style="margin-bottom:14px;">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;">
+        📄 Full Page Dump <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--gray-400);">— Cmd+A then paste the whole page</span>
       </label>
-      <textarea id="pasteFullPage" rows="6"
-        style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-        placeholder="Ctrl+A / Cmd+A on the Pinterest Analytics page, then paste everything here. I'll pull out what matters."></textarea>
+      <textarea id="pasteFullPage" rows="5"
+        style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+        placeholder="Ctrl+A / Cmd+A on the Pinterest Analytics page, paste everything here. I'll extract what matters."></textarea>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:16px;">
-
-      <!-- Box 1: Category -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      {# Search queries #}
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:6px;">
-          📂 Product Category
-        </label>
-        <input type="text" id="pasteCategory"
-          placeholder='e.g. "Plants" or "Skincare"'
-          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;font-family:inherit;">
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">The category name shown at the top of the page</div>
-      </div>
-
-      <!-- Box 2: Search Queries -->
-      <div>
-        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:6px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">
           🔍 Search Queries <span style="color:var(--red);font-size:10px;">← most important</span>
         </label>
         <textarea id="pasteKeywords" rows="5"
-          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-          placeholder="Paste the keywords from the Search queries section here&#10;&#10;gardening&#10;indoor plants&#10;flower&#10;lily&#10;perennials"></textarea>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Copy the list under "Search queries" — these rank highest</div>
+          style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+          placeholder="gardening&#10;indoor plants&#10;flower pots&#10;lily flowers"></textarea>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Copy the Search Queries list</div>
       </div>
 
-      <!-- Box 3: Top Products -->
+      {# Top Products #}
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:6px;">
-          🛍️ Top Products
-        </label>
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;">🛍️ Top Products</label>
         <textarea id="pasteProducts" rows="5"
-          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-          placeholder="Paste the top products section here&#10;&#10;e.g. product names, store names, etc."></textarea>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Used to understand what's actually selling in this category</div>
+          style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+          placeholder="Laneige Lip Mask&#10;CeraVe Moisturizer&#10;e.l.f. Halo Glow"></textarea>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Pinterest's top converting products</div>
       </div>
-
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <button type="button" onclick="submitPastedKeywords()" id="pasteBtn"
-        style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;">
+        style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;">
         Save Data
       </button>
       <span id="pasteStatus" style="font-size:13px;display:none;"></span>
     </div>
 
-    <!-- What I understood summary -->
-    <div id="pasteUnderstanding" style="display:none;margin-top:16px;background:#f8faff;border:1px solid #dbeafe;border-radius:10px;padding:16px;">
-      <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:10px;">🧠 Here's what I understood — does this look right?</div>
+    {# Understanding panel #}
+    <div id="pasteUnderstanding" class="understanding-panel">
+      <div style="font-size:13px;font-weight:700;color:#1d4ed8;margin-bottom:10px;">🧠 Here's what I understood</div>
       <div id="understandingBody"></div>
-      <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div style="font-size:12px;color:var(--gray-400);">If something looks wrong, fix the boxes and save again.</div>
-        <button type="button" onclick="location.reload()" style="font-size:12px;font-weight:700;padding:6px 14px;border-radius:8px;border:1.5px solid #1d4ed8;background:#fff;color:#1d4ed8;cursor:pointer;">
-          Refresh to update board suggestions →
-        </button>
-      </div>
     </div>
   </div>
-</div>
 
-{% if board_suggestions %}
-<!-- ── Board suggestions ── -->
-<div style="margin-bottom:20px;">
-  <div class="section-title" style="margin-top:0;">📌 Board Suggestions Based on Your Trends</div>
-  {% set existing_boards = ["Beauty Finds & Skincare","Glam Home Decor Ideas","Wellness & Self Care Essentials","Nail Inspo & Nail Art Ideas","Luxury Look for Less Home Decor","Amazon Home Finds","Aesthetic Home Decor for Cozy Spaces","Affordable Beauty Essentials","Fitness Finds on Amazon"] %}
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-    {% for b in board_suggestions %}
-    {% set already_have = b.name in existing_boards or b.name.split(' 🎁')[0] in existing_boards %}
-    <div style="background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border-left:4px solid {{ '#1a7a4a' if already_have else '#e53e3e' if b.priority == 1 else '#d97706' }};">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <div style="font-size:15px;font-weight:700;color:var(--gray-800);">{{ b.name }}</div>
-        {% if already_have %}
-          <span style="font-size:10px;font-weight:700;background:#d4f4e8;color:#1a7a4a;padding:2px 8px;border-radius:10px;white-space:nowrap;">✓ You have this</span>
-        {% elif b.priority == 1 %}
-          <span style="font-size:10px;font-weight:700;background:#fde8e8;color:#b91c1c;padding:2px 8px;border-radius:10px;white-space:nowrap;">🔥 Create now</span>
-        {% else %}
-          <span style="font-size:10px;font-weight:700;background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;white-space:nowrap;">Consider adding</span>
+  {# ── Category library ── #}
+  {% if entries %}
+    <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--gray-400);margin-bottom:12px;">
+      {{ entries|length }} categor{{ 'y' if entries|length == 1 else 'ies' }} saved
+    </div>
+    {% for e in entries %}
+    <div class="entry-card" id="entry-{{ e.id }}">
+      <div class="entry-card-header">
+        <div class="entry-cat-name">📂 {{ e.category }}</div>
+        {% if e.saved_at %}
+          <span class="entry-date-badge">
+            {{ e.saved_at.strftime('%b %-d, %Y') }}
+          </span>
         {% endif %}
+        <span class="entry-kw-count">{{ e.total_keywords }} keywords</span>
+        <button class="entry-delete-btn" type="button" title="Delete this entry"
+          onclick="deleteEntry({{ e.id }})">✕</button>
       </div>
-      <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">{{ b.reason }}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px;">
-        {% for kw in b.keywords %}
-          <span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);padding:2px 7px;border-radius:10px;">{{ kw }}</span>
-        {% endfor %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  <p style="font-size:12px;color:var(--gray-400);margin-top:10px;">
-    🔥 "Create now" = trending in your data right now. Create these on Pinterest, then add the board ID in Setup so pins route there automatically.
-  </p>
-</div>
-{% endif %}
 
-<!-- Upload form -->
-<div class="card">
-  <div class="card-body">
-    <form method="POST" action="{{ url_for('main.trends_upload') }}" enctype="multipart/form-data" id="upload-form">
-      <div class="upload-zone" id="upload-zone" onclick="document.getElementById('csv-input').click()">
-        <div class="upload-icon">📈</div>
-        <div class="upload-label">Upload Pinterest Trends CSV</div>
-        <div class="upload-sub">Select one or more files — drag & drop works too</div>
-        <div class="file-list" id="file-list"></div>
-      </div>
-      <input type="file" id="csv-input" name="csv_files" multiple accept=".csv" style="display:none">
-      <div class="mt-16">
-        <button type="submit" class="btn btn-red btn-full" id="analyze-btn" disabled>
-          Analyze Trends
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
+      {% set sqs = e.sq_list() %}
+      {% set tps = e.tp_list() %}
+      {% set fps = e.fp_list() %}
 
-{% if analysis %}
-<!-- Claude Analysis Results -->
-<div class="section-title">Top Opportunities for Aura Girl Essentials</div>
-{% for opp in analysis.get('top_opportunities', []) %}
-<div class="opportunity-card">
-  <div class="opportunity-rank">#{{ loop.index }}</div>
-  <div class="opportunity-body">
-    <div class="flex flex-center gap-8">
-      <div class="opportunity-keyword">{{ opp.trend }}</div>
-      {% if opp.monthly_change %}
-        <span class="opportunity-change">+{{ opp.monthly_change }}% / mo</span>
+      {% if sqs %}
+      <div class="entry-section-label" style="color:#1d4ed8;">🔍 Search Queries</div>
+      <div class="entry-pills">
+        {% for k in sqs[:12] %}<span class="pill-sq">{{ k }}</span>{% endfor %}
+        {% if sqs|length > 12 %}<span class="pill-more">+{{ sqs|length - 12 }} more</span>{% endif %}
+      </div>
+      {% endif %}
+
+      {% if tps %}
+      <div class="entry-section-label" style="color:#7c3aed;">🛍️ Top Products <span style="font-size:10px;color:var(--gray-400);font-weight:400;text-transform:none;">← create pins for these!</span></div>
+      <div class="entry-pills">
+        {% for k in tps[:10] %}<span class="pill-tp">{{ k }}</span>{% endfor %}
+        {% if tps|length > 10 %}<span class="pill-more">+{{ tps|length - 10 }} more</span>{% endif %}
+      </div>
+      {% endif %}
+
+      {% if fps %}
+      <div class="entry-section-label" style="color:var(--gray-400);">📄 Full Page Context</div>
+      <div class="entry-pills">
+        {% for k in fps[:8] %}<span class="pill-fp">{{ k }}</span>{% endfor %}
+        {% if fps|length > 8 %}<span class="pill-more">+{{ fps|length - 8 }} more</span>{% endif %}
+      </div>
       {% endif %}
     </div>
-    <div class="opportunity-reason">{{ opp.reason }}</div>
-  </div>
-</div>
-{% endfor %}
+    {% endfor %}
 
-<div class="grid-2">
-  <div>
-    <div class="section-title">Pin Ideas</div>
-    {% for idea in analysis.get('pin_ideas', []) %}
-    <div class="pin-idea-card">
-      <div class="pin-idea-theme">{{ idea.theme }}</div>
-      <div class="pin-idea-title">{{ idea.title }}</div>
-      <div class="pin-idea-trend">trending: {{ idea.trend }}</div>
+  {% else %}
+    <div style="text-align:center;padding:48px 24px;color:var(--gray-400);background:var(--white);border:1px solid var(--gray-200);border-radius:var(--radius);">
+      <div style="font-size:40px;margin-bottom:12px;">📂</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">No categories yet</div>
+      <div style="font-size:13px;">Click "Add Category Data" above to start building your trend library.</div>
+    </div>
+  {% endif %}
+
+</div>{# end left #}
+
+{# ── RIGHT: board suggestions + keyword table ── #}
+<div>
+
+  {% if board_suggestions %}
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">📌 Board Suggestions</div>
+    {% set existing_boards = ["Beauty Finds & Skincare","Glam Home Decor Ideas","Wellness & Self Care Essentials","Nail Inspo & Nail Art Ideas","Luxury Look for Less Home Decor","Amazon Home Finds","Aesthetic Home Decor for Cozy Spaces","Affordable Beauty Essentials","Fitness Finds on Amazon","Aesthetic Home Finds","Garden & Plant Inspo","Hair Care Essentials","Makeup Finds Under $50","Mother's Day Gift Ideas"] %}
+    {% for b in board_suggestions %}
+    {% set have = b.name in existing_boards %}
+    <div class="board-row">
+      <div class="board-row-name">{{ b.name }}</div>
+      {% if have %}
+        <span style="font-size:10px;font-weight:700;background:#d4f4e8;color:#1a7a4a;padding:2px 8px;border-radius:10px;">✓ Active</span>
+      {% elif b.priority == 1 %}
+        <span style="font-size:10px;font-weight:700;background:#fde8e8;color:#b91c1c;padding:2px 8px;border-radius:10px;">🔥 Create</span>
+      {% else %}
+        <span style="font-size:10px;background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;">Consider</span>
+      {% endif %}
     </div>
     {% endfor %}
   </div>
-  <div>
-    <div class="section-title">Products to Add</div>
-    <div class="card">
-      <div class="card-body">
-        <p class="text-sm text-muted mb-8">Categories trending right now:</p>
-        <div>
-          {% for cat in analysis.get('product_categories', []) %}
-            <span class="product-chip">{{ cat }}</span>
-          {% endfor %}
-        </div>
-        <div class="mt-16" style="display:flex;flex-direction:column;gap:8px;">
-          <form method="POST" action="{{ url_for('main.discover_products') }}">
-            <button type="submit" class="btn btn-red btn-full btn-sm">
-              Find Amazon Products Automatically
-            </button>
-          </form>
-          <a href="{{ url_for('main.product_queue') }}" class="btn btn-full btn-sm" style="background:var(--gray-100);color:var(--gray-800);text-align:center;">
-            View Approval Queue →
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<hr>
-{% endif %}
-
-<!-- All trends table -->
-{% if trends %}
-{% set latest = trends | sort(attribute='cached_at', reverse=True) | first %}
-<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-  <span>{% if analysis %}All Trends{% else %}Saved Trends ({{ trends|length }}){% endif %}</span>
-  {% if latest and latest.cached_at %}
-    {% set cst_hour = (latest.cached_at.hour - 6) % 24 %}
-    {% set ampm = 'AM' if cst_hour < 12 else 'PM' %}
-    {% set h12 = cst_hour % 12 %}{% set h12 = 12 if h12 == 0 else h12 %}
-    <span style="font-size:12px;font-weight:400;color:var(--gray-400);">
-      Last updated: {{ latest.cached_at.strftime('%b %-d, %Y') }} at {{ '%d:%02d %s CST'|format(h12, latest.cached_at.minute, ampm) }}
-    </span>
   {% endif %}
-</div>
-<div class="card">
-  <div class="card-body">
-    {% for t in trends %}
+
+  {% if trends %}
+  <div class="sidebar-section">
+    {% set latest = trends | sort(attribute='cached_at', reverse=True) | first %}
+    <div class="sidebar-section-title">
+      Top Keywords
+      {% if latest and latest.cached_at %}
+        <span style="font-weight:400;text-transform:none;font-size:10px;">— updated {{ latest.cached_at.strftime('%b %-d') }}</span>
+      {% endif %}
+    </div>
+    {% for t in trends[:30] %}
     <div class="trend-row">
       <div class="trend-rank">{{ loop.index }}</div>
       <div class="trend-name">{{ t.keyword }}</div>
-      <div class="trend-score">
-        <div class="trend-score-fill" style="width: {{ [t.score, 100]|min }}%"></div>
-      </div>
-      <div class="trend-cat" style="font-size:11px;color:var(--gray-400);min-width:90px;text-align:right;">
-        {{ t.category or '' }}
-        {% if t.cached_at %}
-          <div style="font-size:10px;color:var(--gray-300);">{{ t.cached_at.strftime('%b %-d') }}</div>
-        {% endif %}
-      </div>
+      <div class="trend-bar"><div class="trend-bar-fill" style="width:{{ [t.score,100]|min }}%"></div></div>
+      <div class="trend-cat">{{ t.category or '' }}</div>
     </div>
     {% endfor %}
   </div>
-</div>
-{% elif not analysis %}
-<div class="empty">
-  <div class="empty-icon">📊</div>
-  <div class="empty-text">Upload a Pinterest Trends CSV to get started</div>
-  <p class="text-sm text-muted mt-8">Export from trends.pinterest.com → select Growing Trends → Download CSV</p>
-</div>
-{% endif %}
+  {% endif %}
+
+  {# CSV upload (collapsed by default) #}
+  <div class="sidebar-section">
+    <div class="sidebar-section-title">📈 CSV Upload</div>
+    <form method="POST" action="{{ url_for('main.trends_upload') }}" enctype="multipart/form-data" id="upload-form">
+      <div style="border:2px dashed var(--gray-200);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color 0.2s;"
+        id="upload-zone" onclick="document.getElementById('csv-input').click()">
+        <div style="font-size:28px;margin-bottom:6px;">📊</div>
+        <div style="font-size:13px;font-weight:600;color:var(--gray-600);">Upload Pinterest Trends CSV</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Export from trends.pinterest.com</div>
+        <div id="file-list" style="margin-top:8px;font-size:12px;color:var(--gray-600);"></div>
+      </div>
+      <input type="file" id="csv-input" name="csv_files" multiple accept=".csv" style="display:none">
+      <button type="submit" class="btn btn-red btn-full btn-sm" id="analyze-btn" disabled style="margin-top:10px;">
+        Analyze Trends
+      </button>
+    </form>
+  </div>
+
+</div>{# end right #}
+</div>{# end trends-layout #}
 
 {% endblock %}
 
 {% block scripts %}
 <script>
+  // ── CSV upload ──
   const input = document.getElementById('csv-input');
   const zone  = document.getElementById('upload-zone');
   const btn   = document.getElementById('analyze-btn');
@@ -355,45 +421,49 @@
 
   function updateFiles(files) {
     if (!files.length) return;
-    const names = Array.from(files).map(f => f.name).join(', ');
-    list.textContent = `Selected: ${names}`;
+    list.textContent = `Selected: ${Array.from(files).map(f => f.name).join(', ')}`;
     btn.disabled = false;
   }
-
   input.addEventListener('change', () => updateFiles(input.files));
-
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor='var(--red)'; });
+  zone.addEventListener('dragleave', () => zone.style.borderColor='');
   zone.addEventListener('drop', e => {
-    e.preventDefault();
-    zone.classList.remove('drag-over');
+    e.preventDefault(); zone.style.borderColor='';
     const dt = new DataTransfer();
     Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
-    input.files = dt.files;
-    updateFiles(input.files);
+    input.files = dt.files; updateFiles(input.files);
   });
-
   document.getElementById('upload-form').addEventListener('submit', () => {
-    btn.disabled = true;
-    btn.textContent = 'Analyzing...';
+    btn.disabled = true; btn.textContent = 'Analyzing…';
   });
 
+  // ── Paste panel toggle ──
+  function togglePastePanel() {
+    const p = document.getElementById('pastePanel');
+    p.classList.toggle('open');
+    if (p.classList.contains('open')) {
+      document.getElementById('pasteCategory').focus();
+    }
+  }
+
+  // ── Submit paste ──
   async function submitPastedKeywords() {
+    const category  = document.getElementById('pasteCategory').value.trim();
     const text      = document.getElementById('pasteKeywords').value.trim();
     const products  = document.getElementById('pasteProducts').value.trim();
-    const category  = document.getElementById('pasteCategory').value.trim() || 'pinterest analytics';
     const full_page = document.getElementById('pasteFullPage').value.trim();
-    const pasteBtn = document.getElementById('pasteBtn');
-    const status   = document.getElementById('pasteStatus');
-    const panel    = document.getElementById('pasteUnderstanding');
-    const body     = document.getElementById('understandingBody');
+    const pasteBtn  = document.getElementById('pasteBtn');
+    const status    = document.getElementById('pasteStatus');
+    const panel     = document.getElementById('pasteUnderstanding');
+    const body      = document.getElementById('understandingBody');
 
-    if (!text && !products && !full_page) { alert('Paste something into at least one box first.'); return; }
+    if (!category) { alert('Please enter a category name — this is how we organize your data.'); return; }
+    if (!text && !products && !full_page) { alert('Paste something into at least one box.'); return; }
 
     pasteBtn.disabled = true;
     pasteBtn.textContent = 'Processing…';
     status.style.display = 'none';
-    panel.style.display  = 'none';
+    panel.classList.remove('visible');
 
     try {
       const resp = await fetch('/trends/paste', {
@@ -406,89 +476,59 @@
 
       status.style.display = 'inline';
       status.style.color   = '#1a7a4a';
-      status.textContent   = `✓ Saved ${data.saved} new keywords (${data.total} total extracted)`;
+      status.textContent   = `✓ Saved ${data.saved} new keywords across ${data.total} extracted`;
 
-      // Show understanding panel
-      const cats = data.by_category || {};
-      const catNames = {
-        beauty: '💄 Beauty', luxury_beauty: '💎 Luxury Beauty',
-        home_decor: '🏠 Home Decor', fitness: '✨ Wellness',
-        garden: '🌿 Garden/Plants', general: '📦 Other'
-      };
+      // Build understanding panel
       let html = '';
-
-      // Category
-      if (data.category && data.category !== 'pinterest analytics') {
-        html += `<div style="margin-bottom:12px;"><span style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);">Category</span><br><span style="font-size:14px;font-weight:700;color:var(--gray-800);">📂 ${data.category}</span></div>`;
+      if (data.category) {
+        html += `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">📂 ${data.category}</div>`;
       }
-
-      // Search queries keywords
-      if (data.search_queries && data.search_queries.length) {
-        html += `<div style="margin-bottom:14px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:6px;">🔍 Search Queries (${data.search_queries.length} keywords — ranked highest)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${data.search_queries.map(k => `<span style="font-size:12px;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600;">${k}</span>`).join('')}
-          </div>
+      if (data.search_queries?.length) {
+        html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:5px;">🔍 ${data.search_queries.length} Search Queries</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+          ${data.search_queries.map(k => `<span style="font-size:12px;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-weight:600;">${k}</span>`).join('')}
         </div>`;
       }
-
-      // Top products
-      if (data.top_products && data.top_products.length) {
-        html += `<div style="margin-bottom:14px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;margin-bottom:6px;">🛍️ Top Products (${data.top_products.length} extracted)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${data.top_products.map(k => `<span style="font-size:12px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')}
-          </div>
+      if (data.top_products?.length) {
+        html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;margin-bottom:5px;">🛍️ ${data.top_products.length} Top Products</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+          ${data.top_products.map(k => `<span style="font-size:12px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')}
         </div>`;
       }
-
-      // Full page context keywords
-      if (data.full_page_context && data.full_page_context.length) {
-        html += `<div style="margin-bottom:14px;">
-          <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#7c3aed;margin-bottom:6px;">📄 From Full Page (context, lower priority)</div>
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${data.full_page_context.map(k => `<span style="font-size:12px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')}
-          </div>
+      if (data.full_page_context?.length) {
+        html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:5px;">📄 ${data.full_page_context.length} from Full Page</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
+          ${data.full_page_context.map(k => `<span style="font-size:11px;background:#f1f5f9;color:#334155;padding:2px 7px;border-radius:10px;">${k}</span>`).join('')}
         </div>`;
       }
-
-      // By category breakdown
-      const cats = data.by_category || {};
-      const hasCats = Object.values(cats).some(v => v && v.length);
-      if (hasCats) {
-        html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:6px;">How I categorized everything</div>`;
-        html += `<div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px;">`;
-        for (const [cat, kws] of Object.entries(cats)) {
-          if (!kws || !kws.length) continue;
-          html += `<div style="flex:1;min-width:160px;">
-            <div style="font-size:11px;font-weight:700;color:var(--gray-500);margin-bottom:4px;">${catNames[cat] || cat}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:3px;">
-              ${kws.map(k => `<span style="font-size:11px;background:#f1f5f9;color:#334155;padding:2px 7px;border-radius:10px;">${k}</span>`).join('')}
-            </div>
-          </div>`;
-        }
-        html += `</div>`;
-      }
-
-      if (data.ignored && data.ignored.length) {
-        html += `<details style="font-size:12px;color:var(--gray-400);cursor:pointer;">
-          <summary>What I ignored (${data.ignored.length} items) — click to see</summary>
-          <div style="margin-top:6px;line-height:1.8;">${data.ignored.join(', ')}</div>
-        </details>`;
-      }
+      html += `<div style="font-size:12px;color:var(--gray-400);margin-top:8px;">Refresh the page to see this entry in your library below.</div>`;
       body.innerHTML = html;
-      panel.style.display = 'block';
+      panel.classList.add('visible');
 
-      pasteBtn.disabled    = false;
+      pasteBtn.disabled = false;
       pasteBtn.textContent = 'Save Data';
 
+      // Clear boxes
+      document.getElementById('pasteCategory').value = '';
+      document.getElementById('pasteKeywords').value = '';
+      document.getElementById('pasteProducts').value = '';
+      document.getElementById('pasteFullPage').value = '';
+
     } catch(err) {
-      pasteBtn.disabled    = false;
+      pasteBtn.disabled = false;
       pasteBtn.textContent = 'Save Data';
       status.style.display = 'inline';
       status.style.color   = 'var(--red)';
       status.textContent   = '✗ ' + err.message;
     }
+  }
+
+  // ── Delete entry ──
+  async function deleteEntry(id) {
+    if (!confirm('Delete this category entry?')) return;
+    await fetch(`/trends/delete-entry/${id}`, { method: 'POST' });
+    const el = document.getElementById(`entry-${id}`);
+    if (el) el.remove();
   }
 </script>
 {% endblock %}

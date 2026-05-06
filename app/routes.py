@@ -1963,9 +1963,22 @@ def _suggest_boards_from_trends(trends):
 @bp.route("/trends")
 @login_required
 def trends():
+    from app.models import TrendEntry
     cached = TrendCache.query.order_by(TrendCache.score.desc(), TrendCache.cached_at.desc()).limit(100).all()
     board_suggestions = _suggest_boards_from_trends(cached)
-    return render_template("trends.html", trends=cached[:50], analysis=None, board_suggestions=board_suggestions)
+    entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
+    return render_template("trends.html", trends=cached[:50], analysis=None, board_suggestions=board_suggestions, entries=entries)
+
+
+@bp.route("/trends/delete-entry/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_delete_entry(entry_id):
+    from app.models import TrendEntry
+    entry = TrendEntry.query.get(entry_id)
+    if entry:
+        db.session.delete(entry)
+        db.session.commit()
+    return jsonify({"ok": True})
 
 
 @bp.route("/trends/paste", methods=["POST"])
@@ -2112,6 +2125,19 @@ def trends_paste():
 
     db.session.commit()
 
+    # ── Save a dated TrendEntry for the library ──
+    import json as _json
+    from app.models import TrendEntry
+    entry = TrendEntry(
+        category       = category_label or "Uncategorized",
+        search_queries = _json.dumps(search_queries_kws + full_page_sq_kws),
+        top_products   = _json.dumps(top_products_kws),
+        full_page_kws  = _json.dumps(full_page_context_kws[:30]),
+        total_keywords = len(keywords),
+    )
+    db.session.add(entry)
+    db.session.commit()
+
     # ── Build by_category for understanding panel ──
     from collections import defaultdict
 
@@ -2124,12 +2150,11 @@ def trends_paste():
     for kw in keywords:
         by_category[_categorize_kw(kw)].append(kw)
 
-    ignored = []  # nothing is ignored now — user controls what goes in each box
-
     return jsonify({
         "ok": True,
         "saved": saved,
         "total": len(keywords),
+        "entry_id": entry.id,
         "category": category_label,
         "search_queries": search_queries_kws + full_page_sq_kws,
         "top_products": top_products_kws,
