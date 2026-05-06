@@ -271,12 +271,12 @@
   /* ── Two-column layout ── */
   .bulk-layout {
     display: grid;
-    grid-template-columns: 230px 1fr;
+    grid-template-columns: 300px 1fr;
     gap: 20px;
     align-items: start;
   }
 
-  /* ── Sticky schedule sidebar ── */
+  /* ── Sticky calendar sidebar ── */
   .schedule-sidebar {
     position: sticky;
     top: 72px;
@@ -291,78 +291,130 @@
   .schedule-sidebar::-webkit-scrollbar { width: 4px; }
   .schedule-sidebar::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 2px; }
 
-  .sidebar-title {
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--gray-400);
-    margin-bottom: 12px;
-  }
-
-  .cal-day {
-    margin-bottom: 10px;
-  }
-  .cal-day-label {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--gray-700);
-    padding: 4px 6px;
-    border-radius: 5px;
+  /* ── Month header ── */
+  .cal-month-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 8px;
   }
-  .cal-day-label.today {
-    background: var(--red-light, #fde8e8);
-    color: var(--red);
+  .cal-month-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--gray-700);
   }
-  .cal-day-slots {
-    padding-left: 6px;
-    margin-top: 3px;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-  }
-  .cal-slot {
-    font-size: 11px;
+  .cal-month-nav {
+    background: none;
+    border: 1px solid var(--gray-200);
+    border-radius: 5px;
+    padding: 2px 8px;
+    font-size: 13px;
+    cursor: pointer;
     color: var(--gray-500);
-    display: flex;
-    align-items: baseline;
-    gap: 5px;
-    line-height: 1.4;
   }
-  .cal-slot-time {
+  .cal-month-nav:hover { background: var(--gray-50); }
+
+  /* ── Day-of-week header row ── */
+  .cal-dow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 4px;
+  }
+  .cal-dow {
     font-size: 10px;
     font-weight: 700;
-    color: var(--red);
-    background: var(--red-light, #fde8e8);
-    padding: 1px 5px;
-    border-radius: 4px;
-    flex-shrink: 0;
-    white-space: nowrap;
+    color: var(--gray-400);
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 0;
   }
-  .cal-slot-title {
+
+  /* ── Calendar grid ── */
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+
+  /* ── Each day cell ── */
+  .cal-cell {
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 4px 4px 5px;
+    min-height: 72px;
+    background: var(--white);
+    position: relative;
+  }
+  .cal-cell.empty {
+    background: var(--gray-50);
+    border-color: transparent;
+    min-height: 72px;
+  }
+  .cal-cell.is-today {
+    border-color: var(--red);
+    background: #fff8f8;
+  }
+  .cal-cell.past {
+    opacity: 0.45;
+  }
+
+  .cal-cell-num {
+    font-size: 11px;
+    font-weight: 700;
     color: var(--gray-500);
+    margin-bottom: 3px;
+    line-height: 1;
+  }
+  .cal-cell.is-today .cal-cell-num {
+    color: var(--red);
+    background: var(--red);
+    color: #fff;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+  }
+
+  /* ── Time slots inside each cell ── */
+  .cal-time-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .cal-time-pill {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 130px;
+    line-height: 1.5;
+    cursor: default;
   }
-  .cal-open {
-    font-size: 11px;
-    color: var(--gray-300);
-    padding-left: 6px;
-    font-style: italic;
+  .cal-time-pill.open {
+    background: #ede9fe;
+    color: #6d28d9;
+  }
+  .cal-time-pill.taken {
+    background: #f3f4f6;
+    color: #9ca3af;
+    text-decoration: line-through;
+  }
+  .cal-time-pill.new-taken {
+    background: #d1fae5;
+    color: #065f46;
+    text-decoration: line-through;
   }
 
-  /* ── New slot highlight (added from JS) ── */
-  .cal-slot.new-slot .cal-slot-time { background: #d4f4e8; color: #1a7a4a; }
-  .cal-slot.new-slot .cal-slot-title { color: #1a7a4a; }
-
-  @media (max-width: 860px) {
+  @media (max-width: 900px) {
     .bulk-layout { grid-template-columns: 1fr; }
-    .schedule-sidebar { position: static; max-height: 220px; }
+    .schedule-sidebar { position: static; max-height: 340px; }
   }
   @media (max-width: 600px) {
     .pin-card-body { grid-template-columns: 1fr; }
@@ -380,31 +432,19 @@
 
 <div class="bulk-layout">
 
-{# ── LEFT: Sticky calendar sidebar ── #}
+{# ── LEFT: Sticky monthly calendar sidebar ── #}
 <div class="schedule-sidebar" id="scheduleSidebar">
-  <div class="sidebar-title">📅 Schedule</div>
-  {% for day in calendar_days %}
-  <div class="cal-day" id="calday-{{ day.key }}">
-    <div class="cal-day-label {% if day.is_today %}today{% endif %}">
-      <span>{{ day.label }}</span>
-      {% if day.pins %}
-        <span style="font-size:10px;font-weight:700;color:{% if day.is_today %}var(--red){% else %}var(--gray-400){% endif %};">{{ day.pins|length }}📌</span>
-      {% endif %}
-    </div>
-    <div class="cal-day-slots" id="calslots-{{ day.key }}">
-      {% if day.pins %}
-        {% for p in day.pins %}
-        <div class="cal-slot">
-          <span class="cal-slot-time">{% set ampm = 'am' if p.hour < 12 else 'pm' %}{% set h12 = p.hour % 12 %}{% set h12 = 12 if h12 == 0 else h12 %}{{ '%d:%02d%s'|format(h12, p.minute, ampm) }}</span>
-          <span class="cal-slot-title" title="{{ p.title }}">{{ p.title }}</span>
-        </div>
-        {% endfor %}
-      {% else %}
-        <div class="cal-open">open</div>
-      {% endif %}
-    </div>
+  <div class="cal-month-header">
+    <button class="cal-month-nav" type="button" onclick="calNav(-1)">‹</button>
+    <div class="cal-month-title" id="calMonthTitle"></div>
+    <button class="cal-month-nav" type="button" onclick="calNav(1)">›</button>
   </div>
-  {% endfor %}
+  <div class="cal-dow-row">
+    <div class="cal-dow">Su</div><div class="cal-dow">Mo</div><div class="cal-dow">Tu</div>
+    <div class="cal-dow">We</div><div class="cal-dow">Th</div><div class="cal-dow">Fr</div>
+    <div class="cal-dow">Sa</div>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
 </div>
 
 {# ── RIGHT: Main content ── #}
@@ -487,28 +527,116 @@
 
   // Recommended posting hours (local time) — morning scroll, lunch, evening
   const REC_HOURS = [8, 12, 20];
+  const REC_LABELS = { 8: '8 AM', 12: '12 PM', 20: '8 PM' };
 
-  // Track which slots are already taken (key = "YYYY-MM-DD-HH")
+  // Track which slots are taken: key = "YYYY-MM-DD-HH"
   const _takenSlots = new Set();
   {% for day in calendar_days %}{% for p in day.pins %}_takenSlots.add("{{ day.key }}-{{ '%02d'|format(p.hour) }}");{% endfor %}{% endfor %}
 
-  // Returns the next available recommended datetime-local string
+  // ── Monthly calendar ──
+  let _calYear, _calMonth;
+  (function initCal() {
+    const now = new Date();
+    _calYear  = now.getFullYear();
+    _calMonth = now.getMonth();
+    renderCal();
+  })();
+
+  function calNav(dir) {
+    _calMonth += dir;
+    if (_calMonth > 11) { _calMonth = 0; _calYear++; }
+    if (_calMonth < 0)  { _calMonth = 11; _calYear--; }
+    renderCal();
+  }
+
+  function renderCal() {
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('calMonthTitle').textContent = `${monthNames[_calMonth]} ${_calYear}`;
+
+    const grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+
+    const today    = new Date();
+    const firstDay = new Date(_calYear, _calMonth, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(_calYear, _calMonth + 1, 0).getDate();
+
+    // Blank cells before the 1st
+    for (let i = 0; i < firstDay; i++) {
+      const blank = document.createElement('div');
+      blank.className = 'cal-cell empty';
+      grid.appendChild(blank);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const y  = _calYear;
+      const mo = String(_calMonth + 1).padStart(2, '0');
+      const dd = String(d).padStart(2, '0');
+      const key = `${y}-${mo}-${dd}`;
+
+      const cellDate = new Date(_calYear, _calMonth, d);
+      const isToday  = (cellDate.toDateString() === today.toDateString());
+      const isPast   = cellDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+      const cell = document.createElement('div');
+      cell.className = 'cal-cell' + (isToday ? ' is-today' : '') + (isPast ? ' past' : '');
+      cell.id = `calcell-${key}`;
+
+      const numEl = document.createElement('div');
+      numEl.className = 'cal-cell-num';
+      numEl.textContent = d;
+      cell.appendChild(numEl);
+
+      const slotsEl = document.createElement('div');
+      slotsEl.className = 'cal-time-slots';
+      slotsEl.id = `calslots-${key}`;
+
+      for (const h of REC_HOURS) {
+        const slotKey = `${key}-${String(h).padStart(2,'0')}`;
+        const pill = document.createElement('div');
+        pill.className = 'cal-time-pill ' + (_takenSlots.has(slotKey) ? 'taken' : 'open');
+        pill.id = `calpill-${slotKey}`;
+        pill.textContent = REC_LABELS[h];
+        slotsEl.appendChild(pill);
+      }
+
+      cell.appendChild(slotsEl);
+      grid.appendChild(cell);
+    }
+  }
+
+  function _markSlotTaken(isoDateTimeLocal) {
+    if (!isoDateTimeLocal) return;
+    const dt = new Date(isoDateTimeLocal);
+    if (isNaN(dt)) return;
+    const y  = dt.getFullYear();
+    const mo = String(dt.getMonth()+1).padStart(2,'0');
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const hh = String(dt.getHours()).padStart(2,'0');
+    const slotKey = `${y}-${mo}-${dd}-${hh}`;
+    _takenSlots.add(slotKey);
+
+    // Strike through the pill in the calendar
+    const pill = document.getElementById(`calpill-${slotKey}`);
+    if (pill) {
+      pill.className = 'cal-time-pill new-taken';
+    }
+  }
+
+  // ── Slot picker helpers ──
   function _nextOpenSlot() {
     const start = document.getElementById('startDate').value;
     const base  = start ? new Date(start + 'T00:00:00') : new Date();
-    // Search up to 60 days out
-    for (let d = 0; d < 60; d++) {
+    for (let d = 0; d < 90; d++) {
       const day = new Date(base);
       day.setDate(base.getDate() + d);
-      const y = day.getFullYear();
+      const y  = day.getFullYear();
       const mo = String(day.getMonth()+1).padStart(2,'0');
       const dd = String(day.getDate()).padStart(2,'0');
       for (const h of REC_HOURS) {
         const slotKey = `${y}-${mo}-${dd}-${String(h).padStart(2,'0')}`;
         if (!_takenSlots.has(slotKey)) {
           _takenSlots.add(slotKey);
-          const hh = String(h).padStart(2,'0');
-          return `${y}-${mo}-${dd}T${hh}:00`;
+          return `${y}-${mo}-${dd}T${String(h).padStart(2,'0')}:00`;
         }
       }
     }
@@ -519,17 +647,19 @@
     const slot = _nextOpenSlot();
     if (!slot) return;
     const el = document.getElementById(`sched-dt-${idx}`);
-    if (el) el.value = slot;
+    if (el) {
+      el.value = slot;
+      _markSlotTaken(slot);
+    }
   }
 
   function autoFillAllSlots() {
-    const cards = document.querySelectorAll('.pin-card');
-    cards.forEach(card => {
+    document.querySelectorAll('.pin-card').forEach(card => {
       const idx = card.dataset.idx;
       const el  = document.getElementById(`sched-dt-${idx}`);
       if (el && !el.value) {
         const slot = _nextOpenSlot();
-        if (slot) el.value = slot;
+        if (slot) { el.value = slot; _markSlotTaken(slot); }
       }
     });
   }
@@ -831,15 +961,8 @@
         ? `✅ Done! <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
         : '✅ Scheduled!';
 
-      // Update the sidebar calendar live
+      // Update the sidebar calendar live (also marks slot as taken)
       addSidebarSlot(schedDt, title);
-
-      // Mark this slot as taken so "Use next slot" skips it
-      const _dt = new Date(schedDt);
-      if (!isNaN(_dt)) {
-        const _k = `${_dt.getFullYear()}-${String(_dt.getMonth()+1).padStart(2,'0')}-${String(_dt.getDate()).padStart(2,'0')}-${String(_dt.getHours()).padStart(2,'0')}`;
-        _takenSlots.add(_k);
-      }
 
     } catch(err) {
       btn.disabled    = false;
@@ -1129,75 +1252,25 @@ function updateCharCount(idx, field, max) {
     }
   }
 
-  // ── Sidebar: add a new slot live when a pin gets scheduled ──
+  // ── Mark a slot as taken in the calendar when a pin is scheduled ──
   function addSidebarSlot(isoDateTimeLocal, titleText) {
-    if (!isoDateTimeLocal) return;
-    const dt = new Date(isoDateTimeLocal);
-    if (isNaN(dt)) return;
-
-    const year  = dt.getFullYear();
-    const month = String(dt.getMonth() + 1).padStart(2, '0');
-    const day   = String(dt.getDate()).padStart(2, '0');
-    const key   = `${year}-${month}-${day}`;
-
-    let slotsEl = document.getElementById(`calslots-${key}`);
-
-    // If day not in sidebar yet, create it
-    if (!slotsEl) {
-      const sidebar = document.getElementById('scheduleSidebar');
-      const today = new Date();
-      const isToday = (dt.toDateString() === today.toDateString());
-      const dayLabel = dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-      const dayEl = document.createElement('div');
-      dayEl.className = 'cal-day';
-      dayEl.id = `calday-${key}`;
-      dayEl.innerHTML = `
-        <div class="cal-day-label ${isToday ? 'today' : ''}">
-          <span>${dayLabel}</span>
-          <span style="font-size:10px;font-weight:700;color:${isToday ? 'var(--red)' : 'var(--gray-400)'};">0📌</span>
-        </div>
-        <div class="cal-day-slots" id="calslots-${key}"></div>
-      `;
-
-      // Insert in date order
-      const days = sidebar.querySelectorAll('.cal-day');
-      let inserted = false;
-      for (const existing of days) {
-        if (existing.id > `calday-${key}`) {
-          sidebar.insertBefore(dayEl, existing);
-          inserted = true;
-          break;
-        }
+    _markSlotTaken(isoDateTimeLocal);
+    // Navigate calendar to the scheduled month so it's visible
+    if (isoDateTimeLocal) {
+      const dt = new Date(isoDateTimeLocal);
+      if (!isNaN(dt)) {
+        _calYear  = dt.getFullYear();
+        _calMonth = dt.getMonth();
+        renderCal();
+        // Scroll cell into view
+        setTimeout(() => {
+          const y  = dt.getFullYear();
+          const mo = String(dt.getMonth()+1).padStart(2,'0');
+          const dd = String(dt.getDate()).padStart(2,'0');
+          document.getElementById(`calcell-${y}-${mo}-${dd}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
       }
-      if (!inserted) sidebar.appendChild(dayEl);
-      slotsEl = document.getElementById(`calslots-${key}`);
     }
-
-    // Remove "open" placeholder if present
-    const openEl = slotsEl.querySelector('.cal-open');
-    if (openEl) openEl.remove();
-
-    // Format time
-    const h = dt.getHours(), m = dt.getMinutes();
-    const ampm = h < 12 ? 'am' : 'pm';
-    const h12  = h % 12 || 12;
-    const timeStr = `${h12}:${String(m).padStart(2,'0')}${ampm}`;
-
-    const slot = document.createElement('div');
-    slot.className = 'cal-slot new-slot';
-    slot.innerHTML = `<span class="cal-slot-time">${timeStr}</span><span class="cal-slot-title" title="${titleText}">${titleText.slice(0,40)}</span>`;
-    slotsEl.appendChild(slot);
-
-    // Update pin count badge on this day
-    const badge = document.getElementById(`calday-${key}`)?.querySelector('.cal-day-label span:last-child');
-    if (badge) {
-      const existing = parseInt(badge.textContent) || 0;
-      badge.textContent = (existing + 1) + '📌';
-    }
-
-    // Scroll sidebar to show the newly scheduled day
-    document.getElementById(`calday-${key}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   // Add first pin automatically
