@@ -72,120 +72,132 @@ def search_products(
 
 def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
     """
-    Scrape Amazon search results page for a keyword.
-    Extracts product cards: name, ASIN, price, image URL.
+    Find Amazon products by searching Google (avoids Amazon's IP blocks on Cloud Run).
+    Extracts ASIN from result URLs, then fetches each product page for details.
     """
     from bs4 import BeautifulSoup
 
-    search_url = "https://www.amazon.com/s"
-    params = {
-        "k": keyword,
-        "i": "aps",
-        "ref": "nb_sb_noss",
+    # Search Google for Amazon product pages
+    google_url = "https://www.google.com/search"
+    params = {"q": f"site:amazon.com/dp {keyword}", "num": 20}
+    google_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/122.0.0.0 Safari/537.36"
+        ),
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     }
 
-    # Polite delay to avoid rate limiting
-    time.sleep(random.uniform(1.5, 3.0))
+    time.sleep(random.uniform(1.0, 2.5))
 
-    resp = requests.get(search_url, params=params, headers=AMAZON_HEADERS, timeout=20)
-    if not resp.ok:
-        logger.warning(f"Amazon search returned {resp.status_code} for '{keyword}'")
+    try:
+        resp = requests.get(google_url, params=params, headers=google_headers, timeout=20)
+    except Exception as e:
+        logger.warning(f"Google search failed for '{keyword}': {e}")
         return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    results = []
-    # Amazon search result cards
-    cards = soup.select('[data-component-type="s-search-result"]')
+    # Extract ASINs from Google result URLs
+    asins_seen = set()
+    asins = []
+    for a in soup.select("a[href]"):
+        href = a.get("href", "")
+        m = re.search(r"amazon\.com/(?:[^/]+/)?dp/([A-Z0-9]{10})", href)
+        if m:
+            asin = m.group(1)
+            if asin not in asins_seen:
+                asins_seen.add(asin)
+                asins.append(asin)
+        if len(asins) >= max_results * 3:
+            break
 
-    for card in cards:
+    if not asins:
+        logger.warning(f"No Amazon ASINs found via Google for '{keyword}'")
+        return []
+
+    # Fetch each product page for name, price, image
+    results = []
+    for asin in asins:
         if len(results) >= max_results:
             break
         try:
-            # ASIN
-            asin = card.get("data-asin", "").strip()
-            if not asin or len(asin) != 10:
-                continue
-
-            # Product name
-            name_tag = card.select_one("h2 a span") or card.select_one(".a-size-medium") or card.select_one(".a-size-base-plus")
-            name = name_tag.get_text(strip=True) if name_tag else ""
-            if not name or len(name) < 5:
-                continue
-
-            # Skip sponsored results if name looks generic
-            if any(w in name.lower() for w in ["sponsored", "advertisement"]):
-                continue
-
-            # Price
-            price = ""
-            price_tag = card.select_one(".a-price .a-offscreen") or card.select_one(".a-price-whole")
-            if price_tag:
-                price = price_tag.get_text(strip=True).replace("$", "").strip()
-                # Clean "14.9914.99" doubled prices
-                if price:
-                    try:
-                        price = str(round(float(re.search(r"[\d.]+", price).group()), 2))
-                    except Exception:
-                        pass
-
-            # Only keep products $15+ — under $15 beauty commission not worth promoting
-            try:
-                if not price or float(price) < 15:
-                    continue
-            except Exception:
-                continue  # skip if price unparseable
-
-            # Product image
-            image_url = ""
-            img_tag = card.select_one("img.s-image") or card.select_one(".s-product-image-container img")
-            if img_tag:
-                image_url = img_tag.get("src", "") or img_tag.get("data-src", "")
-
-            # Rating — prefer higher rated products
-            rating = 0.0
-            rating_tag = card.select_one(".a-icon-star-small .a-icon-alt") or card.select_one("[aria-label*='out of 5']")
-            if rating_tag:
-                try:
-                    rating = float(re.search(r"[\d.]+", rating_tag.get_text() or rating_tag.get("aria-label", "0")).group())
-                except Exception:
-                    pass
-
-            # Review count — skip products with very few reviews
-            reviews = 0
-            review_tag = card.select_one(".a-size-base.s-underline-text")
-            if review_tag:
-                try:
-                    reviews = int(re.sub(r"[^\d]", "", review_tag.get_text()))
-                except Exception:
-                    pass
-
-            # Skip products with fewer than 50 reviews (too new/unproven)
-            if reviews > 0 and reviews < 50:
-                continue
-
-            results.append({
-                "name": name[:200],
-                "asin": asin,
-                "amazon_url": f"https://www.amazon.com/dp/{asin}",
-                "image_url": image_url,
-                "price": price,
-                "rating": rating,
-                "reviews": reviews,
-            })
-
+            product = _fetch_amazon_product(asin)
+            if product:
+                results.append(product)
+            time.sleep(random.uniform(1.0, 2.0))
         except Exception as e:
-            logger.debug(f"Error parsing Amazon card: {e}")
+            logger.debug(f"Failed to fetch ASIN {asin}: {e}")
             continue
 
-    # Sort by rating × log(reviews) — proven popular products first
-    import math
-    results.sort(
-        key=lambda r: (r.get("rating", 0) * math.log(max(r.get("reviews", 1), 1))),
-        reverse=True,
-    )
-
     return results[:max_results]
+
+
+def _fetch_amazon_product(asin: str) -> Optional[dict]:
+    """Fetch a single Amazon product page and extract name, price, image."""
+    from bs4 import BeautifulSoup
+
+    url = f"https://www.amazon.com/dp/{asin}"
+    try:
+        resp = requests.get(url, headers=AMAZON_HEADERS, timeout=20)
+        if not resp.ok:
+            return None
+    except Exception:
+        return None
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+
+    # Name
+    name_tag = soup.select_one("#productTitle") or soup.select_one("#title")
+    name = name_tag.get_text(strip=True) if name_tag else ""
+    if not name or len(name) < 5:
+        return None
+
+    # Price — try multiple selectors
+    price = ""
+    for sel in [
+        ".a-price .a-offscreen",
+        "#priceblock_ourprice",
+        "#priceblock_dealprice",
+        "#price_inside_buybox",
+        ".a-price-whole",
+    ]:
+        p = soup.select_one(sel)
+        if p:
+            raw = p.get_text(strip=True).replace("$", "").replace(",", "").strip()
+            try:
+                price = str(round(float(re.search(r"[\d.]+", raw).group()), 2))
+                break
+            except Exception:
+                continue
+
+    # Min price floor: $30 (strategy is 10% luxury beauty, min $3/sale)
+    try:
+        if not price or float(price) < 30:
+            return None
+    except Exception:
+        return None
+
+    # Image
+    image_url = ""
+    for sel in ["#landingImage", "#imgBlkFront", "#main-image"]:
+        img = soup.select_one(sel)
+        if img:
+            image_url = img.get("src") or img.get("data-src") or ""
+            if image_url:
+                break
+
+    return {
+        "name": name[:200],
+        "asin": asin,
+        "amazon_url": f"https://www.amazon.com/dp/{asin}",
+        "image_url": image_url,
+        "price": price,
+        "rating": 0.0,
+        "reviews": 0,
+    }
 
 
 # Luxury beauty searches that reliably return 10% commission products
