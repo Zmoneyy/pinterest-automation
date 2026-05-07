@@ -27,6 +27,7 @@ class Config:
         }.get(niche, cls.BENABLE_URL_BEAUTY)
 
     AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG", "")  # e.g. auragirlcre-20
+    SERPAPI_KEY          = os.environ.get("SERPAPI_KEY", "")
 
     # AI APIs
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")

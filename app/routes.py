@@ -718,54 +718,147 @@ _discovery_state = {
 
 
 def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
-    """Load curated luxury beauty catalogue into ProductCandidates."""
+    """Search Amazon for luxury beauty products via SerpAPI and queue them as ProductCandidates."""
     import threading
+
+    # Luxury beauty brand searches — 10% commission, variety of price tiers
+    LUXURY_SEARCHES = [
+        ("charlotte tilbury amazon",         "Charlotte Tilbury"),
+        ("tatcha skincare amazon",            "Tatcha"),
+        ("drunk elephant serum amazon",       "Drunk Elephant"),
+        ("rare beauty selena gomez amazon",   "Rare Beauty"),
+        ("merit beauty amazon",               "Merit Beauty"),
+        ("nars cosmetics amazon",             "NARS"),
+        ("dyson airwrap amazon",              "Dyson"),
+        ("sunday riley amazon",               "Sunday Riley"),
+        ("peter thomas roth amazon",          "Peter Thomas Roth"),
+        ("ilia beauty amazon",                "ILIA Beauty"),
+        ("kate somerville amazon",            "Kate Somerville"),
+        ("pat mcgrath amazon",                "Pat McGrath"),
+        ("shiseido amazon",                   "Shiseido"),
+        ("estee lauder advanced night repair","Estée Lauder"),
+        ("lancôme genifique amazon",          "Lancôme"),
+        ("ysl beauty amazon",                 "YSL Beauty"),
+        ("tom ford beauty amazon",            "Tom Ford Beauty"),
+        ("la mer moisturizer amazon",         "La Mer"),
+        ("sk-ii facial treatment amazon",     "SK-II"),
+        ("augustinus bader amazon",           "Augustinus Bader"),
+        ("la prairie amazon",                 "La Prairie"),
+        ("hourglass cosmetics amazon",        "Hourglass"),
+        ("sisley paris amazon",               "Sisley"),
+        ("westman atelier amazon",            "Westman Atelier"),
+        ("perricone md amazon",               "Perricone MD"),
+        ("tata harper amazon",                "Tata Harper"),
+    ]
 
     def _worker():
         global _discovery_state
-        from app.amazon_api import get_curated_products
-        catalogue = get_curated_products()
+        import random, time
+        from app.amazon_api import _get_serpapi_key, search_products, _build_affiliate_url, _guess_category
+
+        serpapi_key = _get_serpapi_key()
+
+        # Fall back to curated catalogue if no SerpAPI key
+        if not serpapi_key:
+            from app.amazon_api import get_curated_products
+            catalogue = get_curated_products()
+            _discovery_state["running"]    = True
+            _discovery_state["added"]      = 0
+            _discovery_state["done"]       = 0
+            _discovery_state["total"]      = len(catalogue)
+            _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
+            _discovery_state["current"]    = "⚠️ No SerpAPI key — loading curated list…"
+
+            with app.app_context():
+                from app.models import ProductCandidate, Product
+                for i, p in enumerate(catalogue):
+                    asin = p.get("asin", "")
+                    _discovery_state["current"] = f"💎 {p.get('trend_keyword', '')}…"
+                    _discovery_state["done"]    = i + 1
+                    if asin:
+                        if ProductCandidate.query.filter_by(asin=asin).first():
+                            continue
+                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
+                            continue
+                    else:
+                        if ProductCandidate.query.filter_by(name=p["name"]).first():
+                            continue
+                    db.session.add(ProductCandidate(
+                        name=p["name"], asin=asin, amazon_url=p["amazon_url"],
+                        category="luxury_beauty", source_category="Luxury Beauty (10%)",
+                        image_url=p.get("image_url"), price=p.get("price"),
+                        trend_keyword=p.get("trend_keyword", ""),
+                        status=ProductCandidate.STATUS_PENDING,
+                    ))
+                    _discovery_state["added"] += 1
+                db.session.commit()
+            _discovery_state["running"] = False
+            _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added (curated fallback)"
+            return
+
+        # SerpAPI path — shuffle searches, run them all
+        searches = list(LUXURY_SEARCHES)
+        if manual_keyword:
+            searches = [(manual_keyword, manual_keyword)] + searches
+
+        random.shuffle(searches)
         _discovery_state["running"]    = True
         _discovery_state["added"]      = 0
         _discovery_state["done"]       = 0
-        _discovery_state["total"]      = len(catalogue)
+        _discovery_state["total"]      = len(searches)
         _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
 
         with app.app_context():
             from app.models import ProductCandidate, Product
-            for i, p in enumerate(catalogue):
-                asin = p.get("asin", "")
-                _discovery_state["current"] = f"💎 Loading {p.get('trend_keyword', '')}…"
+            from config import Config
+            associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
+
+            for i, (query, brand) in enumerate(searches):
+                _discovery_state["current"] = f"🔍 Searching {brand}…"
                 _discovery_state["done"]    = i + 1
 
-                # Skip if already in queue or library
-                if asin:
-                    if ProductCandidate.query.filter_by(asin=asin).first():
-                        continue
-                    if Product.query.filter(Product.amazon_url.contains(asin)).first():
-                        continue
-                else:
-                    if ProductCandidate.query.filter_by(name=p["name"]).first():
-                        continue
+                try:
+                    products = search_products(query, category="luxury_beauty", max_results=5)
+                except Exception as e:
+                    logger.error(f"SerpAPI search error for '{query}': {e}")
+                    products = []
 
-                db.session.add(ProductCandidate(
-                    name=p["name"],
-                    asin=asin,
-                    amazon_url=p["amazon_url"],
-                    category="luxury_beauty",
-                    source_category="Luxury Beauty (10%)",
-                    image_url=p.get("image_url"),
-                    price=p.get("price"),
-                    trend_keyword=p.get("trend_keyword", ""),
-                    status=ProductCandidate.STATUS_PENDING,
-                ))
-                _discovery_state["added"] += 1
+                for p in products:
+                    asin = p.get("asin", "")
+                    name = p.get("name", "")
+                    if not name:
+                        continue
+                    if asin:
+                        if ProductCandidate.query.filter_by(asin=asin).first():
+                            continue
+                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
+                            continue
+                    else:
+                        if ProductCandidate.query.filter_by(name=name).first():
+                            continue
 
-            db.session.commit()
+                    amazon_url = p.get("amazon_url") or (
+                        _build_affiliate_url(asin, associate_tag) if asin else ""
+                    )
+                    db.session.add(ProductCandidate(
+                        name=name,
+                        asin=asin,
+                        amazon_url=amazon_url,
+                        category="luxury_beauty",
+                        source_category="Luxury Beauty (10%)",
+                        image_url=p.get("image_url"),
+                        price=p.get("price"),
+                        trend_keyword=brand,
+                        status=ProductCandidate.STATUS_PENDING,
+                    ))
+                    _discovery_state["added"] += 1
+
+                db.session.commit()
+                time.sleep(random.uniform(0.5, 1.5))  # be polite to SerpAPI
 
         _discovery_state["running"] = False
-        _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added"
-        logger.info(f"Discovery complete: {_discovery_state['added']} curated products loaded")
+        _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} new products found"
+        logger.info(f"Discovery complete: {_discovery_state['added']} products via SerpAPI")
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
@@ -935,6 +1028,7 @@ def setup():
         pass
 
     stored_cookie = Setting.get("pinterest_session_cookie", "")
+    stored_serpapi_key = Setting.get("serpapi_key", "")
 
     from config import Config
     config_board_ids = set(Config.PINTEREST_BOARDS.values())
@@ -948,6 +1042,7 @@ def setup():
         latest_trend=latest_trend,
         cookie_status=cookie_status,
         stored_cookie=stored_cookie,
+        stored_serpapi_key=stored_serpapi_key,
         config_board_ids=config_board_ids,
     )
 
@@ -961,6 +1056,16 @@ def save_pinterest_cookie():
     if cookie:
         Setting.set("pinterest_session_cookie", cookie)
         logger.info("Pinterest session cookie updated.")
+    return redirect(url_for("main.setup"))
+
+
+@bp.route("/setup/serpapi-key", methods=["POST"])
+@login_required
+def save_serpapi_key():
+    key = request.form.get("serpapi_key", "").strip()
+    if key:
+        Setting.set("serpapi_key", key)
+        logger.info("SerpAPI key saved.")
     return redirect(url_for("main.setup"))
 
 

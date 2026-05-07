@@ -437,6 +437,46 @@
   <div id="refresh-result" style="margin-top:10px;font-size:14px;"></div>
 </div>
 
+{# ── SerpAPI key ── #}
+<div class="setup-section">
+  <h2>🔍 SerpAPI Key (Amazon Product Discovery)</h2>
+  <p style="font-size:14px;color:var(--gray-600);margin-bottom:12px;">
+    Used to search Amazon for luxury beauty products via SerpAPI's Amazon Search API.
+    Free plan: 250 searches/month. Get your key at
+    <a href="https://serpapi.com" target="_blank">serpapi.com</a> → API Key tab.
+  </p>
+
+  {% set stored_serpapi_key = stored_serpapi_key or '' %}
+  {% if stored_serpapi_key %}
+    <div class="check-item ok" style="margin-bottom:12px;">
+      <div class="check-icon" style="background:#d1fae5;color:#065f46;">✓</div>
+      <div><strong>SerpAPI key saved</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Key is stored — Amazon product discovery is active.</div>
+      </div>
+    </div>
+  {% else %}
+    <div class="check-item bad" style="margin-bottom:12px;">
+      <div class="check-icon" style="background:#fef3c7;color:#92400e;">!</div>
+      <div><strong>No SerpAPI key</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Paste your key below to enable Amazon product discovery.</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('main.save_serpapi_key') }}">
+    <input
+      type="text"
+      name="serpapi_key"
+      placeholder="Paste your SerpAPI key here (e.g. abc123...)"
+      value="{{ stored_serpapi_key }}"
+      style="width:100%;font-family:monospace;font-size:13px;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;"
+    />
+    <div style="margin-top:10px;">
+      <button type="submit" class="btn btn-red">Save SerpAPI Key</button>
+    </div>
+  </form>
+</div>
+
 {# ── Manual controls ── #}
 <div class="setup-section">
   <h2>🔧 Manual Controls</h2>

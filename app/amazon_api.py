@@ -49,34 +49,91 @@ def search_products(
     max_results: int = 5,
 ) -> list[dict]:
     """
-    Search Amazon for products matching a keyword.
+    Search Amazon for products matching a keyword via SerpAPI.
+    Falls back to empty list if SerpAPI key not configured.
     Returns list of {name, asin, amazon_url, image_url, price, category}.
     """
     from config import Config
 
     associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
+    # Try SerpAPI first (works from Cloud Run — no IP blocking)
+    serpapi_key = _get_serpapi_key()
+    if serpapi_key:
+        try:
+            results = _search_via_serpapi(keyword, serpapi_key, max_results=max_results)
+            for r in results:
+                if r.get("asin"):
+                    r["amazon_url"] = _build_affiliate_url(r["asin"], associate_tag)
+                r["category"] = category or _guess_category(r.get("name", ""))
+            logger.info(f"SerpAPI search '{keyword}': {len(results)} products found")
+            return results
+        except Exception as e:
+            logger.error(f"SerpAPI search failed for '{keyword}': {e}")
+
+    return []
+
+
+def _get_serpapi_key() -> str:
+    """Get SerpAPI key from DB setting or environment config."""
     try:
-        results = _scrape_amazon_search(keyword, max_results=max_results)
-        # Tag each with affiliate URL and category
-        for r in results:
-            if r.get("asin"):
-                r["amazon_url"] = _build_affiliate_url(r["asin"], associate_tag)
-            r["category"] = category or _guess_category(r.get("name", ""))
-        logger.info(f"Amazon search '{keyword}': {len(results)} products found")
-        return results
-    except Exception as e:
-        logger.error(f"Amazon search failed for '{keyword}': {e}")
-        return []
+        from app.models import Setting
+        key = Setting.get("serpapi_key", "")
+        if key:
+            return key
+    except Exception:
+        pass
+    from config import Config
+    return Config.SERPAPI_KEY or ""
+
+
+def _search_via_serpapi(keyword: str, api_key: str, max_results: int = 5) -> list[dict]:
+    """Search Amazon products using SerpAPI's Amazon Search engine."""
+    params = {
+        "engine": "amazon",
+        "q": keyword,
+        "api_key": api_key,
+        "amazon_domain": "amazon.com",
+    }
+    resp = requests.get("https://serpapi.com/search", params=params, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+
+    products = []
+    organic = data.get("organic_results", [])
+    for item in organic[:max_results]:
+        asin = item.get("asin", "")
+        name = item.get("title", "")
+        if not asin or not name:
+            continue
+        # Price — SerpAPI returns price as string like "$38.00" or float
+        price_raw = item.get("price", {})
+        if isinstance(price_raw, dict):
+            price = str(price_raw.get("value", "0"))
+        elif isinstance(price_raw, (int, float)):
+            price = str(price_raw)
+        else:
+            price = str(price_raw).replace("$", "").strip()
+
+        image_url = item.get("thumbnail", "") or item.get("image", "")
+
+        products.append({
+            "name": name,
+            "asin": asin,
+            "image_url": image_url,
+            "price": price,
+        })
+
+    return products
 
 
 def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
-    """Stub — replaced by curated catalogue. Returns empty so caller falls back."""
+    """Stub — Amazon blocks Cloud Run IPs. Use SerpAPI instead."""
     return []
 
 
 def _fetch_amazon_product(asin: str) -> Optional[dict]:
-    """Stub — replaced by curated catalogue."""
+    """Stub — Amazon blocks Cloud Run IPs. Use SerpAPI instead."""
     return None
 
 
