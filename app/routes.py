@@ -605,73 +605,144 @@ def product_queue():
     return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected, commission=COMMISSION)
 
 
+# ── Background discovery state ──
+_discovery_state = {
+    "running": False,
+    "added": 0,
+    "done": 0,
+    "total": 0,
+    "current": "",
+    "started_at": None,
+}
+
+
+def _run_discovery_background(app, trend_dicts, manual_keyword=None):
+    """Run full Amazon discovery in a background thread — no timeout limits."""
+    import threading
+    from app.amazon_api import search_products, LUXURY_BEAUTY_SEARCHES
+    import math, time, random
+
+    def _worker():
+        global _discovery_state
+        _discovery_state["running"]    = True
+        _discovery_state["added"]      = 0
+        _discovery_state["done"]       = 0
+        _discovery_state["total"]      = len(LUXURY_BEAUTY_SEARCHES) + len(trend_dicts)
+        _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
+
+        with app.app_context():
+            seen_asins = set()
+
+            def _save(products, trend_keyword, source_category):
+                from app.models import ProductCandidate, Product
+                count = 0
+                for p in products:
+                    asin = p.get("asin", "")
+                    if asin and asin in seen_asins:
+                        continue
+                    if asin:
+                        seen_asins.add(asin)
+                        if ProductCandidate.query.filter_by(asin=asin).first():
+                            continue
+                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
+                            continue
+                    else:
+                        if ProductCandidate.query.filter_by(name=p["name"]).first():
+                            continue
+                        if Product.query.filter_by(name=p["name"]).first():
+                            continue
+                    db.session.add(ProductCandidate(
+                        name=p["name"],
+                        asin=asin,
+                        amazon_url=p["amazon_url"],
+                        category=p.get("category", "general"),
+                        source_category=source_category,
+                        image_url=p.get("image_url"),
+                        price=p.get("price"),
+                        trend_keyword=trend_keyword,
+                        status=ProductCandidate.STATUS_PENDING,
+                    ))
+                    count += 1
+                if count:
+                    db.session.commit()
+                    _discovery_state["added"] += count
+                return count
+
+            # ── Step 1: ALL luxury beauty brands (10% commission) ──
+            for query, brand in LUXURY_BEAUTY_SEARCHES:
+                _discovery_state["current"] = f"💎 Searching {brand}…"
+                try:
+                    products = search_products(query, category="luxury_beauty", max_results=5)
+                    _save(products, brand, "Luxury Beauty (10%)")
+                except Exception as e:
+                    logger.warning(f"Luxury search failed for {brand}: {e}")
+                _discovery_state["done"] += 1
+                time.sleep(random.uniform(2, 4))
+
+            # ── Step 2: Every keyword from every TrendEntry ──
+            for td in trend_dicts:
+                kw  = td.get("keyword", "")
+                src = td.get("source_category", "")
+                cat = td.get("category", "beauty")
+                if not kw:
+                    _discovery_state["done"] += 1
+                    continue
+                _discovery_state["current"] = f"🔍 {src}: {kw}…"
+                try:
+                    products = search_products(kw, category=cat, max_results=5)
+                    _save(products, kw, src)
+                except Exception as e:
+                    logger.warning(f"Search failed for {kw}: {e}")
+                _discovery_state["done"] += 1
+                time.sleep(random.uniform(2, 4))
+
+        _discovery_state["running"] = False
+        _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added"
+        logger.info(f"Background discovery complete: {_discovery_state['added']} added")
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
 @bp.route("/products/discover", methods=["POST"])
 @login_required
 def discover_products():
-    """Search Amazon for products based on TrendEntry categories + top TrendCache keywords."""
-    from app.amazon_api import discover_products_for_trends
+    """Kick off background Amazon discovery using ALL TrendEntry keywords."""
     from app.models import TrendEntry
 
-    manual_keyword = request.form.get("keyword", "").strip()
+    if _discovery_state["running"]:
+        return redirect(url_for("main.product_queue") + "?discovering=1")
 
-    # Build search list: one entry per TrendEntry category using its top search queries
+    manual_keyword = request.form.get("keyword", "").strip()
     trend_dicts = []
 
     if manual_keyword:
         trend_dicts = [{"keyword": manual_keyword, "category": "general", "source_category": "Manual Search"}]
     else:
-        # Use TrendEntry categories first — each gets its top search queries as keywords
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
         for entry in entries:
-            sqs = entry.sq_list()[:3]   # top 3 search queries per category
-            tps = entry.tp_list()[:2]   # top 2 product names as search terms
-            for kw in sqs + tps:
+            # Use ALL search queries + ALL top products — no limits
+            for kw in entry.sq_list() + entry.tp_list():
                 trend_dicts.append({
                     "keyword": kw,
                     "category": entry.category.lower().replace(" ", "_"),
-                    "source_category": entry.category,   # human-readable label
+                    "source_category": entry.category,
                 })
-
-        # Fallback: if no TrendEntries, use TrendCache
         if not trend_dicts:
-            top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(5).all()
+            top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(20).all()
             if not top_trends:
                 return redirect(url_for("main.product_queue") + "?error=no_trends")
             trend_dicts = [{"keyword": t.keyword, "category": t.category, "source_category": t.category} for t in top_trends]
 
-    candidates = discover_products_for_trends(trend_dicts, per_trend=3)
+    from flask import current_app
+    _run_discovery_background(current_app._get_current_object(), trend_dicts, manual_keyword)
+    return redirect(url_for("main.product_queue") + "?discovering=1")
 
-    added = 0
-    for c in candidates:
-        if c.get("asin"):
-            already = ProductCandidate.query.filter_by(asin=c["asin"]).first()
-            if not already:
-                already = Product.query.filter(Product.amazon_url.contains(c["asin"])).first()
-            if already:
-                continue
-        else:
-            already = ProductCandidate.query.filter_by(name=c["name"]).first()
-            if not already:
-                already = Product.query.filter_by(name=c["name"]).first()
-            if already:
-                continue
 
-        db.session.add(ProductCandidate(
-            name=c["name"],
-            asin=c.get("asin"),
-            amazon_url=c["amazon_url"],
-            category=c.get("category", "general"),
-            source_category=c.get("source_category", ""),
-            image_url=c.get("image_url"),
-            price=c.get("price"),
-            trend_keyword=c.get("trend_keyword"),
-            status=ProductCandidate.STATUS_PENDING,
-        ))
-        added += 1
-
-    db.session.commit()
-    logger.info(f"Product discovery: added {added} new candidates to approval queue")
-    return redirect(url_for("main.product_queue") + f"?added={added}")
+@bp.route("/products/discover/status")
+@login_required
+def discover_status():
+    return jsonify(_discovery_state)
 
 
 @bp.route("/products/queue/<int:candidate_id>/approve", methods=["POST"])

@@ -171,8 +171,39 @@
   </div>
 </div>
 
+{% set discovering = request.args.get('discovering') %}
 {% set added = request.args.get('added') %}
 {% set error = request.args.get('error') %}
+
+{% if discovering %}
+<div id="discovery-banner" style="
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
+  color:#fff;border-radius:12px;padding:18px 22px;margin-bottom:20px;
+  display:flex;flex-direction:column;gap:10px;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span id="disc-spinner" style="font-size:22px;animation:spin 1.2s linear infinite;display:inline-block;">🔍</span>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:2px;">Discovering products in background…</div>
+      <div id="disc-current" style="font-size:13px;color:#a0aec0;">Starting up…</div>
+    </div>
+    <div style="text-align:right;white-space:nowrap;">
+      <div style="font-size:22px;font-weight:800;color:#68d391;" id="disc-added">0</div>
+      <div style="font-size:11px;color:#a0aec0;">products added</div>
+    </div>
+  </div>
+  <!-- Progress bar -->
+  <div style="background:rgba(255,255,255,0.1);border-radius:99px;height:6px;overflow:hidden;">
+    <div id="disc-bar" style="height:100%;background:linear-gradient(90deg,#805ad5,#e53e3e);border-radius:99px;width:0%;transition:width 0.5s;"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;">
+    <span id="disc-progress-text">0 / ? searches</span>
+    <span id="disc-eta"></span>
+  </div>
+</div>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+{% endif %}
 
 {% if added %}
   <div class="alert alert-success" style="margin-bottom:16px;">
@@ -410,5 +441,57 @@
 
   // Default: sort by commission on load
   window.addEventListener('DOMContentLoaded', () => sortQueue('commission'));
+
+  // Live discovery progress polling
+  (function() {
+    const banner = document.getElementById('discovery-banner');
+    if (!banner) return;  // only active when ?discovering=1
+
+    let pollTimer = null;
+    let lastAdded = 0;
+
+    function poll() {
+      fetch('/products/discover/status')
+        .then(r => r.json())
+        .then(data => {
+          const done    = data.done    || 0;
+          const total   = data.total   || 1;
+          const added   = data.added   || 0;
+          const current = data.current || '';
+          const running = data.running;
+
+          document.getElementById('disc-current').textContent = current;
+          document.getElementById('disc-added').textContent   = added;
+          document.getElementById('disc-progress-text').textContent = `${done} / ${total} searches`;
+          document.getElementById('disc-bar').style.width = Math.min(100, Math.round(done / total * 100)) + '%';
+
+          // ETA estimate
+          if (running && data.started_at && done > 0) {
+            const elapsed = (Date.now() - new Date(data.started_at).getTime()) / 1000;
+            const secPerSearch = elapsed / done;
+            const remaining = Math.round((total - done) * secPerSearch);
+            const mins = Math.floor(remaining / 60), secs = remaining % 60;
+            document.getElementById('disc-eta').textContent = mins > 0
+              ? `~${mins}m ${secs}s left` : `~${secs}s left`;
+          }
+
+          if (!running) {
+            // Done — swap spinner to checkmark, then refresh page
+            clearInterval(pollTimer);
+            document.getElementById('disc-spinner').style.animation = 'none';
+            document.getElementById('disc-spinner').textContent = '✅';
+            document.getElementById('disc-current').textContent = current;
+            document.getElementById('disc-bar').style.width = '100%';
+            document.getElementById('disc-bar').style.background = '#48bb78';
+            document.getElementById('disc-eta').textContent = 'Refreshing…';
+            setTimeout(() => { window.location = '/products/queue'; }, 2000);
+          }
+        })
+        .catch(() => {});  // silently ignore network errors mid-poll
+    }
+
+    poll();  // immediate first check
+    pollTimer = setInterval(poll, 3000);
+  })();
 </script>
 {% endblock %}
