@@ -1028,7 +1028,6 @@ def setup():
         pass
 
     stored_cookie = Setting.get("pinterest_session_cookie", "")
-    stored_serpapi_key = Setting.get("serpapi_key", "")
 
     from config import Config
     config_board_ids = set(Config.PINTEREST_BOARDS.values())
@@ -1042,7 +1041,6 @@ def setup():
         latest_trend=latest_trend,
         cookie_status=cookie_status,
         stored_cookie=stored_cookie,
-        stored_serpapi_key=stored_serpapi_key,
         config_board_ids=config_board_ids,
     )
 
@@ -1058,15 +1056,6 @@ def save_pinterest_cookie():
         logger.info("Pinterest session cookie updated.")
     return redirect(url_for("main.setup"))
 
-
-@bp.route("/setup/serpapi-key", methods=["POST"])
-@login_required
-def save_serpapi_key():
-    key = request.form.get("serpapi_key", "").strip()
-    if key:
-        Setting.set("serpapi_key", key)
-        logger.info("SerpAPI key saved.")
-    return redirect(url_for("main.setup"))
 
 
 @bp.route("/api/shopping-trends")
