@@ -506,7 +506,10 @@ def products():
         trend_keywords = []
         trend_source = "none"
 
-    # Pending candidates: only luxury_beauty (10% commission focus)
+    # 10% commission focus: only show luxury_beauty in library
+    all_products = [p for p in all_products if (p.category or "").lower() == "luxury_beauty"]
+
+    # Pending candidates: only luxury_beauty
     pending_candidates = ProductCandidate.query.filter_by(
         status=ProductCandidate.STATUS_PENDING,
         category="luxury_beauty",
