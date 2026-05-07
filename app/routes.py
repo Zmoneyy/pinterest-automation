@@ -481,6 +481,7 @@ def _score_products_against_trends(products, trends):
 @bp.route("/products")
 @login_required
 def products():
+    from app.models import ProductCandidate
     all_products = Product.query.order_by(Product.added_at.desc()).all()
     trends = TrendCache.query.order_by(TrendCache.score.desc()).all()
 
@@ -505,13 +506,21 @@ def products():
         trend_keywords = []
         trend_source = "none"
 
+    # Also pass pending candidates so the Queue is merged into this page
+    pending_candidates = ProductCandidate.query.filter_by(
+        status=ProductCandidate.STATUS_PENDING
+    ).order_by(ProductCandidate.discovered_at.desc()).all()
+
     return render_template(
         "products.html",
         products=all_products,
+        pending_candidates=pending_candidates,
         categories=VALID_CATEGORIES,
         trend_keywords=trend_keywords,
         trend_source=trend_source,
         trend_count=len(trends),
+        discovering=_discovery_state["running"],
+        discovery_state=_discovery_state,
     )
 
 
@@ -579,30 +588,12 @@ def _price_float(price_str) -> float:
 @bp.route("/products/queue")
 @login_required
 def product_queue():
-    # Commission rates by category
-    COMMISSION = {"beauty": 0.10, "home_decor": 0.08, "fitness": 0.05, "general": 0.05}
-
-    def payout(c):
-        try:
-            price = float(re.sub(r"[^\d.]", "", c.price or "0") or 0)
-            rate = COMMISSION.get(c.category or "general", 0.05)
-            return price * rate
-        except Exception:
-            return 0.0
-
-    # Show ALL categories, sorted by estimated commission payout
-    pending_all = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_PENDING
-    ).all()
-    pending = sorted(pending_all, key=payout, reverse=True)
-
-    approved = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_APPROVED
-    ).order_by(ProductCandidate.discovered_at.desc()).limit(30).all()
-    rejected = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_REJECTED
-    ).order_by(ProductCandidate.discovered_at.desc()).limit(30).all()
-    return render_template("approval_queue.html", pending=pending, approved=approved, rejected=rejected, commission=COMMISSION)
+    # Queue is now merged into the Products page
+    qs = request.query_string.decode()
+    dest = url_for("main.products")
+    if qs:
+        dest += "?" + qs
+    return redirect(dest)
 
 
 # ── Background discovery state ──
@@ -711,7 +702,7 @@ def discover_products():
     from app.models import TrendEntry
 
     if _discovery_state["running"]:
-        return redirect(url_for("main.product_queue") + "?discovering=1")
+        return redirect(url_for("main.products") + "?discovering=1")
 
     manual_keyword = request.form.get("keyword", "").strip()
     trend_dicts = []
@@ -731,12 +722,12 @@ def discover_products():
         if not trend_dicts:
             top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(20).all()
             if not top_trends:
-                return redirect(url_for("main.product_queue") + "?error=no_trends")
+                return redirect(url_for("main.products") + "?error=no_trends")
             trend_dicts = [{"keyword": t.keyword, "category": t.category, "source_category": t.category} for t in top_trends]
 
     from flask import current_app
     _run_discovery_background(current_app._get_current_object(), trend_dicts, manual_keyword)
-    return redirect(url_for("main.product_queue") + "?discovering=1")
+    return redirect(url_for("main.products") + "?discovering=1")
 
 
 @bp.route("/products/discover/status")
@@ -763,7 +754,7 @@ def approve_candidate(candidate_id):
     db.session.add(product)
     candidate.status = ProductCandidate.STATUS_APPROVED
     db.session.commit()
-    return redirect(url_for("main.product_queue"))
+    return redirect(url_for("main.products"))
 
 
 @bp.route("/products/queue/<int:candidate_id>/reject", methods=["POST"])
@@ -772,7 +763,7 @@ def reject_candidate(candidate_id):
     candidate = ProductCandidate.query.get_or_404(candidate_id)
     candidate.status = ProductCandidate.STATUS_REJECTED
     db.session.commit()
-    return redirect(url_for("main.product_queue"))
+    return redirect(url_for("main.products"))
 
 
 @bp.route("/products/queue/<int:candidate_id>/undo", methods=["POST"])
@@ -786,7 +777,7 @@ def undo_candidate(candidate_id):
             db.session.delete(product)
     candidate.status = ProductCandidate.STATUS_PENDING
     db.session.commit()
-    return redirect(url_for("main.product_queue"))
+    return redirect(url_for("main.products"))
 
 
 @bp.route("/products/queue/approve-all", methods=["POST"])
@@ -807,7 +798,7 @@ def approve_all_candidates():
         db.session.add(product)
         candidate.status = ProductCandidate.STATUS_APPROVED
     db.session.commit()
-    return redirect(url_for("main.product_queue"))
+    return redirect(url_for("main.products"))
 
 
 # ── Setup wizard ──────────────────────────────────────────────────────────

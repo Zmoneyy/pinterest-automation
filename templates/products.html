@@ -114,17 +114,126 @@
 {% endblock %}
 
 {% block content %}
+{# ── Header with "Find Products" form ── #}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
   <h1 class="page-title" style="margin-bottom:0;">Products</h1>
-  <div style="display:flex;align-items:center;gap:10px;">
-    <span class="badge badge-gray">{{ products|length }} total · {{ products|selectattr('is_active')|list|length }} active</span>
-    <a href="{{ url_for('main.product_queue') }}" class="btn btn-red btn-sm">🔍 Discover &amp; Queue</a>
-  </div>
+  <form method="POST" action="{{ url_for('main.discover_products') }}" style="display:flex;gap:8px;align-items:center;">
+    <input type="text" name="keyword" placeholder="Search Amazon (optional keyword)…"
+      style="padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;width:220px;">
+    <button type="submit" class="btn btn-red">🔍 Find Products</button>
+  </form>
 </div>
 
 {% if request.args.get('error') == 'missing_fields' %}
   <div class="alert alert-error">Please fill in all required fields (name, Amazon URL, Benable URL).</div>
 {% endif %}
+
+{# ── Discovery progress banner ── #}
+{% if discovering or request.args.get('discovering') %}
+<div id="discovery-banner" style="
+  background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%);
+  color:#fff;border-radius:12px;padding:18px 22px;margin-bottom:20px;
+  display:flex;flex-direction:column;gap:10px;">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+    <span id="disc-spinner" style="font-size:22px;animation:spin 1.2s linear infinite;display:inline-block;">🔍</span>
+    <div style="flex:1;min-width:200px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:2px;">Searching Amazon for products…</div>
+      <div id="disc-current" style="font-size:13px;color:#a0aec0;">Starting up…</div>
+    </div>
+    <div style="text-align:right;white-space:nowrap;">
+      <div style="font-size:22px;font-weight:800;color:#68d391;" id="disc-added">{{ discovery_state.added if discovery_state else 0 }}</div>
+      <div style="font-size:11px;color:#a0aec0;">products found</div>
+    </div>
+  </div>
+  <div style="background:rgba(255,255,255,0.1);border-radius:99px;height:6px;overflow:hidden;">
+    <div id="disc-bar" style="height:100%;background:linear-gradient(90deg,#805ad5,#e53e3e);border-radius:99px;width:0%;transition:width 0.5s;"></div>
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:11px;color:#718096;">
+    <span id="disc-progress-text">Searching…</span>
+    <span id="disc-eta"></span>
+  </div>
+</div>
+<style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+{% endif %}
+
+{# ── Pending approval section ── #}
+{% if pending_candidates %}
+<div style="margin-bottom:32px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+    <h2 style="font-size:18px;font-weight:700;margin:0;color:var(--gray-800);">⏳ Waiting for your approval</h2>
+    <span style="background:#fde8e8;color:#b91c1c;font-size:12px;font-weight:700;padding:2px 10px;border-radius:20px;">{{ pending_candidates|length }}</span>
+    <span style="font-size:12px;color:var(--gray-400);margin-left:4px;">— hit Approve to add to your library, Reject to discard</span>
+  </div>
+
+  {# Filter tabs for pending #}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
+    <button onclick="filterPending('all')" id="ptab-all" class="filter-btn active">All</button>
+    <button onclick="filterPending('luxury_beauty')" id="ptab-luxury_beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a44;">
+      💎 Luxury (10%) <span id="ptab-count-luxury_beauty" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','luxury_beauty')|list|length }}</span>
+    </button>
+    <button onclick="filterPending('beauty')" id="ptab-beauty" class="filter-btn">
+      💄 Beauty <span id="ptab-count-beauty" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','beauty')|list|length }}</span>
+    </button>
+    <button onclick="filterPending('home_decor')" id="ptab-home_decor" class="filter-btn">
+      🏠 Home <span id="ptab-count-home_decor" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','home_decor')|list|length }}</span>
+    </button>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;" id="pendingGrid">
+    {% for c in pending_candidates %}
+    {% set rate = {'luxury_beauty': 10, 'beauty': 3, 'home_decor': 3, 'fitness': 1}.get(c.category or 'general', 3) %}
+    {% set price_f = (c.price | replace('$','') | replace(',','') | float) if c.price else 0 %}
+    <div class="product-card" style="flex-direction:column;padding:0;overflow:hidden;"
+         data-category="{{ c.category or 'general' }}" id="pc-{{ c.id }}">
+      {% if c.image_url %}
+        <img src="{{ c.image_url }}" alt="{{ c.name }}"
+             style="width:100%;aspect-ratio:1;object-fit:cover;background:var(--gray-100);" loading="lazy"
+             onerror="this.style.display='none'">
+      {% else %}
+        <div style="width:100%;aspect-ratio:1;background:var(--gray-100);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--gray-400);">🛍️</div>
+      {% endif %}
+      <div style="padding:10px;flex:1;display:flex;flex-direction:column;gap:3px;">
+        <div style="font-size:12px;font-weight:600;color:var(--gray-800);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ c.name }}</div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:3px;">
+          {% if c.price %}<span style="font-size:13px;font-weight:700;color:var(--green);">${{ c.price }}</span>{% endif %}
+          {% if rate >= 10 %}
+            <span style="font-size:11px;padding:2px 7px;border-radius:8px;font-weight:800;background:#059669;color:#fff;">💎 10%</span>
+          {% else %}
+            <span style="font-size:11px;padding:2px 7px;border-radius:8px;font-weight:700;background:#f3f4f6;color:#374151;">{{ rate }}%</span>
+          {% endif %}
+        </div>
+        {% if c.source_category %}
+          <span style="font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;margin-top:2px;display:inline-block;">📂 {{ c.source_category }}</span>
+        {% endif %}
+      </div>
+      {% if c.amazon_url %}
+      <div style="padding:4px 10px;">
+        <a href="{{ c.amazon_url }}" target="_blank" rel="noopener"
+          style="display:block;text-align:center;font-size:11px;font-weight:600;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:4px;text-decoration:none;">
+          🔗 View on Amazon
+        </a>
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--gray-100);">
+        <form method="POST" action="{{ url_for('main.approve_candidate', candidate_id=c.id) }}" style="flex:1;display:flex;" onsubmit="document.getElementById('pc-{{ c.id }}').remove()">
+          <button type="submit" style="flex:1;background:var(--green);color:#fff;border:none;border-radius:20px;padding:7px 0;font-size:12px;font-weight:700;cursor:pointer;">✓ Approve</button>
+        </form>
+        <form method="POST" action="{{ url_for('main.reject_candidate', candidate_id=c.id) }}" style="flex:1;display:flex;" onsubmit="document.getElementById('pc-{{ c.id }}').remove()">
+          <button type="submit" style="flex:1;background:var(--gray-100);color:var(--gray-600);border:none;border-radius:20px;padding:7px 0;font-size:12px;font-weight:700;cursor:pointer;">✕ Reject</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Your library header ── #}
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+  <h2 style="font-size:18px;font-weight:700;margin:0;color:var(--gray-800);">📦 Your Product Library</h2>
+  <span class="badge badge-gray">{{ products|length }} products</span>
+  <span style="font-size:12px;color:var(--gray-400);">— these are used in pin generation</span>
+</div>
 
 {# ── Filter + Sort bar ── #}
 {% if products %}
@@ -145,10 +254,6 @@
   <a href="{{ url_for('main.trends') }}" style="color:#b45309;font-weight:700;margin-left:6px;">Upload trends CSV →</a>
 </div>
 {% endif %}
-<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap;">
-  <span>▶ <strong>Activate</strong> = product is used in pin generation + shown on your shop</span>
-  <span>⏸ <strong>Pause</strong> = excluded from pins + hidden from shop (faded card)</span>
-</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;justify-content:space-between;">
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
@@ -248,15 +353,9 @@
     </div>
 
     <div class="product-actions">
-      <form method="POST" action="{{ url_for('main.toggle_product', product_id=product.id) }}">
-        <button type="submit" class="btn btn-sm {{ 'btn-gray' if product.is_active else 'btn-green' }}"
-          title="{{ 'Pause: remove from pin generation and shop' if product.is_active else 'Activate: include in pin generation and shop' }}">
-          {{ '⏸ Pause' if product.is_active else '▶ Activate' }}
-        </button>
-      </form>
       <form method="POST" action="{{ url_for('main.delete_product', product_id=product.id) }}"
-            onsubmit="return confirm('Remove {{ product.name }}?')">
-        <button type="submit" class="btn btn-ghost btn-sm" style="color:#ccc;">✕</button>
+            onsubmit="return confirm('Remove {{ product.name|replace("'","") }} from your library?')">
+        <button type="submit" class="btn btn-ghost btn-sm" style="color:#e53e3e;font-size:12px;">🗑 Remove</button>
       </form>
     </div>
   </div>
@@ -340,11 +439,20 @@
         'beauty': '💄 Beauty',
         'home_decor': '🏠 Home Decor',
       };
-      hint.innerHTML = `No ${labels[category] || category} products yet — <a href="/products/queue" style="color:var(--red);font-weight:700;">approve some from the Queue →</a>`;
+      hint.innerHTML = `No ${labels[category] || category} products approved yet — approve some from the Pending section above or click <strong>Find Products</strong>.`;
       hint.style.display = '';
     } else {
       hint.style.display = 'none';
     }
+  }
+
+  function filterPending(cat) {
+    document.querySelectorAll('[id^="ptab-"]').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById('ptab-' + cat);
+    if (btn) btn.classList.add('active');
+    document.querySelectorAll('#pendingGrid .product-card').forEach(card => {
+      card.style.display = (cat === 'all' || card.dataset.category === cat) ? '' : 'none';
+    });
   }
 
   function filterByPrice(min, max) {
@@ -373,9 +481,45 @@
   }
 
   function updateCount() {
+    const el = document.querySelector('.badge-gray');
+    if (!el) return;
     const visible = document.querySelectorAll('#productList .product-card:not([style*="none"])').length;
     const total   = document.querySelectorAll('#productList .product-card').length;
-    document.querySelector('.badge-gray').textContent = `${visible} of ${total} shown`;
+    el.textContent = `${visible} of ${total} shown`;
   }
+
+  // Discovery progress polling
+  (function() {
+    const banner = document.getElementById('discovery-banner');
+    if (!banner) return;
+    let pollTimer = null;
+    function poll() {
+      fetch('/products/discover/status')
+        .then(r => r.json())
+        .then(data => {
+          const done = data.done || 0, total = data.total || 1;
+          document.getElementById('disc-current').textContent  = data.current || '';
+          document.getElementById('disc-added').textContent    = data.added   || 0;
+          document.getElementById('disc-progress-text').textContent = `${done} / ${total} searches`;
+          document.getElementById('disc-bar').style.width = Math.min(100, Math.round(done/total*100)) + '%';
+          if (data.started_at && done > 0) {
+            const elapsed = (Date.now() - new Date(data.started_at).getTime()) / 1000;
+            const rem = Math.round((total - done) * elapsed / done);
+            const m = Math.floor(rem/60), s = rem % 60;
+            document.getElementById('disc-eta').textContent = m > 0 ? `~${m}m ${s}s left` : `~${s}s left`;
+          }
+          if (!data.running) {
+            clearInterval(pollTimer);
+            document.getElementById('disc-spinner').style.animation = 'none';
+            document.getElementById('disc-spinner').textContent = '✅';
+            document.getElementById('disc-bar').style.background = '#48bb78';
+            document.getElementById('disc-eta').textContent = 'Done! Refreshing…';
+            setTimeout(() => location.reload(), 2000);
+          }
+        }).catch(() => {});
+    }
+    poll();
+    pollTimer = setInterval(poll, 3000);
+  })();
 </script>
 {% endblock %}

@@ -353,10 +353,6 @@
          class="nav-link {% if request.endpoint == 'main.products' %}active{% endif %}">
         Products
       </a>
-      <a href="{{ url_for('main.product_queue') }}"
-         class="nav-link {% if request.endpoint == 'main.product_queue' %}active{% endif %}">
-        Queue
-      </a>
       <a href="{{ url_for('main.upload_pin') }}"
          class="nav-link {% if request.endpoint == 'main.upload_pin' %}active{% endif %}">
         Upload Pin
