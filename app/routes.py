@@ -506,9 +506,13 @@ def products():
         trend_keywords = []
         trend_source = "none"
 
-    # Also pass pending candidates so the Queue is merged into this page
+    # Only show 10% commission (luxury_beauty) products — that's the strategy
+    all_products = [p for p in all_products if (p.category or "").lower() == "luxury_beauty"]
+
+    # Pending candidates: only luxury_beauty
     pending_candidates = ProductCandidate.query.filter_by(
-        status=ProductCandidate.STATUS_PENDING
+        status=ProductCandidate.STATUS_PENDING,
+        category="luxury_beauty",
     ).order_by(ProductCandidate.discovered_at.desc()).all()
 
     return render_template(
@@ -618,7 +622,7 @@ def _run_discovery_background(app, trend_dicts, manual_keyword=None):
         _discovery_state["running"]    = True
         _discovery_state["added"]      = 0
         _discovery_state["done"]       = 0
-        _discovery_state["total"]      = len(LUXURY_BEAUTY_SEARCHES) + len(trend_dicts)
+        _discovery_state["total"]      = len(LUXURY_BEAUTY_SEARCHES)  # 10% only
         _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
 
         with app.app_context():
@@ -670,22 +674,7 @@ def _run_discovery_background(app, trend_dicts, manual_keyword=None):
                 _discovery_state["done"] += 1
                 time.sleep(random.uniform(2, 4))
 
-            # ── Step 2: Every keyword from every TrendEntry ──
-            for td in trend_dicts:
-                kw  = td.get("keyword", "")
-                src = td.get("source_category", "")
-                cat = td.get("category", "beauty")
-                if not kw:
-                    _discovery_state["done"] += 1
-                    continue
-                _discovery_state["current"] = f"🔍 {src}: {kw}…"
-                try:
-                    products = search_products(kw, category=cat, max_results=5)
-                    _save(products, kw, src)
-                except Exception as e:
-                    logger.warning(f"Search failed for {kw}: {e}")
-                _discovery_state["done"] += 1
-                time.sleep(random.uniform(2, 4))
+            # Step 2 removed — strategy is 10% luxury beauty only
 
         _discovery_state["running"] = False
         _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added"

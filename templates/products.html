@@ -165,18 +165,8 @@
     <span style="font-size:12px;color:var(--gray-400);margin-left:4px;">— hit Approve to add to your library, Reject to discard</span>
   </div>
 
-  {# Filter tabs for pending #}
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center;">
-    <button onclick="filterPending('all')" id="ptab-all" class="filter-btn active">All</button>
-    <button onclick="filterPending('luxury_beauty')" id="ptab-luxury_beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a44;">
-      💎 Luxury (10%) <span id="ptab-count-luxury_beauty" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','luxury_beauty')|list|length }}</span>
-    </button>
-    <button onclick="filterPending('beauty')" id="ptab-beauty" class="filter-btn">
-      💄 Beauty <span id="ptab-count-beauty" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','beauty')|list|length }}</span>
-    </button>
-    <button onclick="filterPending('home_decor')" id="ptab-home_decor" class="filter-btn">
-      🏠 Home <span id="ptab-count-home_decor" style="margin-left:4px;background:rgba(0,0,0,0.1);border-radius:10px;padding:0 6px;">{{ pending_candidates|selectattr('category','equalto','home_decor')|list|length }}</span>
-    </button>
+  <div style="font-size:12px;color:#059669;font-weight:700;margin-bottom:12px;background:#d1fae5;padding:6px 12px;border-radius:8px;display:inline-block;">
+    💎 All 10% Amazon Luxury Beauty commission — approve to add to your pin library
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;" id="pendingGrid">
@@ -257,11 +247,9 @@
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;justify-content:space-between;">
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
-    <button onclick="filterProducts('all')"    id="filter-all"    class="filter-btn active">All</button>
-    <button onclick="filterProducts('beauty')" id="filter-beauty" class="filter-btn">💄 Beauty</button>
-    <button onclick="filterProducts('luxury_beauty')" id="filter-luxury_beauty" class="filter-btn" style="background:#d4f4e8;color:#1a7a4a;border-color:#1a7a4a44;">💎 Luxury (10%)</button>
-    <button onclick="filterProducts('home_decor')" id="filter-home_decor" class="filter-btn">🏠 Home</button>
-    <button onclick="filterByPrice(60, 9999)"  id="filter-60plus" class="filter-btn">$60+</button>
+    <button onclick="filterProducts('all')"   id="filter-all"   class="filter-btn active">All</button>
+    <button onclick="filterByPrice(60, 9999)" id="filter-60plus" class="filter-btn">$60+</button>
+    <button onclick="filterByPrice(100, 9999)" id="filter-100plus" class="filter-btn">$100+</button>
   </div>
   <div style="display:flex;gap:6px;align-items:center;">
     <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Sort:</span>
