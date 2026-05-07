@@ -368,6 +368,14 @@
       <div class="product-card-name">{{ c.name }}</div>
       {% if c.price %}<div class="product-card-price">{{ c.price }}</div>{% endif %}
     </div>
+    {% if c.amazon_url %}
+    <div style="padding:6px 10px;">
+      <a href="{{ c.amazon_url }}" target="_blank" rel="noopener"
+        style="display:block;text-align:center;font-size:11px;font-weight:600;color:#555;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:5px;text-decoration:none;">
+        🔗 View on Amazon
+      </a>
+    </div>
+    {% endif %}
     <div class="product-card-actions">
       <span class="done-pill" style="flex:1;">✅ Added</span>
       <form method="POST" action="{{ url_for('main.undo_candidate', candidate_id=c.id) }}" style="display:flex;">
