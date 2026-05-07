@@ -145,6 +145,10 @@
   <a href="{{ url_for('main.trends') }}" style="color:#b45309;font-weight:700;margin-left:6px;">Upload trends CSV →</a>
 </div>
 {% endif %}
+<div style="font-size:12px;color:var(--gray-400);margin-bottom:10px;display:flex;gap:16px;flex-wrap:wrap;">
+  <span>▶ <strong>Activate</strong> = product is used in pin generation + shown on your shop</span>
+  <span>⏸ <strong>Pause</strong> = excluded from pins + hidden from shop (faded card)</span>
+</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center;justify-content:space-between;">
   <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
     <span style="font-size:12px;color:var(--gray-400);font-weight:600;">Filter:</span>
@@ -245,8 +249,9 @@
 
     <div class="product-actions">
       <form method="POST" action="{{ url_for('main.toggle_product', product_id=product.id) }}">
-        <button type="submit" class="btn btn-sm {{ 'btn-gray' if product.is_active else 'btn-green' }}">
-          {{ 'Pause' if product.is_active else 'Activate' }}
+        <button type="submit" class="btn btn-sm {{ 'btn-gray' if product.is_active else 'btn-green' }}"
+          title="{{ 'Pause: remove from pin generation and shop' if product.is_active else 'Activate: include in pin generation and shop' }}">
+          {{ '⏸ Pause' if product.is_active else '▶ Activate' }}
         </button>
       </form>
       <form method="POST" action="{{ url_for('main.delete_product', product_id=product.id) }}"
@@ -320,6 +325,26 @@
       card.style.display = (category === 'all' || card.dataset.category === category) ? '' : 'none';
     });
     updateCount();
+    // Show empty-state hint when filter returns 0 visible cards
+    const visible = document.querySelectorAll('#productList .product-card:not([style*="none"])').length;
+    let hint = document.getElementById('filter-empty-hint');
+    if (!hint) {
+      hint = document.createElement('div');
+      hint.id = 'filter-empty-hint';
+      hint.style.cssText = 'padding:24px;text-align:center;color:var(--gray-400);font-size:14px;display:none;';
+      document.getElementById('productList').after(hint);
+    }
+    if (visible === 0 && category !== 'all') {
+      const labels = {
+        'luxury_beauty': '💎 Luxury Beauty (10%)',
+        'beauty': '💄 Beauty',
+        'home_decor': '🏠 Home Decor',
+      };
+      hint.innerHTML = `No ${labels[category] || category} products yet — <a href="/products/queue" style="color:var(--red);font-weight:700;">approve some from the Queue →</a>`;
+      hint.style.display = '';
+    } else {
+      hint.style.display = 'none';
+    }
   }
 
   function filterByPrice(min, max) {
