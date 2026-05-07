@@ -492,7 +492,7 @@
             document.getElementById('disc-bar').style.width = '100%';
             document.getElementById('disc-bar').style.background = '#48bb78';
             document.getElementById('disc-eta').textContent = 'Refreshing…';
-            setTimeout(() => { window.location = '/products/queue'; }, 2000);
+            setTimeout(() => { window.location = '/products'; }, 2000);
           }
         })
         .catch(() => {});  // silently ignore network errors mid-poll

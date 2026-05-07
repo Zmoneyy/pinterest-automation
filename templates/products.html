@@ -445,7 +445,7 @@
             document.getElementById('disc-spinner').textContent = '✅';
             document.getElementById('disc-bar').style.background = '#48bb78';
             document.getElementById('disc-eta').textContent = 'Done! Refreshing…';
-            setTimeout(() => location.reload(), 2000);
+            setTimeout(() => location.href = '/products', 2000);
           }
         }).catch(() => {});
     }
