@@ -717,74 +717,55 @@ _discovery_state = {
 }
 
 
-def _run_discovery_background(app, trend_dicts, manual_keyword=None):
-    """Run full Amazon discovery in a background thread — no timeout limits."""
+def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
+    """Load curated luxury beauty catalogue into ProductCandidates."""
     import threading
-    from app.amazon_api import search_products, LUXURY_BEAUTY_SEARCHES
-    import math, time, random
 
     def _worker():
         global _discovery_state
+        from app.amazon_api import get_curated_products
+        catalogue = get_curated_products()
         _discovery_state["running"]    = True
         _discovery_state["added"]      = 0
         _discovery_state["done"]       = 0
-        _discovery_state["total"]      = len(LUXURY_BEAUTY_SEARCHES)  # 10% only
+        _discovery_state["total"]      = len(catalogue)
         _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
 
         with app.app_context():
-            seen_asins = set()
+            from app.models import ProductCandidate, Product
+            for i, p in enumerate(catalogue):
+                asin = p.get("asin", "")
+                _discovery_state["current"] = f"💎 Loading {p.get('trend_keyword', '')}…"
+                _discovery_state["done"]    = i + 1
 
-            def _save(products, trend_keyword, source_category):
-                from app.models import ProductCandidate, Product
-                count = 0
-                for p in products:
-                    asin = p.get("asin", "")
-                    if asin and asin in seen_asins:
+                # Skip if already in queue or library
+                if asin:
+                    if ProductCandidate.query.filter_by(asin=asin).first():
                         continue
-                    if asin:
-                        seen_asins.add(asin)
-                        if ProductCandidate.query.filter_by(asin=asin).first():
-                            continue
-                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
-                            continue
-                    else:
-                        if ProductCandidate.query.filter_by(name=p["name"]).first():
-                            continue
-                        if Product.query.filter_by(name=p["name"]).first():
-                            continue
-                    db.session.add(ProductCandidate(
-                        name=p["name"],
-                        asin=asin,
-                        amazon_url=p["amazon_url"],
-                        category=p.get("category", "general"),
-                        source_category=source_category,
-                        image_url=p.get("image_url"),
-                        price=p.get("price"),
-                        trend_keyword=trend_keyword,
-                        status=ProductCandidate.STATUS_PENDING,
-                    ))
-                    count += 1
-                if count:
-                    db.session.commit()
-                    _discovery_state["added"] += count
-                return count
+                    if Product.query.filter(Product.amazon_url.contains(asin)).first():
+                        continue
+                else:
+                    if ProductCandidate.query.filter_by(name=p["name"]).first():
+                        continue
 
-            # ── Step 1: ALL luxury beauty brands (10% commission) ──
-            for query, brand in LUXURY_BEAUTY_SEARCHES:
-                _discovery_state["current"] = f"💎 Searching {brand}…"
-                try:
-                    products = search_products(query, category="luxury_beauty", max_results=5)
-                    _save(products, brand, "Luxury Beauty (10%)")
-                except Exception as e:
-                    logger.warning(f"Luxury search failed for {brand}: {e}")
-                _discovery_state["done"] += 1
-                time.sleep(random.uniform(2, 4))
+                db.session.add(ProductCandidate(
+                    name=p["name"],
+                    asin=asin,
+                    amazon_url=p["amazon_url"],
+                    category="luxury_beauty",
+                    source_category="Luxury Beauty (10%)",
+                    image_url=p.get("image_url"),
+                    price=p.get("price"),
+                    trend_keyword=p.get("trend_keyword", ""),
+                    status=ProductCandidate.STATUS_PENDING,
+                ))
+                _discovery_state["added"] += 1
 
-            # Step 2 removed — strategy is 10% luxury beauty only
+            db.session.commit()
 
         _discovery_state["running"] = False
         _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added"
-        logger.info(f"Background discovery complete: {_discovery_state['added']} added")
+        logger.info(f"Discovery complete: {_discovery_state['added']} curated products loaded")
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
