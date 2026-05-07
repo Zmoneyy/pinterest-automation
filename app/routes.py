@@ -511,8 +511,8 @@ def products():
 
     # Assign price tier to each product + count their pins
     TIERS = [
-        {"key": "entry", "label": "Entry Luxury",  "range": "$30–$75",   "target": 10, "color": "#059669", "bg": "#d1fae5", "min": 30,  "max": 75},
-        {"key": "mid",   "label": "Mid Luxury",    "range": "$75–$150",  "target": 10, "color": "#1d4ed8", "bg": "#dbeafe", "min": 75,  "max": 150},
+        {"key": "entry", "label": "Entry Luxury",  "range": "$30–$75",   "target": 12, "color": "#059669", "bg": "#d1fae5", "min": 30,  "max": 75},
+        {"key": "mid",   "label": "Mid Luxury",    "range": "$75–$150",  "target": 12, "color": "#1d4ed8", "bg": "#dbeafe", "min": 75,  "max": 150},
         {"key": "high",  "label": "High Luxury",   "range": "$150+",     "target": 6,  "color": "#7c3aed", "bg": "#ede9fe", "min": 150, "max": 99999},
     ]
 
@@ -559,6 +559,79 @@ def products():
         discovering=_discovery_state["running"],
         discovery_state=_discovery_state,
     )
+
+
+@bp.route("/products/import-url", methods=["POST"])
+@login_required
+def import_amazon_url():
+    """Import a product directly from an Amazon URL — bypasses scraping."""
+    from app.amazon_api import AMAZON_HEADERS
+    from bs4 import BeautifulSoup
+    import re as _re
+
+    url = request.form.get("amazon_url", "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "No URL provided"}), 400
+
+    # Extract ASIN from URL
+    asin_match = _re.search(r"/dp/([A-Z0-9]{10})", url)
+    asin = asin_match.group(1) if asin_match else None
+
+    # Build clean affiliate URL
+    from config import Config
+    tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
+    affiliate_url = f"https://www.amazon.com/dp/{asin}?tag={tag}&linkCode=ll1&language=en_US" if asin else url
+
+    try:
+        import time, random
+        time.sleep(random.uniform(1, 2))
+        resp = requests.get(url, headers=AMAZON_HEADERS, timeout=20)
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        # Product name
+        name_tag = soup.select_one("#productTitle") or soup.select_one("#title")
+        name = name_tag.get_text(strip=True) if name_tag else ""
+
+        # Price
+        price = ""
+        for sel in ["#priceblock_ourprice", "#priceblock_dealprice", ".a-price .a-offscreen", "#price_inside_buybox"]:
+            p = soup.select_one(sel)
+            if p:
+                price = p.get_text(strip=True).replace("$", "").strip()
+                try:
+                    price = str(round(float(_re.search(r"[\d.]+", price).group()), 2))
+                    break
+                except Exception:
+                    price = ""
+
+        # Image
+        image_url = ""
+        img = soup.select_one("#landingImage") or soup.select_one("#imgBlkFront")
+        if img:
+            image_url = img.get("src") or img.get("data-src") or ""
+
+        if not name:
+            return jsonify({"ok": False, "error": "Could not read product name — try adding manually below"}), 400
+
+        # Save as ProductCandidate (pending approval)
+        from app.models import ProductCandidate
+        c = ProductCandidate(
+            name=name[:255],
+            asin=asin,
+            amazon_url=affiliate_url,
+            category="luxury_beauty",
+            image_url=image_url or None,
+            price=price or None,
+            trend_keyword="Manual Import",
+            status=ProductCandidate.STATUS_PENDING,
+        )
+        db.session.add(c)
+        db.session.commit()
+        return jsonify({"ok": True, "name": name, "price": price, "image_url": image_url, "id": c.id})
+
+    except Exception as e:
+        logger.error(f"import_amazon_url error: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @bp.route("/products/add", methods=["POST"])
