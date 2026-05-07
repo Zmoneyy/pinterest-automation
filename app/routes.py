@@ -509,16 +509,49 @@ def products():
     # 10% commission focus: only show luxury_beauty in library
     all_products = [p for p in all_products if (p.category or "").lower() == "luxury_beauty"]
 
+    # Assign price tier to each product + count their pins
+    TIERS = [
+        {"key": "entry", "label": "Entry Luxury",  "range": "$30–$75",   "target": 10, "color": "#059669", "bg": "#d1fae5", "min": 30,  "max": 75},
+        {"key": "mid",   "label": "Mid Luxury",    "range": "$75–$150",  "target": 10, "color": "#1d4ed8", "bg": "#dbeafe", "min": 75,  "max": 150},
+        {"key": "high",  "label": "High Luxury",   "range": "$150+",     "target": 6,  "color": "#7c3aed", "bg": "#ede9fe", "min": 150, "max": 99999},
+    ]
+
+    def _tier(price_str):
+        try:
+            p = float(str(price_str or "0").replace("$", "").replace(",", ""))
+            if p >= 150: return "high"
+            if p >= 75:  return "mid"
+            if p >= 30:  return "entry"
+        except Exception:
+            pass
+        return None
+
+    for p in all_products:
+        p._tier      = _tier(p.price)
+        p._pin_count = len(p.pins)  # pins this product has been used in
+
+    # Tier summary for the strategy dashboard
+    tier_stats = []
+    for t in TIERS:
+        tier_products = [p for p in all_products if p._tier == t["key"]]
+        pins_made     = sum(p._pin_count for p in tier_products)
+        tier_stats.append({**t, "products": len(tier_products), "pins_made": pins_made})
+
     # Pending candidates: only luxury_beauty
     pending_candidates = ProductCandidate.query.filter_by(
         status=ProductCandidate.STATUS_PENDING,
         category="luxury_beauty",
     ).order_by(ProductCandidate.discovered_at.desc()).all()
 
+    # Tag pending candidates with their tier too
+    for c in pending_candidates:
+        c._tier = _tier(c.price)
+
     return render_template(
         "products.html",
         products=all_products,
         pending_candidates=pending_candidates,
+        tier_stats=tier_stats,
         categories=VALID_CATEGORIES,
         trend_keywords=trend_keywords,
         trend_source=trend_source,
