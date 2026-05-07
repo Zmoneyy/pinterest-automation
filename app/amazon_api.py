@@ -77,10 +77,10 @@ def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
     """
     from bs4 import BeautifulSoup
 
-    # Search Google for Amazon product pages
-    google_url = "https://www.google.com/search"
-    params = {"q": f"site:amazon.com/dp {keyword}", "num": 20}
-    google_headers = {
+    # Search DuckDuckGo HTML (doesn't block Cloud Run IPs unlike Google/Amazon)
+    ddg_url = "https://html.duckduckgo.com/html/"
+    params = {"q": f"site:amazon.com/dp {keyword}"}
+    ddg_headers = {
         "User-Agent": (
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -88,22 +88,23 @@ def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
         ),
         "Accept-Language": "en-US,en;q=0.9",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://duckduckgo.com/",
     }
 
     time.sleep(random.uniform(1.0, 2.5))
 
     try:
-        resp = requests.get(google_url, params=params, headers=google_headers, timeout=20)
+        resp = requests.post(ddg_url, data=params, headers=ddg_headers, timeout=20)
     except Exception as e:
-        logger.warning(f"Google search failed for '{keyword}': {e}")
+        logger.warning(f"DuckDuckGo search failed for '{keyword}': {e}")
         return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # Extract ASINs from Google result URLs
+    # Extract ASINs from DDG result URLs
     asins_seen = set()
     asins = []
-    for a in soup.select("a[href]"):
+    for a in soup.select("a.result__url, a.result__a, a[href]"):
         href = a.get("href", "")
         m = re.search(r"amazon\.com/(?:[^/]+/)?dp/([A-Z0-9]{10})", href)
         if m:
@@ -115,7 +116,7 @@ def _scrape_amazon_search(keyword: str, max_results: int = 5) -> list[dict]:
             break
 
     if not asins:
-        logger.warning(f"No Amazon ASINs found via Google for '{keyword}'")
+        logger.warning(f"No Amazon ASINs found via DuckDuckGo for '{keyword}'")
         return []
 
     # Fetch each product page for name, price, image
