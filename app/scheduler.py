@@ -73,11 +73,8 @@ def run_daily_pin_generation():
     if trends:
         _cache_trends(trends, db, TrendCache)
 
-    # 2b. Discover new Amazon products from trending keywords → ProductCandidate queue
-    try:
-        _discover_and_queue_products(db)
-    except Exception as e:
-        logger.warning(f"Product discovery failed (non-fatal): {e}")
+    # 2b. Product discovery is MANUAL ONLY — user clicks "Find Products" in the app
+    # Auto-discovery disabled to preserve SerpAPI quota (250/month free plan)
 
     # 3. Generate one pin per niche, rotating content types daily
     # Mix: today's niches paired with content types so every day has variety

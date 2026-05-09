@@ -796,12 +796,27 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
             _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added (curated fallback)"
             return
 
-        # SerpAPI path — shuffle searches, run them all
-        searches = list(LUXURY_SEARCHES)
-        if manual_keyword:
-            searches = [(manual_keyword, manual_keyword)] + searches
+        # Build search list from TrendEntry top products (primary)
+        # trend_dicts comes from discover_products() — it's already tp_list() + sq_list()
+        # Prioritize top products (exact product names) over general search queries
+        searches = []
 
-        random.shuffle(searches)
+        if manual_keyword:
+            searches.append((manual_keyword, manual_keyword))
+        elif trend_dicts:
+            # Deduplicate and build (query, label) pairs from trend entries
+            seen_q = set()
+            for td in trend_dicts:
+                q = td.get("keyword", "").strip()
+                if q and q not in seen_q:
+                    seen_q.add(q)
+                    label = td.get("source_category", q)
+                    searches.append((q, label))
+        else:
+            # No entries yet — fall back to luxury brand searches
+            searches = list(LUXURY_SEARCHES)
+            random.shuffle(searches)
+
         _discovery_state["running"]    = True
         _discovery_state["added"]      = 0
         _discovery_state["done"]       = 0
@@ -809,16 +824,25 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
         _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
 
         with app.app_context():
-            from app.models import ProductCandidate, Product
+            from app.models import ProductCandidate, Product, TrendEntry
             from config import Config
             associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-            for i, (query, brand) in enumerate(searches):
-                _discovery_state["current"] = f"🔍 Searching {brand}…"
+            # Build category map from TrendEntry so we know which category each product belongs to
+            entry_category_map = {}
+            for entry in TrendEntry.query.all():
+                for tp in entry.tp_list():
+                    entry_category_map[tp.lower()] = entry.category
+
+            for i, (query, label) in enumerate(searches):
+                _discovery_state["current"] = f"🔍 Searching: {query[:50]}…"
                 _discovery_state["done"]    = i + 1
 
+                # Guess category from entry map, fall back to luxury_beauty
+                cat = entry_category_map.get(query.lower(), "luxury_beauty")
+
                 try:
-                    products = search_products(query, category="luxury_beauty", max_results=5)
+                    products = search_products(query, category=cat, max_results=5)
                 except Exception as e:
                     logger.error(f"SerpAPI search error for '{query}': {e}")
                     products = []
@@ -844,17 +868,17 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                         name=name,
                         asin=asin,
                         amazon_url=amazon_url,
-                        category="luxury_beauty",
-                        source_category="Luxury Beauty (10%)",
+                        category=cat,
+                        source_category=label,
                         image_url=p.get("image_url"),
                         price=p.get("price"),
-                        trend_keyword=brand,
+                        trend_keyword=query,
                         status=ProductCandidate.STATUS_PENDING,
                     ))
                     _discovery_state["added"] += 1
 
                 db.session.commit()
-                time.sleep(random.uniform(0.5, 1.5))  # be polite to SerpAPI
+                time.sleep(random.uniform(0.5, 1.5))
 
         _discovery_state["running"] = False
         _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} new products found"
