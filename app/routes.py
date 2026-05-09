@@ -2359,7 +2359,7 @@ def trends_paste():
     if full_page_raw:
         # Try to find "Search queries" section
         sq_match = re.search(
-            r'(?:search queries?[^\n]*\n(?:people engaging[^\n]*\n)?(?:copy keywords?[^\n]*\n)?)([\s\S]+?)(?=\n(?:other product|people interested|demographics|performance|related to|view less|view all|$))',
+            r'(?:search queries?[^\n]*\n(?:people engaging[^\n]*\n)?(?:copy keywords?[^\n]*\n)?)([\s\S]+?)(?=\n(?:other product|people interested|demographics|performance|related to|view less|view all|top products|$))',
             full_page_raw, re.IGNORECASE
         )
         if sq_match:
@@ -2369,9 +2369,24 @@ def trends_paste():
                     seen.add(kw)
                     full_page_sq_kws.append(kw)
 
-        # Everything else from the full page (lower priority context)
+        # Try to find "Top products" section in full page — route to top_products_kws
+        tp_match = re.search(
+            r'(?:top products[^\n]*\n)([\s\S]+?)(?=\n(?:other product|people interested|demographics|performance|related to|view less|view all|search queries|$))',
+            full_page_raw, re.IGNORECASE
+        )
+        if tp_match:
+            for line in tp_match.group(1).split('\n'):
+                p = clean_product(line)
+                if p and p.lower() not in seen and not ui_noise.match(p) and not line.strip().startswith('http'):
+                    seen.add(p.lower())
+                    top_products_kws.append(p)
+
+        # Everything else from the full page — short keyword-like strings only, no product names
         for line in re.split(r'[\n,;]+', full_page_raw):
-            kw = clean_kw(line)
+            line = line.strip()
+            if line.startswith('http'):
+                continue
+            kw = clean_kw(line, max_len=50)  # strict 50-char limit keeps context clean
             if kw and kw not in seen and not ui_noise.match(kw):
                 seen.add(kw)
                 full_page_context_kws.append(kw)
