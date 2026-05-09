@@ -541,39 +541,39 @@
     status.style.display = 'none';
     panel.classList.remove('visible');
 
-    // If pin URLs are present, extract product names first
+    // If pin URLs are present, extract product names client-side
+    // (browser fetch works; server-side is blocked by Pinterest's IP filtering)
     if (pinUrls) {
-      const urls = pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin'));
+      const urls = [...new Set(pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin')))];
       if (urls.length) {
-        pasteBtn.textContent = `⏳ Extracting ${urls.length} pin names… (may take ~30s)`;
-        try {
-          const extResp = await fetch('/trends/extract-pin-products', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ urls }),
-          });
-          const extData = await extResp.json();
-          if (extData.ok && extData.products?.length) {
-            const productsBox = document.getElementById('pasteProducts');
-            const existing = productsBox.value.trim();
-            const newNames = extData.products.join('\n');
-            productsBox.value = existing ? existing + '\n' + newNames : newNames;
+        pasteBtn.textContent = `⏳ Extracting ${urls.length} pin names…`;
+        const extracted = [];
+        for (const url of urls) {
+          try {
+            const r = await fetch(url, { credentials: 'omit' });
+            const html = await r.text();
+            // Extract headline from JSON-LD
+            const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
+            if (m) {
+              const d = JSON.parse(m[1]);
+              const name = d.headline || d?.sharedContent?.headline || '';
+              if (name && name.length > 3) extracted.push(name.trim());
+            }
+          } catch(e) { /* skip failed pins */ }
+        }
 
-            const listDiv = document.getElementById('extractedList');
-            const resultDiv = document.getElementById('extractedNames');
-            listDiv.innerHTML = `<strong style="color:#065f46;">✅ ${extData.products.length} products extracted from pins:</strong><br>` + extData.products.map(n => `• ${n}`).join('<br>');
-            resultDiv.style.display = 'block';
-            document.getElementById('pastePinUrls').value = '';
-          } else {
-            // Show error but continue saving
-            const resultDiv = document.getElementById('extractedNames');
-            const listDiv = document.getElementById('extractedList');
-            listDiv.innerHTML = `<span style="color:#dc2626;">⚠️ Could not extract product names: ${extData.error || 'unknown error'}. Saving other data.</span>`;
-            resultDiv.style.display = 'block';
-          }
-        } catch(e) {
-          const resultDiv = document.getElementById('extractedNames');
-          document.getElementById('extractedList').innerHTML = `<span style="color:#dc2626;">⚠️ Extraction failed: ${e.message}. Saving other data.</span>`;
+        const resultDiv = document.getElementById('extractedNames');
+        const listDiv   = document.getElementById('extractedList');
+
+        if (extracted.length) {
+          const productsBox = document.getElementById('pasteProducts');
+          const existing = productsBox.value.trim();
+          productsBox.value = existing ? existing + '\n' + extracted.join('\n') : extracted.join('\n');
+          listDiv.innerHTML = `<strong style="color:#065f46;">✅ ${extracted.length} products extracted:</strong><br>` + extracted.map(n => `• ${n}`).join('<br>');
+          resultDiv.style.display = 'block';
+          document.getElementById('pastePinUrls').value = '';
+        } else {
+          listDiv.innerHTML = `<span style="color:#dc2626;">⚠️ Could not extract names from those pins. Try again or type them manually.</span>`;
           resultDiv.style.display = 'block';
         }
       }
