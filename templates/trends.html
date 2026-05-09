@@ -540,7 +540,7 @@
     if (pinUrls) {
       const urls = pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin'));
       if (urls.length) {
-        pasteBtn.textContent = `Extracting ${urls.length} pins…`;
+        pasteBtn.textContent = `⏳ Extracting ${urls.length} pin names… (may take ~30s)`;
         try {
           const extResp = await fetch('/trends/extract-pin-products', {
             method: 'POST',
@@ -556,11 +556,21 @@
 
             const listDiv = document.getElementById('extractedList');
             const resultDiv = document.getElementById('extractedNames');
-            listDiv.innerHTML = extData.products.map(n => `• ${n}`).join('<br>');
+            listDiv.innerHTML = `<strong style="color:#065f46;">✅ ${extData.products.length} products extracted from pins:</strong><br>` + extData.products.map(n => `• ${n}`).join('<br>');
             resultDiv.style.display = 'block';
             document.getElementById('pastePinUrls').value = '';
+          } else {
+            // Show error but continue saving
+            const resultDiv = document.getElementById('extractedNames');
+            const listDiv = document.getElementById('extractedList');
+            listDiv.innerHTML = `<span style="color:#dc2626;">⚠️ Could not extract product names: ${extData.error || 'unknown error'}. Saving other data.</span>`;
+            resultDiv.style.display = 'block';
           }
-        } catch(e) { /* continue even if extraction fails */ }
+        } catch(e) {
+          const resultDiv = document.getElementById('extractedNames');
+          document.getElementById('extractedList').innerHTML = `<span style="color:#dc2626;">⚠️ Extraction failed: ${e.message}. Saving other data.</span>`;
+          resultDiv.style.display = 'block';
+        }
       }
     }
 

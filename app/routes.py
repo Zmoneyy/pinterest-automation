@@ -2303,8 +2303,8 @@ def trends_paste():
         return kw if (kw and 3 <= len(kw) <= 80) else ""
 
     ui_noise = re.compile(
-        r'^(copy keywords?|view (less|more)|people engaging|people interested|'
-        r'related|other product categor|performance|demographics|forecast|outbound clicks?|'
+        r'^(copy keywords?|view (less|more|all product categor.*)|people engaging|people interested|'
+        r'related|other product categor.*|performance|demographics|forecast|outbound clicks?|'
         r'engagement|pin saves?|key metric|top products on pinterest|products based on|explore top|'
         r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger|fast growing trees|'
         r'great garden plants.*|heirloom|seedssun|ejuqi|seed therapy|opens a new tab|'
@@ -2312,7 +2312,12 @@ def trends_paste():
         r'unspecified|relative interest|view all|opens a new tab|review (how|other)|'
         r'expected to grow|forecast magic|age and gender|distribution of pinners|'
         r'people engaging with this|commonly search for|also interested|'
-        r'aura girl.*|pinbot|pinterest|\d+%|\d+|\s*)$',
+        r'product category|product categories|beta|region|united states|us only|'
+        r'search queries|top products|relative interest over time|'
+        r'weekly trend|monthly trend|trending now|trending up|trending down|'
+        r'high confidence|medium confidence|low confidence|'
+        r'lawn garden|home decor|beauty|fashion|food|travel|diy|'
+        r'aura girl.*|pinbot|pinterest|\d+%|\d+[km]?|\s*)$',
         re.IGNORECASE
     )
 
