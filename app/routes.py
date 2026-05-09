@@ -2297,26 +2297,37 @@ def trends_paste():
     if not search_queries_raw and not products_raw and not full_page_raw:
         return jsonify({"ok": False, "error": "Paste something into at least one box."})
 
-    def clean_kw(line):
+    def clean_kw(line, max_len=80):
         kw = line.strip().lower()
         kw = re.sub(r'[^\w\s\-]', '', kw).strip()
-        return kw if (kw and 3 <= len(kw) <= 80) else ""
+        return kw if (kw and 3 <= len(kw) <= max_len) else ""
+
+    def clean_product(line):
+        """For product names — preserve case, allow longer strings, strip only leading/trailing noise."""
+        p = line.strip()
+        if not p or len(p) < 3:
+            return ""
+        # Truncate very long names at a natural word boundary around 150 chars
+        if len(p) > 150:
+            p = p[:150].rsplit(' ', 1)[0]
+        return p
 
     ui_noise = re.compile(
         r'^(copy keywords?|view (less|more|all product categor.*)|people engaging|people interested|'
-        r'related|other product categor.*|performance|demographics|forecast|outbound clicks?|'
-        r'engagement|pin saves?|key metric|top products on pinterest|products based on|explore top|'
-        r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger|fast growing trees|'
+        r'related|other product categor.*|performance|demographics|forecast.*|outbound clicks?|'
+        r'engagement|pin saves?|key metric.*|top products on pinterest|products based on.*|explore top.*|'
+        r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger.*|fast growing trees|'
         r'great garden plants.*|heirloom|seedssun|ejuqi|seed therapy|opens a new tab|'
-        r'opens a|; opens|volume indexed|date range|past \d+|age|gender|female|male|'
-        r'unspecified|relative interest|view all|opens a new tab|review (how|other)|'
-        r'expected to grow|forecast magic|age and gender|distribution of pinners|'
-        r'people engaging with this|commonly search for|also interested|'
+        r'opens a|; opens|volume indexed.*|date range|past \d+.*|age|gender|female|male|'
+        r'unspecified|relative interest.*|view all.*|review (how|other).*|'
+        r'expected to grow.*|forecast magic.*|age and gender.*|distribution of pinners.*|'
+        r'people engaging with.*|commonly search for.*|also interested.*|'
         r'product category|product categories|beta|region|united states|us only|'
         r'search queries|top products|relative interest over time|'
         r'weekly trend|monthly trend|trending now|trending up|trending down|'
         r'high confidence|medium confidence|low confidence|'
-        r'lawn garden|home decor|beauty|fashion|food|travel|diy|'
+        r'showing \d+.*|preview|merchant|product name|past \d+ months?|'
+        r'review other.*|key metric.*|pinterest top products.*|'
         r'aura girl.*|pinbot|pinterest|\d+%|\d+[km]?|\s*)$',
         re.IGNORECASE
     )
@@ -2331,15 +2342,15 @@ def trends_paste():
             seen.add(kw)
             search_queries_kws.append(kw)
 
-    # ── Box 3: Top products ──
+    # ── Box 3: Top products (use clean_product — longer names, preserve case) ──
     top_products_kws = []
     for line in re.split(r'[\n;]+', products_raw):
         # Skip raw URLs — those should have been extracted already
         if line.strip().startswith('http'):
             continue
-        kw = clean_kw(line)
-        if kw and kw not in seen and not ui_noise.match(kw):
-            seen.add(kw)
+        kw = clean_product(line)
+        if kw and kw.lower() not in seen and not ui_noise.match(kw):
+            seen.add(kw.lower())
             top_products_kws.append(kw)
 
     # ── Full page dump: auto-detect Search queries and Top products sections ──
