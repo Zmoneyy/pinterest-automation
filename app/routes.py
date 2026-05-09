@@ -2329,6 +2329,9 @@ def trends_paste():
     # ── Box 3: Top products ──
     top_products_kws = []
     for line in re.split(r'[\n;]+', products_raw):
+        # Skip raw URLs — those should have been extracted already
+        if line.strip().startswith('http'):
+            continue
         kw = clean_kw(line)
         if kw and kw not in seen and not ui_noise.match(kw):
             seen.add(kw)
