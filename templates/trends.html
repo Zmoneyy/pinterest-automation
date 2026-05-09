@@ -352,9 +352,9 @@
       {% endif %}
 
       {% if e.insight %}
-      <div style="margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:10px 12px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:4px;">🧠 AI Insight</div>
-        <div style="font-size:13px;color:#166534;line-height:1.5;">{{ e.insight }}</div>
+      <div style="margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief</div>
+        <div style="font-size:13px;color:#166534;line-height:1.6;white-space:pre-wrap;">{{ e.insight }}</div>
       </div>
       {% endif %}
     </div>
@@ -460,30 +460,6 @@
   });
   document.getElementById('upload-form').addEventListener('submit', () => {
     btn.disabled = true; btn.textContent = 'Analyzing…';
-  });
-
-  // ── Paste panel toggle ──
-  function togglePastePanel() {
-    const p = document.getElementById('pastePanel');
-    p.classList.toggle('open');
-    if (p.classList.contains('open')) {
-      document.getElementById('pasteCategory').focus();
-    }
-  }
-
-  // ── Extract product names from Pinterest pin URLs ──
-  async function extractPinProducts() {
-    const urlsRaw = document.getElementById('pastePinUrls').value.trim();
-    const btn     = document.getElementById('extractBtn');
-    const status  = document.getElementById('extractStatus');
-    const resultDiv = document.getElementById('extractedNames');
-    const listDiv   = document.getElementById('extractedList');
-
-    if (!urlsRaw) { alert('Paste some Pinterest pin URLs first.'); return; }
-
-    const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin'));
-    if (!urls.length) { alert('No valid Pinterest pin URLs found.'); return; }
-
     btn.disabled = true;
     btn.textContent = '⏳ Extracting…';
     status.textContent = `Fetching ${urls.length} pins…`;
