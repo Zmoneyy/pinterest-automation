@@ -267,7 +267,34 @@
         <textarea id="pasteProducts" rows="5"
           style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
           placeholder="Laneige Lip Mask&#10;CeraVe Moisturizer&#10;e.l.f. Halo Glow"></textarea>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Pinterest's top converting products</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Type product names, OR paste Pinterest pin URLs below to extract them automatically.</div>
+
+        {# Pin URL extractor #}
+        <div style="margin-top:10px;">
+          <label style="font-size:11px;font-weight:600;color:#7c3aed;">📌 Paste Pinterest Pin URLs (one per line)</label>
+          <details style="margin-top:4px;margin-bottom:6px;">
+            <summary style="font-size:11px;color:#7c3aed;cursor:pointer;font-weight:600;">How to get pin URLs from Pinterest Trends ▸</summary>
+            <div style="margin-top:6px;background:#f5f0ff;border-radius:8px;padding:10px;font-size:12px;color:#374151;">
+              <p style="margin:0 0 6px 0;">1. Go to <strong>trends.pinterest.com</strong> → open a product category → scroll to <strong>Top Products</strong></p>
+              <p style="margin:0 0 6px 0;">2. Press <strong>Cmd+Option+I</strong> → click <strong>Console</strong> tab</p>
+              <p style="margin:0 0 6px 0;">3. Paste this command and press Enter:</p>
+              <code style="display:block;background:#ede9fe;padding:8px;border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
+              <p style="margin:6px 0 0 0;">4. Press <strong>Cmd+C</strong> to copy all URLs, then paste them below</p>
+            </div>
+          </details>
+          <textarea id="pastePinUrls" rows="4"
+            style="margin-top:5px;width:100%;font-size:12px;font-family:monospace;padding:9px 12px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
+            placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
+          <button type="button" onclick="extractPinProducts()" id="extractBtn"
+            style="margin-top:6px;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;">
+            Extract Product Names
+          </button>
+          <span id="extractStatus" style="font-size:12px;margin-left:10px;color:#7c3aed;"></span>
+          <div id="extractedNames" style="margin-top:8px;display:none;">
+            <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:5px;">✅ Extracted — added to Top Products box above:</div>
+            <div id="extractedList" style="font-size:12px;color:#374151;line-height:1.8;"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -443,6 +470,58 @@
     p.classList.toggle('open');
     if (p.classList.contains('open')) {
       document.getElementById('pasteCategory').focus();
+    }
+  }
+
+  // ── Extract product names from Pinterest pin URLs ──
+  async function extractPinProducts() {
+    const urlsRaw = document.getElementById('pastePinUrls').value.trim();
+    const btn     = document.getElementById('extractBtn');
+    const status  = document.getElementById('extractStatus');
+    const resultDiv = document.getElementById('extractedNames');
+    const listDiv   = document.getElementById('extractedList');
+
+    if (!urlsRaw) { alert('Paste some Pinterest pin URLs first.'); return; }
+
+    const urls = urlsRaw.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin'));
+    if (!urls.length) { alert('No valid Pinterest pin URLs found.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Extracting…';
+    status.textContent = `Fetching ${urls.length} pins…`;
+
+    try {
+      const resp = await fetch('/trends/extract-pin-products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ urls }),
+      });
+      const data = await resp.json();
+
+      if (!data.ok || !data.products?.length) {
+        status.textContent = data.error || 'No products found.';
+        return;
+      }
+
+      // Append extracted names to the Top Products textarea
+      const productsBox = document.getElementById('pasteProducts');
+      const existing = productsBox.value.trim();
+      const newNames = data.products.join('\n');
+      productsBox.value = existing ? existing + '\n' + newNames : newNames;
+
+      // Show confirmed list
+      listDiv.innerHTML = data.products.map(n => `• ${n}`).join('<br>');
+      resultDiv.style.display = 'block';
+      status.textContent = `✅ ${data.products.length} products extracted`;
+
+      // Clear URL box
+      document.getElementById('pastePinUrls').value = '';
+
+    } catch(e) {
+      status.textContent = 'Error: ' + e.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Extract Product Names';
     }
   }
 

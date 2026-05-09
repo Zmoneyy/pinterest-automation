@@ -2229,6 +2229,54 @@ def trends_delete_entry(entry_id):
     return jsonify({"ok": True})
 
 
+@bp.route("/trends/extract-pin-products", methods=["POST"])
+@login_required
+def trends_extract_pin_products():
+    """Fetch Pinterest pin URLs and extract product names from JSON-LD."""
+    import re
+    import requests as http_requests
+
+    payload = request.get_json(force=True) or {}
+    urls = payload.get("urls", [])
+
+    if not urls:
+        return jsonify({"ok": False, "error": "No URLs provided."})
+
+    UA = (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+
+    products = []
+    seen = set()
+
+    for url in urls[:60]:  # cap at 60
+        url = url.strip()
+        if "pinterest.com/pin" not in url:
+            continue
+        try:
+            resp = http_requests.get(url, headers={"User-Agent": UA}, timeout=10)
+            html = resp.text
+            # Extract JSON-LD headline
+            m = re.search(r'application/ld\+json">(.*?)</script>', html, re.DOTALL)
+            if m:
+                import json as _json
+                d = _json.loads(m.group(1))
+                name = d.get("headline") or d.get("sharedContent", {}).get("headline", "")
+                name = name.strip()
+                if name and name not in seen and len(name) > 3:
+                    seen.add(name)
+                    products.append(name)
+        except Exception as e:
+            logger.warning(f"Pin fetch failed for {url}: {e}")
+            continue
+
+    if not products:
+        return jsonify({"ok": False, "error": "Could not extract product names from those pins."})
+
+    return jsonify({"ok": True, "products": products})
+
+
 @bp.route("/trends/paste", methods=["POST"])
 @login_required
 def trends_paste():
