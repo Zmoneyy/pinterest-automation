@@ -272,16 +272,13 @@
         {# Pin URL extractor #}
         <div style="margin-top:10px;">
           <label style="font-size:11px;font-weight:600;color:#7c3aed;">📌 Paste Pinterest Pin URLs (one per line)</label>
-          <details style="margin-top:4px;margin-bottom:6px;">
-            <summary style="font-size:11px;color:#7c3aed;cursor:pointer;font-weight:600;">How to get pin URLs from Pinterest Trends ▸</summary>
-            <div style="margin-top:6px;background:#f5f0ff;border-radius:8px;padding:10px;font-size:12px;color:#374151;">
-              <p style="margin:0 0 6px 0;">1. Go to <strong>trends.pinterest.com</strong> → open a product category → scroll to <strong>Top Products</strong></p>
-              <p style="margin:0 0 6px 0;">2. Press <strong>Cmd+Option+I</strong> → click <strong>Console</strong> tab</p>
-              <p style="margin:0 0 6px 0;">3. Paste this command and press Enter:</p>
-              <code style="display:block;background:#ede9fe;padding:8px;border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
-              <p style="margin:6px 0 0 0;">4. Press <strong>Cmd+C</strong> to copy all URLs, then paste them below</p>
-            </div>
-          </details>
+          <div style="margin-top:4px;margin-bottom:8px;background:#f5f0ff;border-radius:8px;padding:10px;font-size:12px;color:#374151;">
+            <p style="margin:0 0 4px 0;font-weight:600;">How to get pin URLs from Pinterest Trends:</p>
+            <p style="margin:0 0 4px 0;">1. Go to <strong>trends.pinterest.com</strong> → product category → scroll to <strong>Top Products</strong></p>
+            <p style="margin:0 0 4px 0;">2. Press <strong>Cmd+Option+I</strong> → <strong>Console</strong> tab → paste this → Enter:</p>
+            <code style="display:block;background:#ede9fe;padding:8px;border-radius:6px;font-size:11px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
+            <p style="margin:6px 0 0 0;">3. Press <strong>Cmd+C</strong> → paste below</p>
+          </div>
           <textarea id="pastePinUrls" rows="4"
             style="margin-top:5px;width:100%;font-size:12px;font-family:monospace;padding:9px 12px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
             placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
