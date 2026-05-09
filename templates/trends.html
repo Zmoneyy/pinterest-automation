@@ -331,25 +331,34 @@
 
       {% if sqs %}
       <div class="entry-section-label" style="color:#1d4ed8;">🔍 Search Queries</div>
-      <div class="entry-pills">
+      <div class="entry-pills" id="sqs-{{ e.id }}">
         {% for k in sqs[:12] %}<span class="pill-sq">{{ k }}</span>{% endfor %}
-        {% if sqs|length > 12 %}<span class="pill-more">+{{ sqs|length - 12 }} more</span>{% endif %}
+        {% if sqs|length > 12 %}
+          <span class="pill-hidden" id="sqs-hidden-{{ e.id }}" style="display:none;">{% for k in sqs[12:] %}<span class="pill-sq">{{ k }}</span>{% endfor %}</span>
+          <span class="pill-more" onclick="toggleMore('{{ e.id }}','sqs')" id="sqs-toggle-{{ e.id }}" style="cursor:pointer;">+{{ sqs|length - 12 }} more</span>
+        {% endif %}
       </div>
       {% endif %}
 
       {% if tps %}
       <div class="entry-section-label" style="color:#7c3aed;">🛍️ Top Products <span style="font-size:10px;color:var(--gray-400);font-weight:400;text-transform:none;">← create pins for these!</span></div>
-      <div class="entry-pills">
+      <div class="entry-pills" id="tps-{{ e.id }}">
         {% for k in tps[:10] %}<span class="pill-tp">{{ k }}</span>{% endfor %}
-        {% if tps|length > 10 %}<span class="pill-more">+{{ tps|length - 10 }} more</span>{% endif %}
+        {% if tps|length > 10 %}
+          <span class="pill-hidden" id="tps-hidden-{{ e.id }}" style="display:none;">{% for k in tps[10:] %}<span class="pill-tp">{{ k }}</span>{% endfor %}</span>
+          <span class="pill-more" onclick="toggleMore('{{ e.id }}','tps')" id="tps-toggle-{{ e.id }}" style="cursor:pointer;">+{{ tps|length - 10 }} more</span>
+        {% endif %}
       </div>
       {% endif %}
 
       {% if fps %}
       <div class="entry-section-label" style="color:var(--gray-400);">📄 Full Page Context</div>
-      <div class="entry-pills">
+      <div class="entry-pills" id="fps-{{ e.id }}">
         {% for k in fps[:8] %}<span class="pill-fp">{{ k }}</span>{% endfor %}
-        {% if fps|length > 8 %}<span class="pill-more">+{{ fps|length - 8 }} more</span>{% endif %}
+        {% if fps|length > 8 %}
+          <span class="pill-hidden" id="fps-hidden-{{ e.id }}" style="display:none;">{% for k in fps[8:] %}<span class="pill-fp">{{ k }}</span>{% endfor %}</span>
+          <span class="pill-more" onclick="toggleMore('{{ e.id }}','fps')" id="fps-toggle-{{ e.id }}" style="cursor:pointer;">+{{ fps|length - 8 }} more</span>
+        {% endif %}
       </div>
       {% endif %}
     </div>
@@ -628,6 +637,15 @@
       status.style.color   = 'var(--red)';
       status.textContent   = '✗ ' + err.message;
     }
+  }
+
+  // ── Toggle show all pills ──
+  function toggleMore(id, section) {
+    const hidden  = document.getElementById(`${section}-hidden-${id}`);
+    const toggle  = document.getElementById(`${section}-toggle-${id}`);
+    const showing = hidden.style.display !== 'none';
+    hidden.style.display = showing ? 'none' : 'inline';
+    toggle.textContent   = showing ? `+${hidden.querySelectorAll('span').length} more` : 'Show less';
   }
 
   // ── Delete entry ──
