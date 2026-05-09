@@ -285,11 +285,7 @@
           <textarea id="pastePinUrls" rows="4"
             style="margin-top:5px;width:100%;font-size:12px;font-family:monospace;padding:9px 12px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
             placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
-          <button type="button" onclick="extractPinProducts()" id="extractBtn"
-            style="margin-top:6px;background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer;">
-            Extract Product Names
-          </button>
-          <span id="extractStatus" style="font-size:12px;margin-left:10px;color:#7c3aed;"></span>
+          <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Product names will be extracted automatically when you click Save Data.</div>
           <div id="extractedNames" style="margin-top:8px;display:none;">
             <div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:5px;">✅ Extracted — added to Top Products box above:</div>
             <div id="extractedList" style="font-size:12px;color:#374151;line-height:1.8;"></div>
@@ -529,20 +525,52 @@
   async function submitPastedKeywords() {
     const category  = document.getElementById('pasteCategory').value.trim();
     const text      = document.getElementById('pasteKeywords').value.trim();
-    const products  = document.getElementById('pasteProducts').value.trim();
     const full_page = document.getElementById('pasteFullPage').value.trim();
     const pasteBtn  = document.getElementById('pasteBtn');
     const status    = document.getElementById('pasteStatus');
     const panel     = document.getElementById('pasteUnderstanding');
     const body      = document.getElementById('understandingBody');
+    const pinUrls   = document.getElementById('pastePinUrls').value.trim();
 
     if (!category) { alert('Please enter a category name — this is how we organize your data.'); return; }
-    if (!text && !products && !full_page) { alert('Paste something into at least one box.'); return; }
 
     pasteBtn.disabled = true;
     pasteBtn.textContent = 'Processing…';
     status.style.display = 'none';
     panel.classList.remove('visible');
+
+    // If pin URLs are present, extract product names first
+    if (pinUrls) {
+      const urls = pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin'));
+      if (urls.length) {
+        pasteBtn.textContent = `Extracting ${urls.length} pins…`;
+        try {
+          const extResp = await fetch('/trends/extract-pin-products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ urls }),
+          });
+          const extData = await extResp.json();
+          if (extData.ok && extData.products?.length) {
+            const productsBox = document.getElementById('pasteProducts');
+            const existing = productsBox.value.trim();
+            const newNames = extData.products.join('\n');
+            productsBox.value = existing ? existing + '\n' + newNames : newNames;
+
+            const listDiv = document.getElementById('extractedList');
+            const resultDiv = document.getElementById('extractedNames');
+            listDiv.innerHTML = extData.products.map(n => `• ${n}`).join('<br>');
+            resultDiv.style.display = 'block';
+            document.getElementById('pastePinUrls').value = '';
+          }
+        } catch(e) { /* continue even if extraction fails */ }
+      }
+    }
+
+    const products = document.getElementById('pasteProducts').value.trim();
+    if (!text && !products && !full_page) { alert('Paste something into at least one box.'); pasteBtn.disabled = false; pasteBtn.textContent = 'Save Data'; return; }
+
+    pasteBtn.textContent = 'Saving…';
 
     try {
       const resp = await fetch('/trends/paste', {
