@@ -147,6 +147,7 @@ class TrendEntry(db.Model):
     search_queries   = db.Column(db.Text)   # JSON list of keyword strings
     top_products     = db.Column(db.Text)   # JSON list of product strings
     full_page_kws    = db.Column(db.Text)   # JSON list of keywords from full page dump
+    insight          = db.Column(db.Text)   # AI-generated summary of this trend category
     total_keywords   = db.Column(db.Integer, default=0)
 
     def sq_list(self):

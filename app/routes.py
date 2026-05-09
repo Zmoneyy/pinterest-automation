@@ -2318,7 +2318,8 @@ def trends_paste():
         r'engagement|pin saves?|key metric.*|top products on pinterest|products based on.*|explore top.*|'
         r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger.*|fast growing trees|'
         r'great garden plants.*|heirloom|seedssun|ejuqi|seed therapy|opens a new tab|'
-        r'opens a|; opens|volume indexed.*|date range|past \d+.*|age|gender|female|male|'
+        r'opens a new tab|; opens a new tab|opens a|; opens|\; opens|'
+        r'volume indexed.*|date range|past \d+.*|age|gender|female|male|'
         r'unspecified|relative interest.*|view all.*|review (how|other).*|'
         r'expected to grow.*|forecast magic.*|age and gender.*|distribution of pinners.*|'
         r'people engaging with.*|commonly search for.*|also interested.*|'
@@ -2328,7 +2329,9 @@ def trends_paste():
         r'high confidence|medium confidence|low confidence|'
         r'showing \d+.*|preview|merchant|product name|past \d+ months?|'
         r'review other.*|key metric.*|pinterest top products.*|'
-        r'aura girl.*|pinbot|pinterest|\d+%|\d+[km]?|\s*)$',
+        r'plant addicts|nature hills|fast growing trees|gurney.*|burpee.*|'
+        r'etsy|wayfair|overstock|homedepot|lowes|costco|'
+        r'aura girl.*|pinbot|pinterest|[;,]\s*opens.*|\d+%|\d+[km]?|\s*)$',
         re.IGNORECASE
     )
 
@@ -2455,6 +2458,31 @@ def trends_paste():
 
     db.session.commit()
 
+    # ── Generate AI insight ──
+    insight = ""
+    try:
+        import anthropic as _anthropic
+        from config import Config as _Cfg
+        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
+        sq_sample  = (search_queries_kws + full_page_sq_kws)[:20]
+        tp_sample  = top_products_kws[:15]
+        _prompt = (
+            f"You are analyzing Pinterest Trends data for the category: {category_label}.\n\n"
+            f"Top search queries people use: {', '.join(sq_sample)}\n"
+            f"Top trending products: {', '.join(tp_sample) if tp_sample else 'none recorded'}\n\n"
+            "In 2-3 sentences, summarize: what is this audience looking for, what products are trending, "
+            "and what should an Amazon affiliate creator focus on to get the most clicks and commissions? "
+            "Be specific and actionable. No fluff."
+        )
+        _msg = _client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{"role": "user", "content": _prompt}],
+        )
+        insight = _msg.content[0].text.strip()
+    except Exception as _e:
+        logger.warning(f"Insight generation failed: {_e}")
+
     # ── Save a dated TrendEntry for the library ──
     import json as _json
     from app.models import TrendEntry
@@ -2463,6 +2491,7 @@ def trends_paste():
         search_queries = _json.dumps(search_queries_kws + full_page_sq_kws),
         top_products   = _json.dumps(top_products_kws),
         full_page_kws  = _json.dumps(full_page_context_kws[:30]),
+        insight        = insight,
         total_keywords = len(keywords),
     )
     db.session.add(entry)

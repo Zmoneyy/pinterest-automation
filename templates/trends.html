@@ -351,14 +351,10 @@
       </div>
       {% endif %}
 
-      {% if fps %}
-      <div class="entry-section-label" style="color:var(--gray-400);">📄 Full Page Context</div>
-      <div class="entry-pills" id="fps-{{ e.id }}">
-        {% for k in fps[:8] %}<span class="pill-fp">{{ k }}</span>{% endfor %}
-        {% if fps|length > 8 %}
-          <span class="pill-hidden" id="fps-hidden-{{ e.id }}" style="display:none;">{% for k in fps[8:] %}<span class="pill-fp">{{ k }}</span>{% endfor %}</span>
-          <span class="pill-more" onclick="toggleMore('{{ e.id }}','fps')" id="fps-toggle-{{ e.id }}" style="cursor:pointer;">+{{ fps|length - 8 }} more</span>
-        {% endif %}
+      {% if e.insight %}
+      <div style="margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:10px 12px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:4px;">🧠 AI Insight</div>
+        <div style="font-size:13px;color:#166534;line-height:1.5;">{{ e.insight }}</div>
       </div>
       {% endif %}
     </div>
