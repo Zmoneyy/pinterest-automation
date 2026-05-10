@@ -2415,7 +2415,7 @@ def trends_paste():
 
         # Try to find "Top products" section in full page — route to top_products_kws
         tp_match = re.search(
-            r'(?:top products[^\n]*\n)([\s\S]+?)(?=\n(?:other product|people interested|demographics|performance|related to|view less|view all|search queries|$))',
+            r'top products?\b[^\n]*\n([\s\S]+?)(?=\n\s*(?:other product|people interested|demographics|performance|related to|view less|view all|search quer|$))',
             full_page_raw, re.IGNORECASE
         )
         if tp_match:
@@ -2425,15 +2425,24 @@ def trends_paste():
                     seen.add(p.lower())
                     top_products_kws.append(p)
 
-        # Everything else from the full page — short keyword-like strings only, no product names
-        for line in re.split(r'[\n,;]+', full_page_raw):
+        # Everything else from the full page:
+        # - Long lines (>25 chars) → likely product names → route to top_products
+        # - Short lines → keyword context
+        for line in re.split(r'[\n]+', full_page_raw):
             line = line.strip()
-            if line.startswith('http'):
+            if not line or line.startswith('http'):
                 continue
-            kw = clean_kw(line, max_len=50)  # strict 50-char limit keeps context clean
-            if kw and kw not in seen and not ui_noise.match(kw):
-                seen.add(kw)
-                full_page_context_kws.append(kw)
+            if len(line) > 25:
+                # Looks like a product name — use clean_product
+                p = clean_product(line)
+                if p and p.lower() not in seen and not ui_noise.match(p):
+                    seen.add(p.lower())
+                    top_products_kws.append(p)
+            else:
+                kw = clean_kw(line, max_len=50)
+                if kw and kw not in seen and not ui_noise.match(kw):
+                    seen.add(kw)
+                    full_page_context_kws.append(kw)
 
     # ── Category auto-detect from full page if not provided ──
     if (not category_label or category_label == "pinterest analytics") and full_page_raw:
