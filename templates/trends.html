@@ -252,13 +252,23 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
       {# Search queries #}
       <div>
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">
-          🔍 Search Queries <span style="color:var(--red);font-size:10px;">← most important</span>
-        </label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:0;">
+            🔍 Search Queries <span style="color:var(--red);font-size:10px;">← most important</span>
+          </label>
+          <button type="button" onclick="previewKeywords()"
+            style="font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
+            Preview ▶
+          </button>
+        </div>
         <textarea id="pasteKeywords" rows="5"
-          style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
           placeholder="gardening&#10;indoor plants&#10;flower pots&#10;lily flowers"></textarea>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Copy the Search Queries list</div>
+        <div id="kw-preview" style="display:none;margin-top:8px;background:#eff6ff;border-radius:8px;padding:10px;">
+          <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">Will save these keywords:</div>
+          <div id="kw-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          <div id="kw-preview-count" style="font-size:11px;color:var(--gray-400);margin-top:5px;"></div>
+        </div>
       </div>
 
       {# Top Products #}
@@ -267,20 +277,26 @@
         <textarea id="pasteProducts" rows="4"
           style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
           placeholder="Laneige Lip Mask&#10;CeraVe Moisturizer&#10;Self-watering planter"></textarea>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Type names, OR paste Pinterest pin URLs below to extract them automatically</div>
+        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Type names, OR use pin URLs below to extract automatically</div>
 
         <div style="margin-top:8px;">
-          <label style="font-size:11px;font-weight:600;color:#7c3aed;">📌 Paste Pinterest Pin URLs (one per line)</label>
-          <div style="margin:4px 0 6px;background:#f5f0ff;border-radius:6px;padding:8px 10px;font-size:11px;color:#374151;">
-            On <strong>trends.pinterest.com</strong> → your category → Top Products → open Console (Cmd+Option+I) → paste:<br>
-            <code style="display:block;margin-top:4px;background:#ede9fe;padding:6px 8px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
-            Then Cmd+C and paste below.
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <label style="font-size:11px;font-weight:600;color:#7c3aed;margin-bottom:0;">📌 Pinterest Pin URLs</label>
+            <button type="button" onclick="testPinExtraction()"
+              style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
+              Test Extract ▶
+            </button>
+          </div>
+          <div style="margin-bottom:6px;background:#f5f0ff;border-radius:6px;padding:7px 9px;font-size:11px;color:#374151;">
+            trends.pinterest.com → Top Products → Console (Cmd+Option+I) → paste &amp; run:<br>
+            <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
           </div>
           <textarea id="pastePinUrls" rows="3"
             style="width:100%;font-size:12px;font-family:monospace;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
             placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
-          <div id="extractedNames" style="margin-top:6px;display:none;">
-            <div id="extractedList" style="font-size:12px;color:#374151;line-height:1.8;"></div>
+          <div id="pin-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
+            <div id="pin-preview-status" style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;"></div>
+            <div id="pin-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
           </div>
         </div>
       </div>
@@ -505,6 +521,77 @@
   document.getElementById('upload-form').addEventListener('submit', () => {
     btn.disabled = true; btn.textContent = 'Analyzing…';
   });
+
+  // ── Preview: Search Queries ──
+  function previewKeywords() {
+    const raw = document.getElementById('pasteKeywords').value.trim();
+    const preview = document.getElementById('kw-preview');
+    const pills   = document.getElementById('kw-preview-pills');
+    const count   = document.getElementById('kw-preview-count');
+    if (!raw) { preview.style.display = 'none'; return; }
+
+    const lines = raw.split(/[\n,;]+/).map(l => l.trim().toLowerCase()).filter(l => l.length >= 3 && l.length <= 80);
+    const unique = [...new Set(lines)];
+
+    pills.innerHTML = unique.map(k =>
+      `<span style="font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;">${k}</span>`
+    ).join('');
+    count.textContent = `${unique.length} keywords will be saved`;
+    preview.style.display = 'block';
+  }
+
+  // ── Preview: Pin URL extraction ──
+  async function testPinExtraction() {
+    const raw    = document.getElementById('pastePinUrls').value.trim();
+    const preview = document.getElementById('pin-preview');
+    const status  = document.getElementById('pin-preview-status');
+    const pills   = document.getElementById('pin-preview-pills');
+    if (!raw) return;
+
+    const urls = [...new Set(raw.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin')))];
+    if (!urls.length) {
+      status.textContent = '⚠️ No valid Pinterest pin URLs found';
+      preview.style.display = 'block';
+      return;
+    }
+
+    status.textContent = `⏳ Fetching ${urls.length} pins…`;
+    pills.innerHTML = '';
+    preview.style.display = 'block';
+
+    const extracted = [];
+    let done = 0;
+    for (const url of urls) {
+      try {
+        const r = await fetch(url, { credentials: 'omit' });
+        const html = await r.text();
+        const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
+        if (m) {
+          const d = JSON.parse(m[1]);
+          const name = d.headline || d?.sharedContent?.headline || d?.name || '';
+          if (name && name.length > 3) extracted.push(name.trim());
+        }
+      } catch(e) { /* skip */ }
+      done++;
+      status.textContent = `⏳ Fetched ${done}/${urls.length}…`;
+    }
+
+    if (extracted.length) {
+      status.textContent = `✅ ${extracted.length} product names found — looks good! Hit Save Data to keep them.`;
+      status.style.color = '#065f46';
+      pills.innerHTML = extracted.map(n =>
+        `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${n}</span>`
+      ).join('');
+      // Also populate the Products box so Save Data picks them up
+      const box = document.getElementById('pasteProducts');
+      const existing = box.value.trim();
+      box.value = existing ? existing + '\n' + extracted.join('\n') : extracted.join('\n');
+      document.getElementById('pastePinUrls').value = '';
+    } else {
+      status.textContent = '⚠️ No product names extracted — pins may require login or have no JSON-LD data';
+      status.style.color = '#dc2626';
+    }
+  }
 
   // ── Submit paste ──
   async function submitPastedKeywords() {
