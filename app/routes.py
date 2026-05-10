@@ -2232,6 +2232,12 @@ def _suggest_boards_from_trends(trends):
     return suggestions
 
 
+@bp.route("/test-scrape")
+@login_required
+def test_scrape():
+    return render_template("test_scrape.html")
+
+
 @bp.route("/trends")
 @login_required
 def trends():

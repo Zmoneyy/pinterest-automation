@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+{% block title %}Scrape Test — Pinterest Automation{% endblock %}
+
+{% block head %}
+<style>
+  .step-box {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: var(--red);
+    color: #fff;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 800;
+    margin-right: 10px;
+    flex-shrink: 0;
+  }
+  .step-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--gray-800);
+    display: flex;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .command-box {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    user-select: all;
+    cursor: pointer;
+    position: relative;
+    line-height: 1.6;
+  }
+  .command-box:active { opacity: 0.8; }
+  .copy-hint {
+    font-size: 11px;
+    color: var(--gray-400);
+    margin-top: 6px;
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    margin: 2px;
+  }
+  .pill-kw   { background: #dbeafe; color: #1d4ed8; }
+  .pill-prod { background: #f5f0ff; color: #7c3aed; }
+  .pill-pin  { background: #fef9c3; color: #854d0e; font-size: 11px; font-family: monospace; }
+  .result-section {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .result-label {
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+  <h1 class="page-title" style="margin-bottom:0;">🧪 Scrape Test</h1>
+  <span style="font-size:12px;background:#fef9c3;color:#854d0e;padding:3px 10px;border-radius:20px;font-weight:700;">TEST ONLY — nothing saves</span>
+</div>
+<p style="font-size:13px;color:var(--gray-400);margin-bottom:24px;">Test the one-command Pinterest Trends scrape before wiring it into the real Trends page.</p>
+
+{# Step 1: Prep #}
+<div class="step-box">
+  <div class="step-title"><span class="step-num">1</span> Prep the Pinterest Trends page</div>
+  <ol style="font-size:13px;color:var(--gray-600);line-height:2;padding-left:20px;">
+    <li>Go to <strong>trends.pinterest.com</strong> → pick your product category</li>
+    <li>Scroll slowly all the way down so everything lazy-loads</li>
+    <li>Click <strong>"Explore Top Products"</strong> button to expand that section</li>
+    <li>Click <strong>"View all"</strong> on Search Queries to expand the full keyword list</li>
+    <li>Scroll through the Top Products section so all pin thumbnails load</li>
+  </ol>
+</div>
+
+{# Step 2: Run command #}
+<div class="step-box">
+  <div class="step-title"><span class="step-num">2</span> Open Console → paste this command → Enter</div>
+  <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">Cmd+Option+I → Console tab → click the box below to select all → Cmd+C → paste in Console → Enter</div>
+  <div class="command-box" onclick="selectCommand(this)" id="theCommand">copy(JSON.stringify({pins:[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))],text:document.body.innerText},null,2))</div>
+  <div class="copy-hint">👆 Click to select · then Cmd+C · then paste in Pinterest Console · hit Enter · it auto-copies to clipboard</div>
+</div>
+
+{# Step 3: Paste result #}
+<div class="step-box">
+  <div class="step-title"><span class="step-num">3</span> Paste the result here</div>
+  <div style="font-size:12px;color:var(--gray-500);margin-bottom:8px;">After running the command, your clipboard has the JSON. Paste it below.</div>
+  <textarea id="pasteBox" rows="8"
+    style="font-family:monospace;font-size:12px;background:#f8f8f8;border:1.5px dashed var(--gray-200);border-radius:8px;"
+    placeholder='{"pins":["https://www.pinterest.com/pin/..."],"text":"Gardening\nindoor plants\n..."}'
+    oninput="parseInput()"></textarea>
+  <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+    <button onclick="parseInput()" style="background:var(--red);color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;">Parse It</button>
+    <button onclick="document.getElementById('pasteBox').value='';clearResults();" style="background:var(--gray-100);color:var(--gray-600);border:none;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;">Clear</button>
+    <span id="parseStatus" style="font-size:13px;"></span>
+  </div>
+</div>
+
+{# Results #}
+<div id="results" style="display:none;">
+  <h2 style="font-size:16px;font-weight:800;margin-bottom:14px;">📊 What was extracted</h2>
+
+  <div class="result-section">
+    <div class="result-label" style="color:#1d4ed8;">🔍 Search Queries <span id="kw-count" style="font-weight:400;font-size:10px;"></span></div>
+    <div id="kw-pills"></div>
+  </div>
+
+  <div class="result-section">
+    <div class="result-label" style="color:#7c3aed;">🛍️ Top Products (from page text) <span id="prod-count" style="font-weight:400;font-size:10px;"></span></div>
+    <div id="prod-pills"></div>
+    <div style="font-size:11px;color:var(--gray-400);margin-top:8px;">These are long strings extracted from the page — likely product names. Review them.</div>
+  </div>
+
+  <div class="result-section">
+    <div class="result-label" style="color:#854d0e;">📌 Pin URLs found <span id="pin-count" style="font-weight:400;font-size:10px;"></span></div>
+    <div id="pin-list" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+    <div style="font-size:11px;color:var(--gray-400);margin-top:8px;">These will be fetched to extract product names from JSON-LD.</div>
+    <button id="extractBtn" onclick="extractPinNames()" style="margin-top:10px;background:#854d0e;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer;display:none;">
+      Extract Product Names from Pins
+    </button>
+    <div id="pin-extract-status" style="font-size:12px;margin-top:6px;"></div>
+    <div id="pin-extracted-pills" style="margin-top:8px;"></div>
+  </div>
+
+  <div class="result-section" style="background:#f0fdf4;border-color:#bbf7d0;">
+    <div class="result-label" style="color:#15803d;">✅ Raw JSON (for debugging)</div>
+    <pre id="raw-json" style="font-size:11px;color:#374151;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;"></pre>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function selectCommand(el) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  // ── Noise patterns — mirrors server-side ui_noise ──
+  const NOISE = [
+    /^(home|about|log in|sign up|sign in|terms|privacy|help|settings|notifications|search|explore|following|for you|today|this week|this month|pinterest|pinbot|aura girl)$/i,
+    /^\d+(\.\d+)?[km%]?$/,
+    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s/i,
+    /opens a new tab/i,
+    /showing \d+/i,
+    /view (all|less|more)/i,
+    /copy keywords?/i,
+    /people (engaging|interested|also engage)/i,
+    /top products/i,
+    /explore top/i,
+    /search quer/i,
+    /related to/i,
+    /demographics/i,
+    /^\s*$/,
+  ];
+
+  function isNoise(s) {
+    return NOISE.some(r => r.test(s.trim()));
+  }
+
+  let parsedPins = [];
+
+  function clearResults() {
+    document.getElementById('results').style.display = 'none';
+    document.getElementById('parseStatus').textContent = '';
+    parsedPins = [];
+  }
+
+  function parseInput() {
+    const raw = document.getElementById('pasteBox').value.trim();
+    if (!raw) return;
+
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch(e) {
+      document.getElementById('parseStatus').textContent = '✗ Not valid JSON — make sure you pasted the full output';
+      document.getElementById('parseStatus').style.color = 'var(--red)';
+      return;
+    }
+
+    const pageText = data.text || '';
+    const pins     = data.pins || [];
+    parsedPins = pins;
+
+    // ── Parse page text into keywords vs products ──
+    const lines = pageText.split('\n').map(l => l.trim()).filter(l => l.length > 1);
+    const keywords = [];
+    const products = [];
+    const seen = new Set();
+
+    for (const line of lines) {
+      if (isNoise(line)) continue;
+      if (line.startsWith('http')) continue;
+      const key = line.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      if (line.length > 30) {
+        // Long = likely a product name
+        if (line.length <= 150) products.push(line);
+      } else if (line.length >= 3 && line.length <= 50) {
+        // Short = likely a search keyword
+        keywords.push(line.toLowerCase());
+      }
+    }
+
+    // ── Render keywords ──
+    const kwPills = document.getElementById('kw-pills');
+    document.getElementById('kw-count').textContent = `(${keywords.length} found)`;
+    kwPills.innerHTML = keywords.map(k => `<span class="pill pill-kw">${k}</span>`).join('');
+
+    // ── Render products ──
+    const prodPills = document.getElementById('prod-pills');
+    document.getElementById('prod-count').textContent = `(${products.length} found)`;
+    prodPills.innerHTML = products.length
+      ? products.map(p => `<span class="pill pill-prod">${p}</span>`).join('')
+      : '<span style="font-size:12px;color:var(--gray-400);">None detected — may need to scroll more on Pinterest or expand sections</span>';
+
+    // ── Render pins ──
+    const pinList = document.getElementById('pin-list');
+    document.getElementById('pin-count').textContent = `(${pins.length} found)`;
+    pinList.innerHTML = pins.slice(0, 20).map(p =>
+      `<span class="pill pill-pin">${p.replace('https://www.pinterest.com/pin/','pin/')}</span>`
+    ).join('') + (pins.length > 20 ? `<span class="pill pill-pin">+${pins.length-20} more</span>` : '');
+
+    // Show extract button if pins exist
+    document.getElementById('extractBtn').style.display = pins.length ? 'inline-block' : 'none';
+
+    // ── Raw JSON ──
+    document.getElementById('raw-json').textContent = JSON.stringify({
+      keywords_found: keywords.length,
+      products_found: products.length,
+      pins_found: pins.length,
+      sample_keywords: keywords.slice(0,10),
+      sample_products: products.slice(0,5),
+      sample_pins: pins.slice(0,3),
+    }, null, 2);
+
+    document.getElementById('results').style.display = 'block';
+    document.getElementById('parseStatus').textContent = `✓ Parsed — ${keywords.length} keywords, ${products.length} products, ${pins.length} pins`;
+    document.getElementById('parseStatus').style.color = 'var(--green)';
+  }
+
+  // ── Extract product names from pin URLs ──
+  async function extractPinNames() {
+    const btn    = document.getElementById('extractBtn');
+    const status = document.getElementById('pin-extract-status');
+    const pills  = document.getElementById('pin-extracted-pills');
+
+    btn.disabled = true;
+    status.textContent = `⏳ Fetching ${parsedPins.length} pins…`;
+
+    const extracted = [];
+    let done = 0;
+    for (const url of parsedPins) {
+      try {
+        const r = await fetch(url, { credentials: 'omit' });
+        const html = await r.text();
+        const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
+        if (m) {
+          const d = JSON.parse(m[1]);
+          const name = d.headline || d?.sharedContent?.headline || d?.name || '';
+          if (name && name.length > 3) extracted.push(name.trim());
+        }
+      } catch(e) { /* skip */ }
+      done++;
+      status.textContent = `⏳ Fetched ${done}/${parsedPins.length}…`;
+    }
+
+    if (extracted.length) {
+      pills.innerHTML = `<div style="font-size:11px;font-weight:700;color:#065f46;margin-bottom:6px;">✅ ${extracted.length} product names from pins:</div>` +
+        extracted.map(n => `<span class="pill pill-prod">${n}</span>`).join('');
+      status.textContent = `✅ ${extracted.length} names extracted`;
+      status.style.color = 'var(--green)';
+    } else {
+      status.textContent = '⚠️ Could not extract names from pins — Pinterest may be blocking or pins have no JSON-LD';
+      status.style.color = 'var(--orange)';
+    }
+
+    btn.disabled = false;
+  }
+</script>
+{% endblock %}
