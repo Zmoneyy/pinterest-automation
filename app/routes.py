@@ -2361,6 +2361,7 @@ def trends_paste():
 
     ui_noise = re.compile(
         r'^(copy keywords?|view (less|more|all product categor.*)|people engaging|people interested|'
+        r'people interested in .* are also interested.*|also interested in these.*|'
         r'related|other product categor.*|performance|demographics|forecast.*|outbound clicks?|'
         r'engagement|pin saves?|key metric.*|top products on pinterest|products based on.*|explore top.*|'
         r'amazon|walmart|target|the home depot|etsy|lowe.*|kroger.*|fast growing trees|'
@@ -2378,6 +2379,9 @@ def trends_paste():
         r'review other.*|key metric.*|pinterest top products.*|'
         r'plant addicts|nature hills|fast growing trees|gurney.*|burpee.*|'
         r'etsy|wayfair|overstock|homedepot|lowes|costco|'
+        r'southern europe.*|northern europe.*|eastern europe.*|nordic countries.*|'
+        r'latin americ.*|western europe.*|germanic.*|benelux.*|'
+        r'great britain.*|hispanic latin.*|'
         r'aura girl.*|pinbot|pinterest|[;,]\s*opens.*|\d+%|\d+[km]?|\s*)$',
         re.IGNORECASE
     )

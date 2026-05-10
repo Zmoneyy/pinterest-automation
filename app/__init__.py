@@ -64,12 +64,26 @@ def create_app(config_object=None):
             t = str(text)
             # Escape HTML entities first
             t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            # Horizontal rules --- → <hr>
+            t = _re.sub(r'^\s*[-]{3,}\s*$', '<hr style="border:none;border-top:1px solid #bbf7d0;margin:8px 0;">', t, flags=_re.MULTILINE)
+            # Markdown tables — strip them into a simple list of rows
+            def _render_table(m):
+                rows = [r.strip() for r in m.group(0).strip().split('\n') if r.strip() and not _re.match(r'^\|[-| :]+\|$', r.strip())]
+                html = '<div style="margin:6px 0;">'
+                for row in rows:
+                    cells = [c.strip() for c in row.strip('|').split('|') if c.strip()]
+                    html += '<div style="display:flex;gap:12px;padding:3px 0;border-bottom:1px solid #d1fae5;">' + ''.join(f'<span style="flex:1;font-size:12px;">{c}</span>' for c in cells) + '</div>'
+                html += '</div>'
+                return html
+            t = _re.sub(r'(^\|.+\|\n?)+', _render_table, t, flags=_re.MULTILINE)
             # Bold **text**
             t = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
             # Italic *text*
             t = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', t)
             # ## Heading → bold section header
             t = _re.sub(r'^#{1,3}\s+(.+)$', r'<p style="font-weight:800;margin:10px 0 3px 0;color:#14532d;">\1</p>', t, flags=_re.MULTILINE)
+            # Numbered list  1. item
+            t = _re.sub(r'^\d+\.\s+(.+)$', r'<li>\1</li>', t, flags=_re.MULTILINE)
             # Bullet - item
             t = _re.sub(r'^[-•]\s+(.+)$', r'<li>\1</li>', t, flags=_re.MULTILINE)
             # Wrap consecutive <li> in <ul>
@@ -78,7 +92,7 @@ def create_app(config_object=None):
             t = _re.sub(r'\n{2,}', '</p><p style="margin:4px 0;">', t)
             t = '<p style="margin:4px 0;">' + t + '</p>'
             # Clean up empty paragraphs
-            t = _re.sub(r'<p[^>]*>\s*</p>', '', t)
+            t = _re.sub(r'<p[^>]*>\s*(<hr[^>]*>)?\s*</p>', r'\1', t)
             return Markup(t)
 
         app.jinja_env.filters["md"] = md_to_html
