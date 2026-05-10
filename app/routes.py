@@ -2238,6 +2238,47 @@ def test_scrape():
     return render_template("test_scrape.html")
 
 
+@bp.route("/trends/preview-insight", methods=["POST"])
+@login_required
+def trends_preview_insight():
+    """Generate an AI Strategy Brief preview without saving anything."""
+    data = request.get_json(force=True) or {}
+    category = data.get("category", "").strip() or "Unknown"
+    sq_sample = data.get("search_queries", [])[:20]
+    tp_sample = data.get("top_products", [])[:15]
+
+    try:
+        import anthropic as _anthropic
+        from config import Config as _Cfg
+        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
+        _prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
+
+Pinterest Trends data for category: {category}
+
+Top search queries (what people are actively searching):
+{', '.join(sq_sample) if sq_sample else 'none'}
+
+Top trending products on Pinterest right now:
+{', '.join(tp_sample) if tp_sample else 'none recorded'}
+
+Give a focused strategic analysis covering:
+1. **Audience intent** — what is this person trying to achieve/feel?
+2. **Best products to pin** — which trending products have highest click/buy potential and why?
+3. **Pin angle** — what transformation or emotion should the pin lead with?
+4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
+5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
+
+Be specific, tactical, direct. No fluff. Use markdown headers."""
+        _msg = _client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=600,
+            messages=[{"role": "user", "content": _prompt}],
+        )
+        return jsonify({"ok": True, "insight": _msg.content[0].text.strip()})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @bp.route("/trends")
 @login_required
 def trends():

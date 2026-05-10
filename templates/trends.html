@@ -241,12 +241,22 @@
 
     {# Full page dump #}
     <div style="margin-bottom:14px;">
-      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;">
-        📄 Full Page Dump <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--gray-400);">— Cmd+A then paste the whole page</span>
-      </label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">
+          📄 Full Page Dump <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--gray-400);">— Cmd+A then paste the whole page</span>
+        </label>
+        <button type="button" onclick="previewAIBrief()"
+          style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;white-space:nowrap;">
+          Preview AI Brief ▶
+        </button>
+      </div>
       <textarea id="pasteFullPage" rows="5"
-        style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+        style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
         placeholder="Ctrl+A / Cmd+A on the Pinterest Analytics page, paste everything here. I'll extract what matters."></textarea>
+      <div id="ai-brief-preview" style="display:none;margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief Preview</div>
+        <div id="ai-brief-preview-body" style="font-size:13px;color:#166534;line-height:1.6;"></div>
+      </div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
@@ -273,10 +283,21 @@
 
       {# Top Products #}
       <div>
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;">🛍️ Top Products</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">🛍️ Top Products</label>
+          <button type="button" onclick="previewProducts()"
+            style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
+            Preview ▶
+          </button>
+        </div>
         <textarea id="pasteProducts" rows="4"
-          style="margin-top:5px;width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
           placeholder="Laneige Lip Mask&#10;CeraVe Moisturizer&#10;Self-watering planter"></textarea>
+        <div id="prod-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
+          <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;">Will save these products:</div>
+          <div id="prod-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+          <div id="prod-preview-count" style="font-size:11px;color:var(--gray-400);margin-top:5px;"></div>
+        </div>
         <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Type names, OR use pin URLs below to extract automatically</div>
 
         <div style="margin-top:8px;">
@@ -522,6 +543,26 @@
     btn.disabled = true; btn.textContent = 'Analyzing…';
   });
 
+  // ── Simple client-side markdown renderer (for previews only) ──
+  function renderMd(text) {
+    let t = text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/^\s*---+\s*$/gm, '<hr style="border:none;border-top:1px solid #bbf7d0;margin:6px 0;">')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^#{1,3}\s+(.+)$/gm, '<p style="font-weight:800;margin:10px 0 3px;color:#14532d;">$1</p>')
+      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>.*<\/li>\n?)+/g, s => `<ul style="margin:4px 0 6px 16px;padding:0;">${s}</ul>`)
+      .replace(/\n{2,}/g, '</p><p style="margin:4px 0;">')
+      .replace(/^\|.+\|$/gm, row => {
+        if (/^[\|:\- ]+$/.test(row)) return '';
+        const cells = row.split('|').filter(c=>c.trim());
+        return '<div style="display:flex;gap:8px;padding:2px 0;font-size:12px;">' + cells.map(c=>`<span style="flex:1;">${c.trim()}</span>`).join('') + '</div>';
+      });
+    return '<p style="margin:4px 0;">' + t + '</p>';
+  }
+
   // ── Preview: Search Queries ──
   function previewKeywords() {
     const raw = document.getElementById('pasteKeywords').value.trim();
@@ -538,6 +579,65 @@
     ).join('');
     count.textContent = `${unique.length} keywords will be saved`;
     preview.style.display = 'block';
+  }
+
+  // ── Preview: Top Products ──
+  function previewProducts() {
+    const raw     = document.getElementById('pasteProducts').value.trim();
+    const preview = document.getElementById('prod-preview');
+    const pills   = document.getElementById('prod-preview-pills');
+    const count   = document.getElementById('prod-preview-count');
+    if (!raw) { preview.style.display = 'none'; return; }
+
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 150 && !l.startsWith('http'));
+    const unique = [...new Map(lines.map(l => [l.toLowerCase(), l])).values()];
+
+    pills.innerHTML = unique.map(p =>
+      `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${p}</span>`
+    ).join('');
+    count.textContent = unique.length ? `${unique.length} products will be saved` : 'No valid product names found';
+    preview.style.display = 'block';
+  }
+
+  // ── Preview: AI Strategy Brief ──
+  async function previewAIBrief() {
+    const category  = document.getElementById('pasteCategory').value.trim();
+    const fullPage  = document.getElementById('pasteFullPage').value.trim();
+    const keywords  = document.getElementById('pasteKeywords').value.trim();
+    const products  = document.getElementById('pasteProducts').value.trim();
+    const preview   = document.getElementById('ai-brief-preview');
+    const body      = document.getElementById('ai-brief-preview-body');
+    const btn       = event.target;
+
+    if (!fullPage && !keywords) {
+      alert('Paste something into the Full Page Dump or Search Queries box first.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    preview.style.display = 'block';
+    body.innerHTML = '<span style="color:#16a34a;">Asking Claude for a strategy brief…</span>';
+
+    // Parse keywords and products client-side to send to the server
+    const sq = keywords.split(/[\n,;]+/).map(l => l.trim().toLowerCase()).filter(l => l.length >= 3 && l.length <= 80);
+    const tp = products.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 150 && !l.startsWith('http'));
+
+    try {
+      const resp = await fetch('/trends/preview-insight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: category || 'Unknown', search_queries: sq, top_products: tp }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Failed');
+      body.innerHTML = renderMd(data.insight);
+    } catch(e) {
+      body.innerHTML = `<span style="color:#dc2626;">Error: ${e.message}</span>`;
+    }
+
+    btn.disabled = false;
+    btn.textContent = 'Preview AI Brief ▶';
   }
 
   // ── Preview: Pin URL extraction ──
