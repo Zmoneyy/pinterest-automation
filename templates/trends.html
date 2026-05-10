@@ -2,6 +2,7 @@
 {% block title %}Trends — Pinterest Automation{% endblock %}
 
 {% block head %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   /* ── Page layout ── */
   .trends-layout {
@@ -354,7 +355,7 @@
       {% if e.insight %}
       <div style="margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief</div>
-        <div style="font-size:13px;color:#166534;line-height:1.6;white-space:pre-wrap;">{{ e.insight }}</div>
+        <div class="insight-body" style="font-size:13px;color:#166534;line-height:1.6;" data-raw="{{ e.insight | replace('"', '&quot;') | replace('\n', '\\n') }}"></div>
       </div>
       {% endif %}
     </div>
@@ -438,6 +439,11 @@
 
 {% block scripts %}
 <script>
+  // ── Toggle paste panel ──
+  function togglePastePanel() {
+    document.getElementById('pastePanel').classList.toggle('open');
+  }
+
   // ── CSV upload ──
   const input = document.getElementById('csv-input');
   const zone  = document.getElementById('upload-zone');
@@ -460,44 +466,7 @@
   });
   document.getElementById('upload-form').addEventListener('submit', () => {
     btn.disabled = true; btn.textContent = 'Analyzing…';
-    btn.disabled = true;
-    btn.textContent = '⏳ Extracting…';
-    status.textContent = `Fetching ${urls.length} pins…`;
-
-    try {
-      const resp = await fetch('/trends/extract-pin-products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ urls }),
-      });
-      const data = await resp.json();
-
-      if (!data.ok || !data.products?.length) {
-        status.textContent = data.error || 'No products found.';
-        return;
-      }
-
-      // Append extracted names to the Top Products textarea
-      const productsBox = document.getElementById('pasteProducts');
-      const existing = productsBox.value.trim();
-      const newNames = data.products.join('\n');
-      productsBox.value = existing ? existing + '\n' + newNames : newNames;
-
-      // Show confirmed list
-      listDiv.innerHTML = data.products.map(n => `• ${n}`).join('<br>');
-      resultDiv.style.display = 'block';
-      status.textContent = `✅ ${data.products.length} products extracted`;
-
-      // Clear URL box
-      document.getElementById('pastePinUrls').value = '';
-
-    } catch(e) {
-      status.textContent = 'Error: ' + e.message;
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Extract Product Names';
-    }
-  }
+  });
 
   // ── Submit paste ──
   async function submitPastedKeywords() {
@@ -610,6 +579,29 @@
       status.textContent   = '✗ ' + err.message;
     }
   }
+
+  // ── Render AI Strategy Brief markdown ──
+  document.querySelectorAll('.insight-body').forEach(el => {
+    const raw = el.getAttribute('data-raw').replace(/\\n/g, '\n');
+    if (typeof marked !== 'undefined') {
+      el.innerHTML = marked.parse(raw);
+    } else {
+      el.textContent = raw;
+    }
+  });
+  // Style headings and bold inside insight blocks
+  document.querySelectorAll('.insight-body h1, .insight-body h2, .insight-body h3').forEach(h => {
+    h.style.cssText = 'font-size:13px;font-weight:800;color:#14532d;margin:10px 0 4px 0;';
+  });
+  document.querySelectorAll('.insight-body strong').forEach(s => {
+    s.style.color = '#14532d';
+  });
+  document.querySelectorAll('.insight-body ul, .insight-body ol').forEach(l => {
+    l.style.cssText = 'margin:4px 0 4px 16px;padding:0;';
+  });
+  document.querySelectorAll('.insight-body p').forEach(p => {
+    p.style.cssText = 'margin:4px 0;';
+  });
 
   // ── Toggle show all pills ──
   function toggleMore(id, section) {
