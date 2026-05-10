@@ -2253,6 +2253,23 @@ def trends_delete_entry(entry_id):
     return jsonify({"ok": True})
 
 
+@bp.route("/trends/update-products/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_update_products(entry_id):
+    """Add or replace top_products for an existing TrendEntry."""
+    import json as _json
+    from app.models import TrendEntry
+    data = request.get_json(force=True) or {}
+    products = [p.strip() for p in data.get("products", []) if p.strip()]
+    entry = TrendEntry.query.get_or_404(entry_id)
+    # Merge with existing (deduplicate)
+    existing = entry.tp_list()
+    merged = list(dict.fromkeys(existing + products))  # preserve order, deduplicate
+    entry.top_products = _json.dumps(merged)
+    db.session.commit()
+    return jsonify({"ok": True, "count": len(merged), "products": merged})
+
+
 @bp.route("/trends/extract-pin-products", methods=["POST"])
 @login_required
 def trends_extract_pin_products():
