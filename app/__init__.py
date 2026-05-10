@@ -54,6 +54,35 @@ def create_app(config_object=None):
         app_env = os.environ.get("APP_ENV", "prod")
         app.jinja_env.globals["APP_ENV"] = app_env
 
+        # Markdown → HTML filter for AI Strategy Brief
+        import re as _re
+        from markupsafe import Markup
+
+        def md_to_html(text):
+            if not text:
+                return ""
+            t = str(text)
+            # Escape HTML entities first
+            t = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            # Bold **text**
+            t = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', t)
+            # Italic *text*
+            t = _re.sub(r'\*(.+?)\*', r'<em>\1</em>', t)
+            # ## Heading → bold section header
+            t = _re.sub(r'^#{1,3}\s+(.+)$', r'<p style="font-weight:800;margin:10px 0 3px 0;color:#14532d;">\1</p>', t, flags=_re.MULTILINE)
+            # Bullet - item
+            t = _re.sub(r'^[-•]\s+(.+)$', r'<li>\1</li>', t, flags=_re.MULTILINE)
+            # Wrap consecutive <li> in <ul>
+            t = _re.sub(r'(<li>.*?</li>(\n|$))+', lambda m: '<ul style="margin:4px 0 6px 16px;padding:0;">' + m.group(0) + '</ul>', t, flags=_re.DOTALL)
+            # Paragraphs: blank lines
+            t = _re.sub(r'\n{2,}', '</p><p style="margin:4px 0;">', t)
+            t = '<p style="margin:4px 0;">' + t + '</p>'
+            # Clean up empty paragraphs
+            t = _re.sub(r'<p[^>]*>\s*</p>', '', t)
+            return Markup(t)
+
+        app.jinja_env.filters["md"] = md_to_html
+
         # Start the scheduler
         _start_scheduler(app)
 
