@@ -225,102 +225,82 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
       <span style="font-size:20px;">📋</span>
       <div>
-        <div style="font-size:15px;font-weight:700;color:var(--gray-800);">Paste from Pinterest Analytics</div>
-        <div style="font-size:12px;color:var(--gray-400);">Fill one or all boxes — category name is required</div>
+        <div style="font-size:15px;font-weight:700;color:var(--gray-800);">Add Category from Pinterest Trends</div>
+        <div style="font-size:12px;color:var(--gray-400);">Screenshot → keywords extracted automatically. Pin URLs → products extracted automatically.</div>
       </div>
       <button type="button" onclick="togglePastePanel()" style="margin-left:auto;background:none;border:none;font-size:20px;color:var(--gray-400);cursor:pointer;">✕</button>
     </div>
 
-    {# Category name — prominent #}
-    <div style="margin-bottom:14px;">
-      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">🛍️ Pinterest Product Category <span style="color:var(--red);">*</span></label>
+    {# Step 1: Category name #}
+    <div style="margin-bottom:16px;">
+      <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;">🛍️ Category Name <span style="color:var(--red);">*</span></label>
       <input type="text" id="pasteCategory"
-        placeholder='e.g. Skincare, Home Decor, Fitness, Garden, Nails…'
+        placeholder='e.g. Plants, Skincare, Home Decor, Fitness, Nails…'
         style="margin-top:5px;font-size:14px;padding:10px 12px;border:2px solid #bfdbfe;border-radius:8px;width:100%;box-sizing:border-box;font-family:inherit;font-weight:600;">
     </div>
 
-    {# Full page dump #}
-    <div style="margin-bottom:14px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">
-          📄 Full Page Dump <span style="font-weight:400;text-transform:none;font-size:10px;color:var(--gray-400);">— Cmd+A then paste the whole page</span>
+    {# Step 2: Screenshot upload #}
+    <div style="margin-bottom:16px;background:#fafafa;border:2px dashed var(--gray-200);border-radius:10px;padding:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:0;">
+          📸 Screenshot of Pinterest Trends Page
         </label>
-        <button type="button" onclick="previewAIBrief()"
-          style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;white-space:nowrap;">
-          Preview AI Brief ▶
+        <button type="button" id="extractScreenshotBtn" onclick="extractFromScreenshot()"
+          style="font-size:11px;font-weight:700;background:#1d4ed8;color:#fff;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">
+          Extract ▶
         </button>
       </div>
-      <textarea id="pasteFullPage" rows="5"
-        style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-        placeholder="Ctrl+A / Cmd+A on the Pinterest Analytics page, paste everything here. I'll extract what matters."></textarea>
-      <div id="ai-brief-preview" style="display:none;margin-top:10px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief Preview</div>
-        <div id="ai-brief-preview-body" style="font-size:13px;color:#166534;line-height:1.6;"></div>
+      <div style="font-size:11px;color:var(--gray-500);margin-bottom:10px;">
+        1. On <strong>trends.pinterest.com</strong> → your category → expand <strong>Search Queries</strong> (View all) → take a screenshot<br>
+        2. Drag &amp; drop it below (or click to browse) → hit <strong>Extract ▶</strong>
       </div>
+      {# Drop zone #}
+      <div id="screenshotDropZone"
+        onclick="document.getElementById('screenshotInput').click()"
+        style="border:2px dashed #bfdbfe;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color 0.15s,background 0.15s;background:#fff;">
+        <div id="screenshotDropLabel" style="font-size:13px;color:#6b7280;">
+          📂 Drop screenshot here or <span style="color:#1d4ed8;font-weight:700;text-decoration:underline;">browse</span>
+        </div>
+        <div id="screenshotFileName" style="font-size:12px;color:#1d4ed8;font-weight:600;margin-top:4px;display:none;"></div>
+      </div>
+      <input type="file" id="screenshotInput" accept="image/*" style="display:none;">
+      {# Extracted keywords preview #}
+      <div id="screenshot-preview" style="display:none;margin-top:12px;">
+        <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">🔍 Keywords extracted:</div>
+        <div id="screenshot-kw-pills" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;"></div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:6px;">🧠 AI Strategy Brief:</div>
+        <div id="screenshot-brief" style="font-size:13px;color:#166534;line-height:1.6;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:10px 12px;"></div>
+      </div>
+      {# Hidden fields populated by screenshot extraction #}
+      <input type="hidden" id="pasteKeywords" value="">
+      <input type="hidden" id="pasteFullPage" value="">
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
-      {# Search queries #}
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#1d4ed8;margin-bottom:0;">
-            🔍 Search Queries <span style="color:var(--red);font-size:10px;">← most important</span>
-          </label>
-          <button type="button" onclick="previewKeywords()"
-            style="font-size:11px;font-weight:700;background:#dbeafe;color:#1d4ed8;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
-            Preview ▶
-          </button>
-        </div>
-        <textarea id="pasteKeywords" rows="5"
-          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #bfdbfe;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-          placeholder="gardening&#10;indoor plants&#10;flower pots&#10;lily flowers"></textarea>
-        <div id="kw-preview" style="display:none;margin-top:8px;background:#eff6ff;border-radius:8px;padding:10px;">
-          <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:6px;">Will save these keywords:</div>
-          <div id="kw-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-          <div id="kw-preview-count" style="font-size:11px;color:var(--gray-400);margin-top:5px;"></div>
-        </div>
+    {# Step 3: Pin URLs → products #}
+    <div style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">
+          📌 Top Products — Paste Pinterest Pin URLs
+        </label>
+        <button type="button" onclick="testPinExtraction()"
+          style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">
+          Test Extract ▶
+        </button>
       </div>
-
-      {# Top Products #}
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
-          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">🛍️ Top Products</label>
-          <button type="button" onclick="previewProducts()"
-            style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
-            Preview ▶
-          </button>
-        </div>
-        <textarea id="pasteProducts" rows="4"
-          style="width:100%;font-size:13px;padding:9px 12px;border:1.5px solid #e9d5ff;border-radius:8px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-          placeholder="Laneige Lip Mask&#10;CeraVe Moisturizer&#10;Self-watering planter"></textarea>
-        <div id="prod-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
-          <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;">Will save these products:</div>
-          <div id="prod-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-          <div id="prod-preview-count" style="font-size:11px;color:var(--gray-400);margin-top:5px;"></div>
-        </div>
-        <div style="font-size:11px;color:var(--gray-400);margin-top:3px;">Type names, OR use pin URLs below to extract automatically</div>
-
-        <div style="margin-top:8px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-            <label style="font-size:11px;font-weight:600;color:#7c3aed;margin-bottom:0;">📌 Pinterest Pin URLs</label>
-            <button type="button" onclick="testPinExtraction()"
-              style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:3px 10px;cursor:pointer;">
-              Test Extract ▶
-            </button>
-          </div>
-          <div style="margin-bottom:6px;background:#f5f0ff;border-radius:6px;padding:7px 9px;font-size:11px;color:#374151;">
-            trends.pinterest.com → Top Products → Console (Cmd+Option+I) → paste &amp; run:<br>
-            <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
-          </div>
-          <textarea id="pastePinUrls" rows="3"
-            style="width:100%;font-size:12px;font-family:monospace;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
-            placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
-          <div id="pin-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
-            <div id="pin-preview-status" style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;"></div>
-            <div id="pin-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-          </div>
-        </div>
+      <div style="margin-bottom:6px;background:#f5f0ff;border-radius:6px;padding:7px 9px;font-size:11px;color:#374151;">
+        trends.pinterest.com → Top Products → click <strong>"Explore Top Products"</strong> → Console (Cmd+Option+I) → paste &amp; run:<br>
+        <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
+        Then Cmd+C → paste below.
       </div>
+      <textarea id="pastePinUrls" rows="3"
+        style="width:100%;font-size:12px;font-family:monospace;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
+        placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
+      <div id="pin-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
+        <div id="pin-preview-status" style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;"></div>
+        <div id="pin-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+      </div>
+      {# Hidden products field populated by pin extraction #}
+      <input type="hidden" id="pasteProducts" value="">
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -543,7 +523,7 @@
     btn.disabled = true; btn.textContent = 'Analyzing…';
   });
 
-  // ── Simple client-side markdown renderer (for previews only) ──
+  // ── Simple markdown renderer for client-side previews ──
   function renderMd(text) {
     let t = text
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -563,91 +543,110 @@
     return '<p style="margin:4px 0;">' + t + '</p>';
   }
 
-  // ── Preview: Search Queries ──
-  function previewKeywords() {
-    const raw = document.getElementById('pasteKeywords').value.trim();
-    const preview = document.getElementById('kw-preview');
-    const pills   = document.getElementById('kw-preview-pills');
-    const count   = document.getElementById('kw-preview-count');
-    if (!raw) { preview.style.display = 'none'; return; }
+  // ── Screenshot drop zone ──
+  (function() {
+    const zone  = document.getElementById('screenshotDropZone');
+    const input = document.getElementById('screenshotInput');
+    const label = document.getElementById('screenshotFileName');
 
-    const lines = raw.split(/[\n,;]+/).map(l => l.trim().toLowerCase()).filter(l => l.length >= 3 && l.length <= 80);
-    const unique = [...new Set(lines)];
+    function showFile(file) {
+      label.textContent = '✓ ' + file.name;
+      label.style.display = 'block';
+      document.getElementById('screenshotDropLabel').style.display = 'none';
+    }
 
-    pills.innerHTML = unique.map(k =>
-      `<span style="font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;">${k}</span>`
-    ).join('');
-    count.textContent = `${unique.length} keywords will be saved`;
-    preview.style.display = 'block';
-  }
+    input.addEventListener('change', () => {
+      if (input.files[0]) showFile(input.files[0]);
+    });
 
-  // ── Preview: Top Products ──
-  function previewProducts() {
-    const raw     = document.getElementById('pasteProducts').value.trim();
-    const preview = document.getElementById('prod-preview');
-    const pills   = document.getElementById('prod-preview-pills');
-    const count   = document.getElementById('prod-preview-count');
-    if (!raw) { preview.style.display = 'none'; return; }
+    zone.addEventListener('dragover', e => {
+      e.preventDefault();
+      zone.style.borderColor = '#1d4ed8';
+      zone.style.background  = '#eff6ff';
+    });
+    zone.addEventListener('dragleave', () => {
+      zone.style.borderColor = '#bfdbfe';
+      zone.style.background  = '#fff';
+    });
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.style.borderColor = '#bfdbfe';
+      zone.style.background  = '#fff';
+      const file = e.dataTransfer.files[0];
+      if (!file) return;
+      // Wire the dropped file into the input
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      showFile(file);
+    });
+  })();
 
-    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 150 && !l.startsWith('http'));
-    const unique = [...new Map(lines.map(l => [l.toLowerCase(), l])).values()];
-
-    pills.innerHTML = unique.map(p =>
-      `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${p}</span>`
-    ).join('');
-    count.textContent = unique.length ? `${unique.length} products will be saved` : 'No valid product names found';
-    preview.style.display = 'block';
-  }
-
-  // ── Preview: AI Strategy Brief ──
-  async function previewAIBrief() {
+  // ── Extract from screenshot via Claude vision ──
+  async function extractFromScreenshot() {
+    const fileInput = document.getElementById('screenshotInput');
     const category  = document.getElementById('pasteCategory').value.trim();
-    const fullPage  = document.getElementById('pasteFullPage').value.trim();
-    const keywords  = document.getElementById('pasteKeywords').value.trim();
-    const products  = document.getElementById('pasteProducts').value.trim();
-    const preview   = document.getElementById('ai-brief-preview');
-    const body      = document.getElementById('ai-brief-preview-body');
-    const btn       = event.target;
+    const btn       = document.getElementById('extractScreenshotBtn');
+    const preview   = document.getElementById('screenshot-preview');
+    const kwPills   = document.getElementById('screenshot-kw-pills');
+    const briefDiv  = document.getElementById('screenshot-brief');
 
-    if (!fullPage && !keywords) {
-      alert('Paste something into the Full Page Dump or Search Queries box first.');
+    if (!fileInput.files.length) {
+      alert('Please select a screenshot first.');
+      return;
+    }
+    if (!category) {
+      alert('Please enter a category name first.');
       return;
     }
 
     btn.disabled = true;
-    btn.textContent = '⏳ Generating…';
+    btn.textContent = '⏳ Reading screenshot…';
     preview.style.display = 'block';
-    body.innerHTML = '<span style="color:#16a34a;">Asking Claude for a strategy brief…</span>';
+    kwPills.innerHTML = '<span style="color:var(--gray-400);font-size:12px;">Reading image…</span>';
+    briefDiv.innerHTML = '';
 
-    // Parse keywords and products client-side to send to the server
-    const sq = keywords.split(/[\n,;]+/).map(l => l.trim().toLowerCase()).filter(l => l.length >= 3 && l.length <= 80);
-    const tp = products.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && l.length <= 150 && !l.startsWith('http'));
+    // Convert image to base64
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      const base64 = reader.result.split(',')[1];
+      const mimeType = file.type || 'image/png';
 
-    try {
-      const resp = await fetch('/trends/preview-insight', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          category: category || 'Unknown',
-          search_queries: sq,
-          top_products: tp,
-          full_page: fullPage,
-        }),
-      });
-      const data = await resp.json();
-      if (!data.ok) throw new Error(data.error || 'Failed');
-      body.innerHTML = renderMd(data.insight);
-    } catch(e) {
-      body.innerHTML = `<span style="color:#dc2626;">Error: ${e.message}</span>`;
-    }
+      try {
+        const resp = await fetch('/trends/extract-screenshot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64, mime_type: mimeType, category }),
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.error || 'Failed');
 
-    btn.disabled = false;
-    btn.textContent = 'Preview AI Brief ▶';
+        // Show extracted keywords as pills
+        const kws = data.search_queries || [];
+        kwPills.innerHTML = kws.length
+          ? kws.map(k => `<span style="font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')
+          : '<span style="font-size:12px;color:var(--gray-400);">No keywords found — try a clearer screenshot</span>';
+
+        // Show AI brief
+        briefDiv.innerHTML = data.insight ? renderMd(data.insight) : '<span style="color:var(--gray-400);">No brief generated</span>';
+
+        // Store extracted keywords in hidden field so Save Data sends them
+        document.getElementById('pasteKeywords').value = kws.join('\n');
+
+      } catch(e) {
+        kwPills.innerHTML = `<span style="color:#dc2626;">Error: ${e.message}</span>`;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Extract ▶';
+    };
   }
 
-  // ── Preview: Pin URL extraction ──
+  // ── Test pin URL extraction ──
   async function testPinExtraction() {
-    const raw    = document.getElementById('pastePinUrls').value.trim();
+    const raw     = document.getElementById('pastePinUrls').value.trim();
     const preview = document.getElementById('pin-preview');
     const status  = document.getElementById('pin-preview-status');
     const pills   = document.getElementById('pin-preview-pills');
@@ -682,97 +681,55 @@
     }
 
     if (extracted.length) {
-      status.textContent = `✅ ${extracted.length} product names found — looks good! Hit Save Data to keep them.`;
+      status.textContent = `✅ ${extracted.length} product names found — looks good! Hit Save Data to commit.`;
       status.style.color = '#065f46';
       pills.innerHTML = extracted.map(n =>
         `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${n}</span>`
       ).join('');
-      // Also populate the Products box so Save Data picks them up
+      // Store in hidden field so Save Data sends them
       const box = document.getElementById('pasteProducts');
       const existing = box.value.trim();
       box.value = existing ? existing + '\n' + extracted.join('\n') : extracted.join('\n');
       document.getElementById('pastePinUrls').value = '';
     } else {
-      status.textContent = '⚠️ No product names extracted — pins may require login or have no JSON-LD data';
+      status.textContent = '⚠️ No product names extracted — pins may need login or have no metadata';
       status.style.color = '#dc2626';
     }
   }
 
-  // ── Submit paste ──
+  // ── Save Data ──
   async function submitPastedKeywords() {
     const category  = document.getElementById('pasteCategory').value.trim();
     const text      = document.getElementById('pasteKeywords').value.trim();
-    const full_page = document.getElementById('pasteFullPage').value.trim();
+    const products  = document.getElementById('pasteProducts').value.trim();
     const pasteBtn  = document.getElementById('pasteBtn');
     const status    = document.getElementById('pasteStatus');
     const panel     = document.getElementById('pasteUnderstanding');
     const body      = document.getElementById('understandingBody');
-    const pinUrls = document.getElementById('pastePinUrls').value.trim();
 
-    if (!category) { alert('Please enter a category name — this is how we organize your data.'); return; }
+    if (!category) { alert('Please enter a category name.'); return; }
+    if (!text && !products) { alert('Please extract keywords from a screenshot and/or products from pin URLs first.'); return; }
 
     pasteBtn.disabled = true;
-    pasteBtn.textContent = 'Processing…';
+    pasteBtn.textContent = 'Saving…';
     status.style.display = 'none';
     panel.classList.remove('visible');
-
-    // Extract product names from Pinterest pin URLs (client-side — works in browser)
-    if (pinUrls) {
-      const urls = [...new Set(pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin')))];
-      if (urls.length) {
-        pasteBtn.textContent = `⏳ Extracting ${urls.length} pin names…`;
-        const extracted = [];
-        for (const url of urls) {
-          try {
-            const r = await fetch(url, { credentials: 'omit' });
-            const html = await r.text();
-            const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
-            if (m) {
-              const d = JSON.parse(m[1]);
-              const name = d.headline || d?.sharedContent?.headline || d?.name || '';
-              if (name && name.length > 3) extracted.push(name.trim());
-            }
-          } catch(e) { /* skip failed pins */ }
-        }
-        const resultDiv = document.getElementById('extractedNames');
-        const listDiv   = document.getElementById('extractedList');
-        if (extracted.length) {
-          const productsBox = document.getElementById('pasteProducts');
-          const existing = productsBox.value.trim();
-          productsBox.value = existing ? existing + '\n' + extracted.join('\n') : extracted.join('\n');
-          listDiv.innerHTML = `<strong style="color:#065f46;">✅ ${extracted.length} products extracted:</strong><br>` + extracted.map(n => `• ${n}`).join('<br>');
-          resultDiv.style.display = 'block';
-          document.getElementById('pastePinUrls').value = '';
-        } else {
-          listDiv.innerHTML = `<span style="color:#dc2626;">⚠️ Could not extract from those URLs — type product names manually above.</span>`;
-          resultDiv.style.display = 'block';
-        }
-      }
-    }
-
-    const products = document.getElementById('pasteProducts').value.trim();
-    if (!text && !products && !full_page) { alert('Paste something into at least one box.'); pasteBtn.disabled = false; pasteBtn.textContent = 'Save Data'; return; }
-
-    pasteBtn.textContent = 'Saving…';
 
     try {
       const resp = await fetch('/trends/paste', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, products, category, full_page }),
+        body: JSON.stringify({ text, products, category, full_page: '' }),
       });
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Failed');
 
       status.style.display = 'inline';
       status.style.color   = '#1a7a4a';
-      status.textContent   = `✓ Saved ${data.saved} new keywords across ${data.total} extracted`;
+      status.textContent   = `✓ Saved — ${data.total} keywords, ${(data.top_products||[]).length} products`;
 
-      // Build understanding panel
-      let html = '';
-      if (data.category) {
-        html += `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">🛍️ Product Category: ${data.category}</div>`;
-      }
+      // Show what was saved
+      let html = `<div style="font-size:14px;font-weight:700;margin-bottom:10px;">🛍️ ${data.category}</div>`;
       if (data.search_queries?.length) {
         html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#1d4ed8;margin-bottom:5px;">🔍 ${data.search_queries.length} Search Queries</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
@@ -785,18 +742,11 @@
           ${data.top_products.map(k => `<span style="font-size:12px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')}
         </div>`;
       }
-      if (data.full_page_context?.length) {
-        html += `<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--gray-400);margin-bottom:5px;">📄 ${data.full_page_context.length} from Full Page</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">
-          ${data.full_page_context.map(k => `<span style="font-size:11px;background:#f1f5f9;color:#334155;padding:2px 7px;border-radius:10px;">${k}</span>`).join('')}
-        </div>`;
-      }
       body.innerHTML = html;
       panel.classList.add('visible');
 
-      pasteBtn.textContent = '✓ Saved — scroll down to see your entry';
+      pasteBtn.textContent = '✓ Saved!';
       pasteBtn.style.background = '#16a34a';
-      // Don't auto-reload — let user see "what I understood" panel, then click to reload
       const reloadBtn = document.createElement('button');
       reloadBtn.textContent = 'View All Entries ↓';
       reloadBtn.style.cssText = 'margin-left:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;';
