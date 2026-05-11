@@ -280,26 +280,26 @@
     <div style="margin-bottom:16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin-bottom:0;">
-          📌 Top Products — Paste Pinterest Pin URLs
+          🛍️ Top Products — Paste Names from Pinterest
         </label>
-        <button type="button" onclick="testPinExtraction()"
+        <button type="button" onclick="previewProductNames()"
           style="font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;">
-          Test Extract ▶
+          Preview ▶
         </button>
       </div>
       <div style="margin-bottom:6px;background:#f5f0ff;border-radius:6px;padding:7px 9px;font-size:11px;color:#374151;">
-        trends.pinterest.com → Top Products → click <strong>"Explore Top Products"</strong> → Console (Cmd+Option+I) → paste &amp; run:<br>
-        <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</code>
-        Then Cmd+C → paste below.
+        trends.pinterest.com → click <strong>"Explore Top Products"</strong> → Console (Cmd+Option+I) → paste &amp; run:<br>
+        <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">copy([...new Set([...document.querySelectorAll('img')].map(i=>i.alt?.trim()).filter(a=>a&&a.length>=8&&a.length<=200&&!/^(Pinterest|Save|Pin it|Avatar|Board|Photo|Image|Logo|Icon|Home|Profile|Explore|Search)/i.test(a)))].slice(0,50).join('\n'))</code>
+        Then paste the result below (names are copied straight to your clipboard).
       </div>
-      <textarea id="pastePinUrls" rows="3"
-        style="width:100%;font-size:12px;font-family:monospace;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
-        placeholder="https://www.pinterest.com/pin/123...&#10;https://www.pinterest.com/pin/456..."></textarea>
+      <textarea id="pastePinUrls" rows="4"
+        style="width:100%;font-size:13px;font-family:inherit;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
+        placeholder="Ceramic Self-Watering Planter&#10;Monstera Deliciosa Plant&#10;Plant Grow Lights for Indoor Plants&#10;…"></textarea>
       <div id="pin-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
         <div id="pin-preview-status" style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;"></div>
         <div id="pin-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
       </div>
-      {# Hidden products field populated by pin extraction #}
+      {# Hidden products field populated by preview #}
       <input type="hidden" id="pasteProducts" value="">
     </div>
 
@@ -384,17 +384,14 @@
       <div id="add-products-{{ e.id }}" style="display:none;margin-top:10px;background:#faf5ff;border:1.5px solid #c4b5fd;border-radius:8px;padding:12px;">
         <div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:8px;">🛍️ Add Products to "{{ e.category }}"</div>
 
-        <label style="font-size:11px;font-weight:600;color:#7c3aed;">📌 Paste Pinterest Pin URLs to extract product names:</label>
-        <div style="margin:4px 0 6px;background:#ede9fe;border-radius:6px;padding:6px 8px;font-size:10px;color:#374151;white-space:pre-wrap;word-break:break-all;user-select:all;">var ta=document.createElement('textarea');ta.value=[...new Set([...document.querySelectorAll('a[href]')].map(a=>a.href).filter(h=>h.includes('pinterest.com/pin')))].join('\n');ta.style='position:fixed;top:0;left:0;width:100%;height:200px;z-index:99999;background:white;font-size:12px;';document.body.appendChild(ta);ta.select();</div>
-        <textarea id="add-urls-{{ e.id }}" rows="3"
-          style="width:100%;font-size:12px;font-family:monospace;padding:8px;border:1.5px dashed #c4b5fd;border-radius:6px;box-sizing:border-box;resize:vertical;"
-          placeholder="https://www.pinterest.com/pin/123..."></textarea>
+        <label style="font-size:11px;font-weight:600;color:#7c3aed;">🛍️ Paste product names from the Pinterest Trends console command:</label>
+        <div style="margin:4px 0 6px;background:#ede9fe;border-radius:6px;padding:6px 8px;font-size:10px;color:#374151;white-space:pre-wrap;word-break:break-all;user-select:all;">copy([...new Set([...document.querySelectorAll('img')].map(i=>i.alt?.trim()).filter(a=>a&&a.length>=8&&a.length<=200&&!/^(Pinterest|Save|Pin it|Avatar|Board|Photo|Image|Logo|Icon|Home|Profile|Explore|Search)/i.test(a)))].slice(0,50).join('\n'))</div>
+        <div style="margin-bottom:6px;font-size:10px;color:var(--gray-400);">On trends.pinterest.com → "Explore Top Products" → Console (Cmd+Option+I) → run command above → paste result below</div>
 
-        <div style="margin-top:8px;">
-          <label style="font-size:11px;font-weight:600;color:#7c3aed;">Or type product names directly (one per line):</label>
-          <textarea id="add-names-{{ e.id }}" rows="3"
-            style="margin-top:4px;width:100%;font-size:13px;padding:8px 10px;border:1.5px solid #c4b5fd;border-radius:6px;box-sizing:border-box;resize:vertical;font-family:inherit;"
-            placeholder="Ceramic plant pot&#10;Self-watering planter&#10;Miracle-Gro liquid fertilizer"></textarea>
+        <div style="margin-top:4px;">
+          <textarea id="add-names-{{ e.id }}" rows="5"
+            style="width:100%;font-size:13px;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:6px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+            placeholder="Ceramic plant pot&#10;Self-watering planter&#10;Miracle-Gro liquid fertilizer&#10;…or type product names directly, one per line"></textarea>
         </div>
         <div id="add-extract-status-{{ e.id }}" style="font-size:12px;margin-top:4px;"></div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
@@ -644,71 +641,51 @@
     };
   }
 
-  // ── Test pin URL extraction ──
-  async function testPinExtraction() {
+  // ── Preview pasted product names (no fetch needed) ──
+  function previewProductNames() {
     const raw     = document.getElementById('pastePinUrls').value.trim();
     const preview = document.getElementById('pin-preview');
     const status  = document.getElementById('pin-preview-status');
     const pills   = document.getElementById('pin-preview-pills');
-    if (!raw) return;
+    preview.style.display = 'block';
 
-    const urls = [...new Set(raw.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin')))];
-    if (!urls.length) {
-      status.textContent = '⚠️ No valid Pinterest pin URLs found';
-      preview.style.display = 'block';
+    const names = [...new Set(
+      raw.split('\n').map(l => l.trim()).filter(l => l.length >= 4 && !l.startsWith('http'))
+    )];
+
+    if (!names.length) {
+      status.textContent = '⚠️ No product names found — paste the console command output above';
+      status.style.color = '#dc2626';
+      pills.innerHTML = '';
       return;
     }
 
-    status.textContent = `⏳ Fetching ${urls.length} pins…`;
-    pills.innerHTML = '';
-    preview.style.display = 'block';
-
-    const extracted = [];
-    let done = 0;
-    for (const url of urls) {
-      try {
-        const r = await fetch(url, { credentials: 'omit' });
-        const html = await r.text();
-        const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
-        if (m) {
-          const d = JSON.parse(m[1]);
-          const name = d.headline || d?.sharedContent?.headline || d?.name || '';
-          if (name && name.length > 3) extracted.push(name.trim());
-        }
-      } catch(e) { /* skip */ }
-      done++;
-      status.textContent = `⏳ Fetched ${done}/${urls.length}…`;
-    }
-
-    if (extracted.length) {
-      status.textContent = `✅ ${extracted.length} product names found — looks good! Hit Save Data to commit.`;
-      status.style.color = '#065f46';
-      pills.innerHTML = extracted.map(n =>
-        `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${n}</span>`
-      ).join('');
-      // Store in hidden field so Save Data sends them
-      const box = document.getElementById('pasteProducts');
-      const existing = box.value.trim();
-      box.value = existing ? existing + '\n' + extracted.join('\n') : extracted.join('\n');
-      document.getElementById('pastePinUrls').value = '';
-    } else {
-      status.textContent = '⚠️ No product names extracted — pins may need login or have no metadata';
-      status.style.color = '#dc2626';
-    }
+    status.textContent = `✅ ${names.length} product names — looks good! Hit Save Data to commit.`;
+    status.style.color = '#065f46';
+    pills.innerHTML = names.map(n =>
+      `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${n}</span>`
+    ).join('');
+    // Store in hidden field so Save Data picks them up
+    document.getElementById('pasteProducts').value = names.join('\n');
   }
 
   // ── Save Data ──
   async function submitPastedKeywords() {
     const category  = document.getElementById('pasteCategory').value.trim();
     const text      = document.getElementById('pasteKeywords').value.trim();
-    const products  = document.getElementById('pasteProducts').value.trim();
+    // Products: prefer hidden field (set by Preview), fall back to raw textarea
+    const hiddenProducts = document.getElementById('pasteProducts').value.trim();
+    const rawTextarea    = document.getElementById('pastePinUrls').value.trim();
+    const products = hiddenProducts || [...new Set(
+      rawTextarea.split('\n').map(l => l.trim()).filter(l => l.length >= 4 && !l.startsWith('http'))
+    )].join('\n');
     const pasteBtn  = document.getElementById('pasteBtn');
     const status    = document.getElementById('pasteStatus');
     const panel     = document.getElementById('pasteUnderstanding');
     const body      = document.getElementById('understandingBody');
 
     if (!category) { alert('Please enter a category name.'); return; }
-    if (!text && !products) { alert('Please extract keywords from a screenshot and/or products from pin URLs first.'); return; }
+    if (!text && !products) { alert('Please extract keywords from a screenshot and/or paste product names first.'); return; }
 
     pasteBtn.disabled = true;
     pasteBtn.textContent = 'Saving…';
@@ -778,46 +755,19 @@
   }
 
   async function saveProducts(id) {
-    const btn       = document.getElementById(`save-prod-btn-${id}`);
-    const status    = document.getElementById(`save-prod-status-${id}`);
-    const extStatus = document.getElementById(`add-extract-status-${id}`);
-    const urlBox    = document.getElementById(`add-urls-${id}`);
-    const nameBox   = document.getElementById(`add-names-${id}`);
+    const btn     = document.getElementById(`save-prod-btn-${id}`);
+    const status  = document.getElementById(`save-prod-status-${id}`);
+    const nameBox = document.getElementById(`add-names-${id}`);
 
     btn.disabled = true;
     status.textContent = '';
 
-    // Extract from pin URLs first
-    const extracted = [];
-    const pinUrls = urlBox.value.trim();
-    if (pinUrls) {
-      const urls = [...new Set(pinUrls.split('\n').map(u => u.trim()).filter(u => u.includes('pinterest.com/pin')))];
-      if (urls.length) {
-        btn.textContent = `⏳ Extracting ${urls.length} pins…`;
-        for (const url of urls) {
-          try {
-            const r = await fetch(url, { credentials: 'omit' });
-            const html = await r.text();
-            const m = html.match(/application\/ld\+json">([\s\S]*?)<\/script>/);
-            if (m) {
-              const d = JSON.parse(m[1]);
-              const name = d.headline || d?.sharedContent?.headline || d?.name || '';
-              if (name && name.length > 3) extracted.push(name.trim());
-            }
-          } catch(e) { /* skip */ }
-        }
-        urlBox.value = '';
-        if (extStatus) extStatus.textContent = extracted.length
-          ? `✅ ${extracted.length} names extracted from pins`
-          : `⚠️ Could not extract from pins — type names below`;
-      }
-    }
-
-    const typed = nameBox.value.trim().split('\n').map(n => n.trim()).filter(n => n.length > 2);
-    const allProducts = [...extracted, ...typed];
+    const allProducts = [...new Set(
+      nameBox.value.trim().split('\n').map(n => n.trim()).filter(n => n.length > 2 && !n.startsWith('http'))
+    )];
 
     if (!allProducts.length) {
-      status.textContent = '⚠️ No products found — paste URLs or type names';
+      status.textContent = '⚠️ No products found — paste the console command output or type names';
       btn.disabled = false; btn.textContent = 'Save Products';
       return;
     }
