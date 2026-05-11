@@ -2297,7 +2297,7 @@ Give a focused strategic analysis covering:
 Be specific, tactical, direct. No fluff. Use markdown headers."""
         _msg = _client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=1200,
             messages=[{"role": "user", "content": _prompt}],
         )
         return jsonify({"ok": True, "insight": _msg.content[0].text.strip()})
@@ -2613,7 +2613,7 @@ Give a focused strategic analysis covering:
 Be specific, tactical, direct. No fluff. Use markdown headers."""
         _msg = _client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=600,
+            max_tokens=1200,
             messages=[{"role": "user", "content": _prompt}],
         )
         insight = _msg.content[0].text.strip()
