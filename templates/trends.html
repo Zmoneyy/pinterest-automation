@@ -627,7 +627,12 @@
       const resp = await fetch('/trends/preview-insight', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: category || 'Unknown', search_queries: sq, top_products: tp }),
+        body: JSON.stringify({
+          category: category || 'Unknown',
+          search_queries: sq,
+          top_products: tp,
+          full_page: fullPage,
+        }),
       });
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Failed');

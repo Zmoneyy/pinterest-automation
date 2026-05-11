@@ -2241,11 +2241,37 @@ def test_scrape():
 @bp.route("/trends/preview-insight", methods=["POST"])
 @login_required
 def trends_preview_insight():
-    """Generate an AI Strategy Brief preview without saving anything."""
+    """Generate an AI Strategy Brief preview without saving anything.
+    Accepts: category, search_queries (list), top_products (list), full_page (raw text).
+    Parses full_page the same way trends_paste() does to extract keywords/products.
+    """
+    import re as _re
     data = request.get_json(force=True) or {}
-    category = data.get("category", "").strip() or "Unknown"
-    sq_sample = data.get("search_queries", [])[:20]
-    tp_sample = data.get("top_products", [])[:15]
+    category   = data.get("category", "").strip() or "Unknown"
+    sq_sample  = list(data.get("search_queries", []))
+    tp_sample  = list(data.get("top_products", []))
+    full_page  = data.get("full_page", "").strip()
+
+    # Parse full page text to extract more keywords/products (mirrors trends_paste logic)
+    if full_page:
+        seen = {k.lower() for k in sq_sample + tp_sample}
+        for line in full_page.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('http'):
+                continue
+            if len(line) > 25 and len(line) <= 150:
+                # Likely a product name
+                if line.lower() not in seen and len(tp_sample) < 15:
+                    seen.add(line.lower())
+                    tp_sample.append(line)
+            elif 3 <= len(line) <= 50:
+                kw = line.lower()
+                if kw not in seen and len(sq_sample) < 20:
+                    seen.add(kw)
+                    sq_sample.append(kw)
+
+    if not sq_sample and not tp_sample:
+        return jsonify({"ok": False, "error": "No data found — paste your search queries or full page dump first."})
 
     try:
         import anthropic as _anthropic
