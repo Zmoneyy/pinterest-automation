@@ -2305,6 +2305,111 @@ Be specific, tactical, direct. No fluff. Use markdown headers."""
         return jsonify({"ok": False, "error": str(e)})
 
 
+@bp.route("/trends/extract-screenshot", methods=["POST"])
+@login_required
+def trends_extract_screenshot():
+    """
+    Accept a base64-encoded screenshot of the Pinterest Trends page.
+    Use Claude vision to extract all visible search query keywords,
+    then generate an AI Strategy Brief for the given category.
+    Returns: { ok, search_queries: [...], insight: "..." }
+    """
+    import base64 as _b64
+    data = request.get_json(force=True) or {}
+    image_b64 = data.get("image", "").strip()
+    mime_type  = data.get("mime_type", "image/png").strip() or "image/png"
+    category   = data.get("category", "").strip() or "Unknown"
+
+    if not image_b64:
+        return jsonify({"ok": False, "error": "No image provided."})
+
+    try:
+        import anthropic as _anthropic
+        from config import Config as _Cfg
+        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
+
+        # Step 1: Extract keywords from the screenshot
+        extract_msg = _client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=800,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime_type,
+                            "data": image_b64,
+                        },
+                    },
+                    {
+                        "type": "text",
+                        "text": (
+                            f"This is a screenshot of the Pinterest Trends page for the '{category}' category. "
+                            "Please extract ALL visible search query keywords/phrases shown on the page. "
+                            "These are the search terms people are using on Pinterest — they appear as short keyword phrases, "
+                            "often in a list or grid format labeled 'Search Queries', 'Top Searches', or similar. "
+                            "Return ONLY a plain list, one keyword per line, no numbering, no bullet points, no extra text. "
+                            "Include every keyword you can read, even if partially visible. "
+                            "Do not include product names, UI labels, navigation text, or category headings — only the actual search query keywords."
+                        ),
+                    },
+                ],
+            }],
+        )
+
+        raw_kws = extract_msg.content[0].text.strip()
+
+        # Parse keyword lines — clean and deduplicate
+        seen = set()
+        search_queries = []
+        for line in raw_kws.split('\n'):
+            kw = line.strip().strip('-•').strip().lower()
+            if not kw or len(kw) < 2 or len(kw) > 80:
+                continue
+            # Skip obvious noise
+            if kw in ('search queries', 'top searches', 'keywords', 'search terms', category.lower()):
+                continue
+            if kw not in seen:
+                seen.add(kw)
+                search_queries.append(kw)
+
+        # Step 2: Generate AI Strategy Brief using the extracted keywords
+        brief_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
+
+Pinterest Trends data for category: {category}
+
+Top search queries (what people are actively searching):
+{', '.join(search_queries) if search_queries else 'none'}
+
+Give a focused strategic analysis covering:
+1. **Audience intent** — what is this person trying to achieve/feel?
+2. **Best products to pin** — which product types have highest click/buy potential and why?
+3. **Pin angle** — what transformation or emotion should the pin lead with?
+4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
+5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
+
+Be specific, tactical, direct. No fluff. Use markdown headers."""
+
+        brief_msg = _client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": brief_prompt}],
+        )
+        insight = brief_msg.content[0].text.strip()
+
+        return jsonify({
+            "ok": True,
+            "search_queries": search_queries,
+            "insight": insight,
+        })
+
+    except Exception as e:
+        logger.error(f"extract-screenshot error: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @bp.route("/trends")
 @login_required
 def trends():
