@@ -185,6 +185,15 @@
   .trend-bar-fill { height: 100%; background: var(--red); border-radius: 99px; }
   .trend-cat { font-size: 10px; color: var(--gray-400); min-width: 60px; text-align: right; }
 
+  /* priority buttons */
+  .prio-btn {
+    font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;
+    border:none;cursor:pointer;background:#f3f4f6;color:#9ca3af;
+  }
+  .prio-active-high { background:#ef4444;color:#fff; }
+  .prio-active-med  { background:#f59e0b;color:#fff; }
+  .prio-active-low  { background:#6b7280;color:#fff; }
+
   /* understanding panel */
   .understanding-panel {
     display: none;
@@ -334,6 +343,16 @@
           <span class="entry-date-badge">{{ e.saved_at.strftime('%b %-d, %Y') }}</span>
         {% endif %}
         <span class="entry-kw-count">{{ e.total_keywords }} keywords</span>
+        {# Priority toggle #}
+        {% set p = e.priority or 'medium' %}
+        <div style="display:flex;gap:3px;align-items:center;" title="Set priority based on outbound click volume">
+          <button onclick="setPriority({{ e.id }}, 'high')"
+            class="prio-btn{% if p == 'high' %} prio-active-high{% endif %}">🔥</button>
+          <button onclick="setPriority({{ e.id }}, 'medium')"
+            class="prio-btn{% if p == 'medium' %} prio-active-med{% endif %}">⚡</button>
+          <button onclick="setPriority({{ e.id }}, 'low')"
+            class="prio-btn{% if p == 'low' %} prio-active-low{% endif %}">—</button>
+        </div>
         <button class="entry-delete-btn" type="button" title="Delete this entry"
           onclick="deleteEntry({{ e.id }})">✕</button>
       </div>
@@ -849,6 +868,25 @@
       status.style.color   = 'var(--red)';
       status.textContent   = '✗ ' + err.message;
     }
+  }
+
+  // ── Set priority on entry card ──
+  async function setPriority(id, priority) {
+    await fetch(`/trends/set-priority/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ priority }),
+    });
+    // Update button styles in place
+    const card = document.getElementById(`entry-${id}`);
+    if (!card) return;
+    const btns = card.querySelectorAll('.prio-btn');
+    const activeClass = { high: 'prio-active-high', medium: 'prio-active-med', low: 'prio-active-low' };
+    const priorities = ['high', 'medium', 'low'];
+    btns.forEach((btn, i) => {
+      btn.classList.remove('prio-active-high', 'prio-active-med', 'prio-active-low');
+      if (priorities[i] === priority) btn.classList.add(activeClass[priority]);
+    });
   }
 
   // ── Generate AI Brief on demand for existing entry ──

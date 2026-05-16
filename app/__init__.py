@@ -116,6 +116,8 @@ def _run_migrations():
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS total_keywords INTEGER DEFAULT 0",
         # product_candidates — source category tag
         "ALTER TABLE product_candidates ADD COLUMN IF NOT EXISTS source_category VARCHAR(255)",
+        # trend_entries — priority (high/medium/low based on outbound click volume)
+        "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'medium'",
     ]
     for sql in migrations:
         try:

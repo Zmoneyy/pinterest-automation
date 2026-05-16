@@ -141,6 +141,10 @@ class TrendEntry(db.Model):
     """One dated paste session per product category from Pinterest Analytics."""
     __tablename__ = "trend_entries"
 
+    PRIORITY_HIGH   = "high"
+    PRIORITY_MEDIUM = "medium"
+    PRIORITY_LOW    = "low"
+
     id               = db.Column(db.Integer, primary_key=True)
     category         = db.Column(db.String(255), nullable=False)
     saved_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
@@ -149,6 +153,7 @@ class TrendEntry(db.Model):
     full_page_kws    = db.Column(db.Text)   # JSON list of keywords from full page dump
     insight          = db.Column(db.Text)   # AI-generated summary of this trend category
     total_keywords   = db.Column(db.Integer, default=0)
+    priority         = db.Column(db.String(20), default="medium")  # high / medium / low
 
     def sq_list(self):
         import json

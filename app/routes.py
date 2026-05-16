@@ -917,16 +917,20 @@ def discover_products():
         trend_dicts = [{"keyword": manual_keyword, "category": "luxury_beauty", "source_category": "Manual Search"}]
     else:
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
-        # Only use beauty entries (10% commission) — skip home decor, fitness, etc.
+        # Only beauty entries (10% commission) — skip home decor, fitness, etc.
         beauty_entries = [e for e in entries if _is_beauty_entry(e.category)]
-        # TOP PRODUCTS ONLY — exact product names give the best Amazon matches
-        # Cap at 50 total to protect SerpAPI quota (250/month free plan)
+        # Sort: High priority first, then Medium, then Low
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
+        # TOP PRODUCTS ONLY — exact names = best Amazon matches
+        # Cap at 50 to protect SerpAPI quota (250/month free plan)
         for entry in beauty_entries:
             for product_name in entry.tp_list():
                 trend_dicts.append({
                     "keyword": product_name,
                     "category": "luxury_beauty",
                     "source_category": entry.category,
+                    "priority": entry.priority or "medium",
                 })
                 if len(trend_dicts) >= 50:
                     break
@@ -2256,6 +2260,20 @@ def _suggest_boards_from_trends(trends):
 @login_required
 def test_scrape():
     return render_template("test_scrape.html")
+
+
+@bp.route("/trends/set-priority/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_set_priority(entry_id):
+    from app.models import TrendEntry
+    entry = TrendEntry.query.get_or_404(entry_id)
+    data = request.get_json(force=True) or {}
+    priority = data.get("priority", "medium")
+    if priority not in ("high", "medium", "low"):
+        return jsonify({"ok": False, "error": "Invalid priority"})
+    entry.priority = priority
+    db.session.commit()
+    return jsonify({"ok": True, "priority": priority})
 
 
 @bp.route("/trends/generate-brief/<int:entry_id>", methods=["POST"])
