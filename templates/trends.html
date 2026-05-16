@@ -694,30 +694,53 @@
     document.getElementById('pasteProducts').value = names.join('\n');
   }
 
-  // ── Save Data ──
+  // ── Save Data (auto-extracts if not already done) ──
   async function submitPastedKeywords() {
     const category  = document.getElementById('pasteCategory').value.trim();
-    const text      = document.getElementById('pasteKeywords').value.trim();
-    // Products: prefer hidden field (set by Preview), fall back to raw textarea
-    const hiddenProducts = document.getElementById('pasteProducts').value.trim();
-    const rawTextarea    = document.getElementById('pastePinUrls').value.trim();
-    const products = hiddenProducts || [...new Set(
-      rawTextarea.split('\n')
-        .map(l => l.replace(/;\s*Opens a new tab/gi, '').trim())
-        .filter(l => l.length >= 20 && !l.startsWith('http'))
-    )].join('\n');
     const pasteBtn  = document.getElementById('pasteBtn');
     const status    = document.getElementById('pasteStatus');
     const panel     = document.getElementById('pasteUnderstanding');
     const body      = document.getElementById('understandingBody');
 
     if (!category) { alert('Please enter a category name.'); return; }
-    if (!text && !products) { alert('Please extract keywords from a screenshot and/or paste product names first.'); return; }
 
     pasteBtn.disabled = true;
-    pasteBtn.textContent = 'Saving…';
     status.style.display = 'none';
     panel.classList.remove('visible');
+
+    // ── Auto-extract from screenshot if not done yet ──
+    const fileInput = document.getElementById('screenshotInput');
+    const hasFiles  = fileInput.files.length > 0;
+    const alreadyExtracted = document.getElementById('pasteKeywords').value.trim();
+
+    if (hasFiles && !alreadyExtracted) {
+      pasteBtn.textContent = '⏳ Extracting screenshots…';
+      await extractFromScreenshot();
+    }
+
+    // ── Auto-preview products if not done yet ──
+    const hiddenProducts = document.getElementById('pasteProducts').value.trim();
+    const rawTextarea    = document.getElementById('pastePinUrls').value.trim();
+    if (rawTextarea && !hiddenProducts) {
+      previewProductNames();
+    }
+
+    // Now read the final values
+    const text     = document.getElementById('pasteKeywords').value.trim();
+    const products = document.getElementById('pasteProducts').value.trim() || [...new Set(
+      rawTextarea.split('\n')
+        .map(l => l.replace(/;\s*Opens a new tab/gi, '').trim())
+        .filter(l => l.length >= 20 && !l.startsWith('http'))
+    )].join('\n');
+
+    if (!text && !products) {
+      alert('Please upload a screenshot and/or paste product names first.');
+      pasteBtn.disabled = false;
+      pasteBtn.textContent = 'Save Data';
+      return;
+    }
+
+    pasteBtn.textContent = 'Saving…';
 
     try {
       const resp = await fetch('/trends/paste', {
