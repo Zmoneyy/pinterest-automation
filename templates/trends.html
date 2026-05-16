@@ -496,7 +496,38 @@
 <script>
   // ── Toggle paste panel ──
   function togglePastePanel() {
-    document.getElementById('pastePanel').classList.toggle('open');
+    const panel = document.getElementById('pastePanel');
+    const isOpening = !panel.classList.contains('open');
+    panel.classList.toggle('open');
+
+    // Reset all fields when opening fresh
+    if (isOpening) {
+      document.getElementById('pasteCategory').value = '';
+      document.getElementById('pastePinUrls').value = '';
+      document.getElementById('pasteKeywords').value = '';
+      document.getElementById('pasteFullPage').value = '';
+      document.getElementById('pasteProducts').value = '';
+      document.getElementById('screenshot-preview').style.display = 'none';
+      document.getElementById('screenshot-kw-pills').innerHTML = '';
+      document.getElementById('screenshot-brief').innerHTML = '';
+      const prodPills = document.getElementById('screenshot-prod-pills');
+      if (prodPills) prodPills.innerHTML = '';
+      document.getElementById('pin-preview').style.display = 'none';
+      document.getElementById('pin-preview-pills').innerHTML = '';
+      document.getElementById('pin-preview-status').textContent = '';
+      document.getElementById('pasteUnderstanding').classList.remove('visible');
+      document.getElementById('understandingBody').innerHTML = '';
+      document.getElementById('pasteStatus').style.display = 'none';
+      const pasteBtn = document.getElementById('pasteBtn');
+      pasteBtn.disabled = false;
+      pasteBtn.textContent = '💾 Save Data to Database';
+      pasteBtn.style.background = '#16a34a';
+      // Reset drop zone
+      const input = document.getElementById('screenshotInput');
+      input.value = '';
+      document.getElementById('screenshotFileName').style.display = 'none';
+      document.getElementById('screenshotDropLabel').style.display = 'block';
+    }
   }
 
   // ── CSV upload ──
