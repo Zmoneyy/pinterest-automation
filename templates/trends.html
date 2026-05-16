@@ -407,12 +407,20 @@
       </div>
 
       {# AI Strategy Brief #}
-      {% if e.insight %}
-      <div style="margin-top:12px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief</div>
-        <div style="font-size:13px;color:#166534;line-height:1.6;">{{ e.insight | md }}</div>
+      <div style="margin-top:12px;" id="brief-container-{{ e.id }}">
+        {% if e.insight %}
+        <div style="background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief</div>
+          <div style="font-size:13px;color:#166534;line-height:1.6;">{{ e.insight | md }}</div>
+        </div>
+        {% else %}
+        <button onclick="generateBrief({{ e.id }})" id="brief-btn-{{ e.id }}"
+          style="font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;padding:5px 12px;cursor:pointer;">
+          🧠 Generate AI Brief
+        </button>
+        <span id="brief-status-{{ e.id }}" style="font-size:11px;color:var(--gray-400);margin-left:6px;"></span>
+        {% endif %}
       </div>
-      {% endif %}
     </div>
     {% endfor %}
 
@@ -840,6 +848,31 @@
       status.style.display = 'inline';
       status.style.color   = 'var(--red)';
       status.textContent   = '✗ ' + err.message;
+    }
+  }
+
+  // ── Generate AI Brief on demand for existing entry ──
+  async function generateBrief(id) {
+    const btn    = document.getElementById(`brief-btn-${id}`);
+    const status = document.getElementById(`brief-status-${id}`);
+    const container = document.getElementById(`brief-container-${id}`);
+    btn.disabled = true;
+    btn.textContent = '⏳ Generating…';
+    status.textContent = '';
+    try {
+      const resp = await fetch(`/trends/generate-brief/${id}`, { method: 'POST' });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Failed');
+      container.innerHTML = `
+        <div style="background:#f0fdf4;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:12px 14px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#16a34a;margin-bottom:8px;">🧠 AI Strategy Brief</div>
+          <div style="font-size:13px;color:#166534;line-height:1.6;">${renderMd(data.insight)}</div>
+        </div>`;
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = '🧠 Generate AI Brief';
+      status.textContent = '✗ ' + e.message;
+      status.style.color = 'var(--red)';
     }
   }
 

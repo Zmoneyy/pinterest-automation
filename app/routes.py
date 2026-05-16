@@ -2238,6 +2238,51 @@ def test_scrape():
     return render_template("test_scrape.html")
 
 
+@bp.route("/trends/generate-brief/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_generate_brief(entry_id):
+    """Generate and save an AI Strategy Brief for an existing TrendEntry on demand."""
+    from app.models import TrendEntry
+    entry = TrendEntry.query.get_or_404(entry_id)
+    sq = entry.sq_list()
+    tp = entry.tp_list()
+    if not sq and not tp:
+        return jsonify({"ok": False, "error": "No keywords or products saved for this entry."})
+    try:
+        import anthropic as _anthropic
+        from config import Config as _Cfg
+        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
+        prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
+
+Pinterest Trends data for category: {entry.category}
+
+Top search queries (what people are actively searching):
+{', '.join(sq) if sq else 'none'}
+
+Top trending products on Pinterest right now:
+{', '.join(tp) if tp else 'none'}
+
+Give a focused strategic analysis covering:
+1. **Audience intent** — what is this person trying to achieve/feel?
+2. **Best products to pin** — which of the trending products have highest click/buy potential and why?
+3. **Pin angle** — what transformation or emotion should the pin lead with?
+4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
+5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
+
+Be specific, tactical, direct. No fluff. Use markdown headers."""
+        msg = _client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        insight = msg.content[0].text.strip()
+        entry.insight = insight
+        db.session.commit()
+        return jsonify({"ok": True, "insight": insight})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @bp.route("/trends/preview-insight", methods=["POST"])
 @login_required
 def trends_preview_insight():
@@ -2404,38 +2449,13 @@ def trends_extract_screenshot():
                     seen_prod.add(cleaned.lower())
                     product_names.append(cleaned)
 
-        # Step 2: Generate AI Strategy Brief from merged keywords + products
-        brief_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
-
-Pinterest Trends data for category: {category}
-
-Top search queries (what people are actively searching):
-{', '.join(search_queries) if search_queries else 'none'}
-
-Top trending products on Pinterest right now:
-{', '.join(product_names) if product_names else 'none'}
-
-Give a focused strategic analysis covering:
-1. **Audience intent** — what is this person trying to achieve/feel?
-2. **Best products to pin** — which of the trending products have highest click/buy potential and why?
-3. **Pin angle** — what transformation or emotion should the pin lead with?
-4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
-5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
-
-Be specific, tactical, direct. No fluff. Use markdown headers."""
-
-        brief_msg = _client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": brief_prompt}],
-        )
-        insight = brief_msg.content[0].text.strip()
-
+        # No AI brief generated here — saves API credits.
+        # Brief can be generated on-demand via the Preview Insight button on the entry card.
         return jsonify({
             "ok": True,
             "search_queries": search_queries,
             "top_products": product_names,
-            "insight": insight,
+            "insight": "",
         })
 
     except Exception as e:
@@ -2723,9 +2743,9 @@ def trends_paste():
 
     db.session.commit()
 
-    # ── Generate AI insight ──
+    # ── Generate AI insight (skipped on save — generate on-demand from entry card) ──
     insight = ""
-    try:
+    if False:  # disabled to save API credits
         import anthropic as _anthropic
         from config import Config as _Cfg
         _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
