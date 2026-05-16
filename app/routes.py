@@ -2280,6 +2280,7 @@ def trends_set_priority(entry_id):
 @login_required
 def trends_generate_brief(entry_id):
     """Generate and save an AI Strategy Brief for an existing TrendEntry on demand."""
+    import json as _json
     from app.models import TrendEntry
     entry = TrendEntry.query.get_or_404(entry_id)
     sq = entry.sq_list()
@@ -2290,7 +2291,8 @@ def trends_generate_brief(entry_id):
         import anthropic as _anthropic
         from config import Config as _Cfg
         _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
-        prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
+
+        text_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
 
 Pinterest Trends data for category: {entry.category}
 
@@ -2305,13 +2307,35 @@ Give a focused strategic analysis covering:
 2. **Best products to pin** — which of the trending products have highest click/buy potential and why?
 3. **Pin angle** — what transformation or emotion should the pin lead with?
 4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
-5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
+5. **Outbound click signals** — if screenshots are attached, look at the outbound click bar charts and note which products/queries have the highest bars (most outbound clicks = most buyer intent). List the top ones specifically.
+6. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
 
 Be specific, tactical, direct. No fluff. Use markdown headers."""
+
+        # If screenshots were saved, include them so Claude can read outbound click bar charts
+        content = []
+        screenshots = []
+        if entry.screenshots_b64:
+            try:
+                screenshots = _json.loads(entry.screenshots_b64) or []
+            except Exception:
+                screenshots = []
+
+        if screenshots:
+            for img in screenshots[:6]:
+                mime = (img.get("mime_type") or "image/png").strip() or "image/png"
+                content.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": mime, "data": img["image"]},
+                })
+            content.append({"type": "text", "text": text_prompt})
+        else:
+            content = text_prompt
+
         msg = _client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": content}],
         )
         insight = msg.content[0].text.strip()
         entry.insight = insight
@@ -2603,6 +2627,7 @@ def trends_paste():
     products_raw       = (payload.get("products") or "").strip()
     full_page_raw      = (payload.get("full_page") or "").strip()
     category_label     = (payload.get("category") or "pinterest analytics").strip()
+    saved_images       = payload.get("images") or []  # [{image: base64, mime_type: str}]
 
     if not search_queries_raw and not products_raw and not full_page_raw:
         return jsonify({"ok": False, "error": "Paste something into at least one box."})
@@ -2787,13 +2812,17 @@ def trends_paste():
     # ── Save a dated TrendEntry for the library ──
     import json as _json
     from app.models import TrendEntry
+    # Save screenshots as base64 JSON (cap at 6 to keep DB size reasonable)
+    screenshots_json = _json.dumps(saved_images[:6]) if saved_images else None
+
     entry = TrendEntry(
-        category       = category_label or "Uncategorized",
-        search_queries = _json.dumps(search_queries_kws + full_page_sq_kws),
-        top_products   = _json.dumps(top_products_kws),
-        full_page_kws  = _json.dumps(full_page_context_kws[:30]),
-        insight        = insight,
-        total_keywords = len(keywords),
+        category        = category_label or "Uncategorized",
+        search_queries  = _json.dumps(search_queries_kws + full_page_sq_kws),
+        top_products    = _json.dumps(top_products_kws),
+        full_page_kws   = _json.dumps(full_page_context_kws[:30]),
+        insight         = insight,
+        total_keywords  = len(keywords),
+        screenshots_b64 = screenshots_json,
     )
     db.session.add(entry)
     db.session.commit()

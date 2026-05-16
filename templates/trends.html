@@ -561,9 +561,10 @@
       pasteBtn.disabled = false;
       pasteBtn.textContent = '💾 Save Data to Database';
       pasteBtn.style.background = '#16a34a';
-      // Reset drop zone
+      // Reset drop zone and saved images
       const input = document.getElementById('screenshotInput');
       input.value = '';
+      _lastExtractedImages = [];
       document.getElementById('screenshotFileName').style.display = 'none';
       document.getElementById('screenshotDropLabel').style.display = 'block';
     }
@@ -657,6 +658,9 @@
 
   // ── Extract from screenshot via Claude vision ──
   // silent=true suppresses alerts (used when called from Save)
+  // Holds base64 images after extraction so Save can persist them to the DB
+  let _lastExtractedImages = [];
+
   async function extractFromScreenshot(silent = false) {
     const fileInput = document.getElementById('screenshotInput');
     const category  = document.getElementById('pasteCategory').value.trim();
@@ -691,6 +695,7 @@
 
     try {
       const images = await Promise.all(files.map(toBase64));
+      _lastExtractedImages = images;  // store so Save can persist them
       const resp = await fetch('/trends/extract-screenshot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -830,7 +835,7 @@
       const resp = await fetch('/trends/paste', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, products, category, full_page: '' }),
+        body: JSON.stringify({ text, products, category, full_page: '', images: _lastExtractedImages }),
       });
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Failed');

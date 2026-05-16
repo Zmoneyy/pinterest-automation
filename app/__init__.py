@@ -118,6 +118,8 @@ def _run_migrations():
         "ALTER TABLE product_candidates ADD COLUMN IF NOT EXISTS source_category VARCHAR(255)",
         # trend_entries — priority (high/medium/low based on outbound click volume)
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'medium'",
+        # trend_entries — store original screenshots as base64 JSON for AI brief generation
+        "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS screenshots_b64 TEXT",
     ]
     for sql in migrations:
         try:

@@ -154,6 +154,7 @@ class TrendEntry(db.Model):
     insight          = db.Column(db.Text)   # AI-generated summary of this trend category
     total_keywords   = db.Column(db.Integer, default=0)
     priority         = db.Column(db.String(20), default="medium")  # high / medium / low
+    screenshots_b64  = db.Column(db.Text)   # JSON list of {image: base64, mime_type: str} — saved screenshots
 
     def sq_list(self):
         import json
