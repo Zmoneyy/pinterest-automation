@@ -2262,6 +2262,22 @@ def test_scrape():
     return render_template("test_scrape.html")
 
 
+@bp.route("/trends/upload-screenshots/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_upload_screenshots(entry_id):
+    """Save (or replace) screenshots on an existing TrendEntry."""
+    import json as _json
+    from app.models import TrendEntry
+    entry = TrendEntry.query.get_or_404(entry_id)
+    data = request.get_json(force=True) or {}
+    images = data.get("images") or []
+    if not images:
+        return jsonify({"ok": False, "error": "No images provided."})
+    entry.screenshots_b64 = _json.dumps(images[:6])
+    db.session.commit()
+    return jsonify({"ok": True, "count": len(images[:6])})
+
+
 @bp.route("/trends/set-priority/<int:entry_id>", methods=["POST"])
 @login_required
 def trends_set_priority(entry_id):

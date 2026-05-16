@@ -194,6 +194,15 @@
   .prio-active-med  { background:#f59e0b;color:#fff; }
   .prio-active-low  { background:#6b7280;color:#fff; }
 
+  /* screenshot upload button on entry cards */
+  .ss-btn {
+    font-size:11px;font-weight:700;padding:3px 10px;border-radius:6px;
+    border:1px solid #bae6fd;background:#f0f9ff;color:#0369a1;cursor:pointer;
+    white-space:nowrap;
+  }
+  .ss-btn.has-shots { border-color:#bbf7d0;background:#f0fdf4;color:#16a34a; }
+  .ss-btn:hover { opacity:0.85; }
+
   /* understanding panel */
   .understanding-panel {
     display: none;
@@ -353,6 +362,18 @@
           <button onclick="setPriority({{ e.id }}, 'low')"
             class="prio-btn{% if p == 'low' %} prio-active-low{% endif %}">—</button>
         </div>
+        {# Screenshot upload button #}
+        {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
+        <button class="ss-btn{% if has_ss %} has-shots{% endif %}"
+          id="ss-btn-{{ e.id }}"
+          title="{% if has_ss %}Screenshots saved — click to replace{% else %}Upload screenshots for AI brief{% endif %}"
+          onclick="document.getElementById('ss-input-{{ e.id }}').click()">
+          {% if has_ss %}📷 Screenshots ✓{% else %}📷 Add Screenshots{% endif %}
+        </button>
+        <input type="file" id="ss-input-{{ e.id }}" multiple accept="image/*" style="display:none"
+          onchange="uploadScreenshots({{ e.id }}, this)">
+        <span id="ss-status-{{ e.id }}" style="font-size:11px;"></span>
+
         <button class="entry-delete-btn" type="button" title="Delete this entry"
           onclick="deleteEntry({{ e.id }})">✕</button>
       </div>
@@ -914,6 +935,47 @@
     } catch(e) {
       btn.disabled = false;
       btn.textContent = '🧠 Generate AI Brief';
+      status.textContent = '✗ ' + e.message;
+      status.style.color = 'var(--red)';
+    }
+  }
+
+  // ── Upload screenshots to an existing entry ──
+  async function uploadScreenshots(id, input) {
+    const files = Array.from(input.files);
+    if (!files.length) return;
+    const btn    = document.getElementById(`ss-btn-${id}`);
+    const status = document.getElementById(`ss-status-${id}`);
+    btn.disabled = true;
+    btn.textContent = `⏳ Uploading ${files.length} screenshot${files.length > 1 ? 's' : ''}…`;
+    status.textContent = '';
+
+    const toBase64 = file => new Promise((res, rej) => {
+      const r = new FileReader();
+      r.readAsDataURL(file);
+      r.onload  = () => res({ image: r.result.split(',')[1], mime_type: file.type || 'image/png' });
+      r.onerror = rej;
+    });
+
+    try {
+      const images = await Promise.all(files.map(toBase64));
+      const resp = await fetch(`/trends/upload-screenshots/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error(data.error || 'Failed');
+
+      btn.disabled = false;
+      btn.textContent = `📷 Screenshots ✓`;
+      btn.classList.add('has-shots');
+      btn.title = 'Screenshots saved — click to replace';
+      status.textContent = `✓ ${files.length} saved`;
+      status.style.color = '#16a34a';
+    } catch(e) {
+      btn.disabled = false;
+      btn.textContent = btn.classList.contains('has-shots') ? '📷 Screenshots ✓' : '📷 Add Screenshots';
       status.textContent = '✗ ' + e.message;
       status.style.color = 'var(--red)';
     }
