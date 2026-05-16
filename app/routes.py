@@ -2309,73 +2309,73 @@ Be specific, tactical, direct. No fluff. Use markdown headers."""
 @login_required
 def trends_extract_screenshot():
     """
-    Accept a base64-encoded screenshot of the Pinterest Trends page.
-    Use Claude vision to extract all visible search query keywords,
-    then generate an AI Strategy Brief for the given category.
+    Accept one or more base64-encoded screenshots of the Pinterest Trends page.
+    Accepts either:
+      { image, mime_type, category }          — single image (legacy)
+      { images: [{image, mime_type}], category } — multiple images
+    Extracts keywords from all images in one Claude call, then generates AI brief.
     Returns: { ok, search_queries: [...], insight: "..." }
     """
-    import base64 as _b64
     data = request.get_json(force=True) or {}
-    image_b64 = data.get("image", "").strip()
-    mime_type  = data.get("mime_type", "image/png").strip() or "image/png"
-    category   = data.get("category", "").strip() or "Unknown"
+    category = data.get("category", "").strip() or "Unknown"
 
-    if not image_b64:
-        return jsonify({"ok": False, "error": "No image provided."})
+    # Build list of {image, mime_type} dicts — support both single and multi
+    images = data.get("images") or []
+    if not images and data.get("image"):
+        images = [{"image": data["image"], "mime_type": data.get("mime_type", "image/png")}]
+
+    if not images:
+        return jsonify({"ok": False, "error": "No images provided."})
 
     try:
         import anthropic as _anthropic
         from config import Config as _Cfg
         _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
 
-        # Step 1: Extract keywords from the screenshot
+        # Build content blocks — one image block per screenshot + one instruction at the end
+        content = []
+        for idx, img in enumerate(images[:6], 1):  # cap at 6
+            mime = (img.get("mime_type") or "image/png").strip() or "image/png"
+            content.append({
+                "type": "image",
+                "source": {"type": "base64", "media_type": mime, "data": img["image"]},
+            })
+        content.append({
+            "type": "text",
+            "text": (
+                f"These are {len(images)} screenshot(s) of the Pinterest Trends page for the '{category}' category. "
+                "Please extract ALL visible search query keywords/phrases shown across all the screenshots. "
+                "These are the search terms people are using on Pinterest — short keyword phrases, "
+                "often in a list or grid labeled 'Search Queries', 'Top Searches', or similar. "
+                "Return ONLY a plain list, one keyword per line, no numbering, no bullet points, no extra text. "
+                "Include every keyword you can read across all images, even if partially visible. "
+                "Do not include product names, UI labels, navigation text, or category headings — only the actual search query keywords."
+            ),
+        })
+
+        # Step 1: Extract keywords from all screenshots in one call
         extract_msg = _client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=800,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": mime_type,
-                            "data": image_b64,
-                        },
-                    },
-                    {
-                        "type": "text",
-                        "text": (
-                            f"This is a screenshot of the Pinterest Trends page for the '{category}' category. "
-                            "Please extract ALL visible search query keywords/phrases shown on the page. "
-                            "These are the search terms people are using on Pinterest — they appear as short keyword phrases, "
-                            "often in a list or grid format labeled 'Search Queries', 'Top Searches', or similar. "
-                            "Return ONLY a plain list, one keyword per line, no numbering, no bullet points, no extra text. "
-                            "Include every keyword you can read, even if partially visible. "
-                            "Do not include product names, UI labels, navigation text, or category headings — only the actual search query keywords."
-                        ),
-                    },
-                ],
-            }],
+            max_tokens=1000,
+            messages=[{"role": "user", "content": content}],
         )
 
         raw_kws = extract_msg.content[0].text.strip()
 
-        # Parse keyword lines — clean and deduplicate
+        # Parse + deduplicate
         seen = set()
         search_queries = []
         for line in raw_kws.split('\n'):
             kw = line.strip().strip('-•').strip().lower()
             if not kw or len(kw) < 2 or len(kw) > 80:
                 continue
-            # Skip obvious noise
             if kw in ('search queries', 'top searches', 'keywords', 'search terms', category.lower()):
                 continue
             if kw not in seen:
                 seen.add(kw)
                 search_queries.append(kw)
 
-        # Step 2: Generate AI Strategy Brief using the extracted keywords
+        # Step 2: Generate AI Strategy Brief from merged keywords
         brief_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
 
 Pinterest Trends data for category: {category}
