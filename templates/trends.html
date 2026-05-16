@@ -288,13 +288,13 @@
         </button>
       </div>
       <div style="margin-bottom:6px;background:#f5f0ff;border-radius:6px;padding:7px 9px;font-size:11px;color:#374151;">
-        trends.pinterest.com → click <strong>"Explore Top Products"</strong> → Console (Cmd+Option+I) → paste &amp; run:<br>
-        <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">copy([...new Set([...document.querySelectorAll('img')].map(i=>i.alt?.trim()).filter(a=>a&&a.length>=8&&a.length<=200&&!/^(Pinterest|Save|Pin it|Avatar|Board|Photo|Image|Logo|Icon|Home|Profile|Explore|Search)/i.test(a)))].slice(0,50).join('\n'))</code>
-        Then paste the result below (names are copied straight to your clipboard).
+        trends.pinterest.com → click <strong>"Explore Top Products"</strong> → when the product modal opens → Console (Cmd+Option+I) → paste &amp; run:<br>
+        <code style="display:block;margin-top:3px;background:#ede9fe;padding:5px 7px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;user-select:all;">copy([...new Set([...document.querySelectorAll('table td, [data-test-id] span, [class*="product"] span')].map(el=>el.innerText?.trim()).filter(t=>t&&t.length>20&&t.length<300&&!t.includes('Opens a new tab')))].join('\n'))</code>
+        Names copy straight to your clipboard — paste below. App auto-cleans merchant names &amp; junk.
       </div>
-      <textarea id="pastePinUrls" rows="4"
-        style="width:100%;font-size:13px;font-family:inherit;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
-        placeholder="Ceramic Self-Watering Planter&#10;Monstera Deliciosa Plant&#10;Plant Grow Lights for Indoor Plants&#10;…"></textarea>
+      <textarea id="pastePinUrls" rows="5"
+        style="width:100%;font-size:12px;font-family:monospace;padding:8px 10px;border:1.5px dashed #c4b5fd;border-radius:8px;box-sizing:border-box;resize:vertical;"
+        placeholder="Perricone MD High Potency Retinol Recovery Overnight Moisturizer&#10;La Roche-Posay Hydraphase HA Rich Hyaluronic Acid Face Cream&#10;…"></textarea>
       <div id="pin-preview" style="display:none;margin-top:8px;background:#faf5ff;border-radius:8px;padding:10px;">
         <div id="pin-preview-status" style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:6px;"></div>
         <div id="pin-preview-pills" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
@@ -673,7 +673,9 @@
     preview.style.display = 'block';
 
     const names = [...new Set(
-      raw.split('\n').map(l => l.trim()).filter(l => l.length >= 4 && !l.startsWith('http'))
+      raw.split('\n')
+        .map(l => l.replace(/;\s*Opens a new tab/gi, '').trim())
+        .filter(l => l.length >= 20 && !l.startsWith('http'))
     )];
 
     if (!names.length) {
@@ -700,7 +702,9 @@
     const hiddenProducts = document.getElementById('pasteProducts').value.trim();
     const rawTextarea    = document.getElementById('pastePinUrls').value.trim();
     const products = hiddenProducts || [...new Set(
-      rawTextarea.split('\n').map(l => l.trim()).filter(l => l.length >= 4 && !l.startsWith('http'))
+      rawTextarea.split('\n')
+        .map(l => l.replace(/;\s*Opens a new tab/gi, '').trim())
+        .filter(l => l.length >= 20 && !l.startsWith('http'))
     )].join('\n');
     const pasteBtn  = document.getElementById('pasteBtn');
     const status    = document.getElementById('pasteStatus');
