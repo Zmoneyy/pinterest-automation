@@ -203,21 +203,33 @@
   .ss-btn.has-shots { border-color:#bbf7d0;background:#f0fdf4;color:#16a34a; }
   .ss-btn:hover { opacity:0.85; }
 
-  /* drag-over highlight on entry cards */
-  .entry-card.drag-over {
-    border: 2px dashed #0369a1;
-    background: #e0f2fe;
-    box-shadow: 0 0 0 4px #bae6fd;
-  }
-  .entry-card.drag-over::after {
-    content: '📷 Drop screenshots here';
-    display: block;
+  /* screenshot drop zone on entry cards */
+  .ss-dropzone {
+    margin-top: 10px;
+    border: 2px dashed #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 14px;
     text-align: center;
-    font-size: 13px;
-    font-weight: 700;
-    color: #0369a1;
-    padding: 6px 0 2px;
+    cursor: pointer;
+    background: #f8fbff;
+    transition: all 0.15s;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 500;
   }
+  .ss-dropzone.ss-dz-saved {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+    color: #16a34a;
+    font-weight: 700;
+  }
+  .ss-dropzone.ss-dz-active {
+    border-color: #0369a1;
+    background: #e0f2fe;
+    color: #0369a1;
+    font-weight: 700;
+  }
+  .ss-dropzone:hover { opacity: 0.85; }
 
   /* understanding panel */
   .understanding-panel {
@@ -361,11 +373,7 @@
       {{ entries|length }} categor{{ 'y' if entries|length == 1 else 'ies' }} saved
     </div>
     {% for e in entries %}
-    <div class="entry-card" id="entry-{{ e.id }}"
-      ondragover="event.preventDefault(); this.classList.add('drag-over')"
-      ondragleave="if (!this.contains(event.relatedTarget)) this.classList.remove('drag-over')"
-      ondrop="this.classList.remove('drag-over'); handleCardDrop(event, {{ e.id }})"
-    >
+    <div class="entry-card" id="entry-{{ e.id }}">
       <div class="entry-card-header">
         <div class="entry-cat-name">🛍️ {{ e.category }}</div>
         {% if e.saved_at %}
@@ -463,6 +471,20 @@
             Save Products
           </button>
           <span id="save-prod-status-{{ e.id }}" style="font-size:12px;"></span>
+        </div>
+      </div>
+
+      {# Screenshot drop zone #}
+      {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
+      <div id="ss-dropzone-{{ e.id }}"
+        data-has-ss="{{ 'true' if has_ss else 'false' }}"
+        onclick="document.getElementById('ss-input-{{ e.id }}').click()"
+        ondragover="event.preventDefault(); this.classList.add('ss-dz-active')"
+        ondragleave="if(!this.contains(event.relatedTarget)) this.classList.remove('ss-dz-active')"
+        ondrop="event.preventDefault(); this.classList.remove('ss-dz-active'); handleCardDrop(event, {{ e.id }})"
+        class="ss-dropzone{{ ' ss-dz-saved' if has_ss else '' }}">
+        <div id="ss-dropzone-label-{{ e.id }}">
+          {% if has_ss %}📷 Screenshots saved ✓ — drop new ones to replace{% else %}📷 Drop screenshots here or click to browse{% endif %}
         </div>
       </div>
 
@@ -1006,6 +1028,11 @@
       btn.title = 'Screenshots saved — click to replace';
       status.textContent = `✓ ${files.length} saved`;
       status.style.color = '#16a34a';
+      // Update drop zone to show saved state
+      const dz = document.getElementById(`ss-dropzone-${id}`);
+      const dzLabel = document.getElementById(`ss-dropzone-label-${id}`);
+      if (dz) { dz.classList.add('ss-dz-saved'); dz.dataset.hasSs = 'true'; }
+      if (dzLabel) dzLabel.textContent = '📷 Screenshots saved ✓ — drop new ones to replace';
     } catch(e) {
       btn.disabled = false;
       btn.textContent = btn.classList.contains('has-shots') ? '📷 Screenshots ✓' : '📷 Add Screenshots';
