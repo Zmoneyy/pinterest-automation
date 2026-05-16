@@ -213,6 +213,20 @@
 {# ── LEFT: category library ── #}
 <div>
 
+  {# ── Saved categories quick-glance box ── #}
+  {% if entries %}
+  <div style="background:#f8faff;border:1.5px solid #dbeafe;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+    <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.07em;color:#1d4ed8;margin-bottom:8px;">
+      ✅ {{ entries|length }} Entr{{ 'y' if entries|length == 1 else 'ies' }} Saved
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;">
+      {% for e in entries %}
+        <span style="font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:20px;">{{ e.category }}</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
   {# Add Category button #}
   <button class="add-cat-btn" type="button" onclick="togglePastePanel()">
     <span style="font-size:20px;">+</span>
