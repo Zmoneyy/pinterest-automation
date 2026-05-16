@@ -919,21 +919,19 @@ def discover_products():
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
         # Only use beauty entries (10% commission) — skip home decor, fitness, etc.
         beauty_entries = [e for e in entries if _is_beauty_entry(e.category)]
+        # TOP PRODUCTS ONLY — exact product names give the best Amazon matches
+        # Cap at 50 total to protect SerpAPI quota (250/month free plan)
         for entry in beauty_entries:
-            # Top products first (exact product names → better Amazon matches)
             for product_name in entry.tp_list():
                 trend_dicts.append({
                     "keyword": product_name,
                     "category": "luxury_beauty",
                     "source_category": entry.category,
                 })
-            # Then search queries (keywords) — lower priority
-            for kw in entry.sq_list():
-                trend_dicts.append({
-                    "keyword": kw,
-                    "category": "luxury_beauty",
-                    "source_category": entry.category,
-                })
+                if len(trend_dicts) >= 50:
+                    break
+            if len(trend_dicts) >= 50:
+                break
         if not trend_dicts:
             top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(20).all()
             if not top_trends:
