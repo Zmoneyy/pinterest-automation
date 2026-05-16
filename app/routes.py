@@ -2743,40 +2743,8 @@ def trends_paste():
 
     db.session.commit()
 
-    # ── Generate AI insight (skipped on save — generate on-demand from entry card) ──
+    # AI brief skipped on save — generated on demand via Generate Brief button on entry card
     insight = ""
-    if False:  # disabled to save API credits
-        import anthropic as _anthropic
-        from config import Config as _Cfg
-        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
-        sq_sample = (search_queries_kws + full_page_sq_kws)[:20]
-        tp_sample = top_products_kws[:15]
-        _prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
-
-Pinterest Trends data for category: {category_label}
-
-Top search queries (what people are actively searching):
-{', '.join(sq_sample) if sq_sample else 'none'}
-
-Top trending products on Pinterest right now:
-{', '.join(tp_sample) if tp_sample else 'none recorded'}
-
-Give a focused strategic analysis covering:
-1. **Audience intent** — what is this person trying to achieve/feel?
-2. **Best products to pin** — which trending products have highest click/buy potential and why?
-3. **Pin angle** — what transformation or emotion should the pin lead with?
-4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
-5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
-
-Be specific, tactical, direct. No fluff. Use markdown headers."""
-        _msg = _client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": _prompt}],
-        )
-        insight = _msg.content[0].text.strip()
-    except Exception as _e:
-        logger.warning(f"Insight generation failed: {_e}")
 
     # ── Save a dated TrendEntry for the library ──
     import json as _json
