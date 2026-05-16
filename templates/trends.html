@@ -203,6 +203,22 @@
   .ss-btn.has-shots { border-color:#bbf7d0;background:#f0fdf4;color:#16a34a; }
   .ss-btn:hover { opacity:0.85; }
 
+  /* drag-over highlight on entry cards */
+  .entry-card.drag-over {
+    border: 2px dashed #0369a1;
+    background: #e0f2fe;
+    box-shadow: 0 0 0 4px #bae6fd;
+  }
+  .entry-card.drag-over::after {
+    content: '📷 Drop screenshots here';
+    display: block;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0369a1;
+    padding: 6px 0 2px;
+  }
+
   /* understanding panel */
   .understanding-panel {
     display: none;
@@ -345,7 +361,11 @@
       {{ entries|length }} categor{{ 'y' if entries|length == 1 else 'ies' }} saved
     </div>
     {% for e in entries %}
-    <div class="entry-card" id="entry-{{ e.id }}">
+    <div class="entry-card" id="entry-{{ e.id }}"
+      ondragover="event.preventDefault(); this.classList.add('drag-over')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondrop="this.classList.remove('drag-over'); handleCardDrop(event, {{ e.id }})"
+    >
       <div class="entry-card-header">
         <div class="entry-cat-name">🛍️ {{ e.category }}</div>
         {% if e.saved_at %}
@@ -940,10 +960,23 @@
     }
   }
 
+  // ── Handle drag-and-drop onto an entry card ──
+  async function handleCardDrop(event, id) {
+    event.preventDefault();
+    const files = Array.from(event.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    // Reuse uploadScreenshots by faking an input-like object
+    await _doUploadScreenshots(id, files);
+  }
+
   // ── Upload screenshots to an existing entry ──
   async function uploadScreenshots(id, input) {
     const files = Array.from(input.files);
     if (!files.length) return;
+    await _doUploadScreenshots(id, files);
+  }
+
+  async function _doUploadScreenshots(id, files) {
     const btn    = document.getElementById(`ss-btn-${id}`);
     const status = document.getElementById(`ss-status-${id}`);
     btn.disabled = true;
