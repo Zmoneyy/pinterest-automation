@@ -829,13 +829,10 @@
       body.innerHTML = html;
       panel.classList.add('visible');
 
-      pasteBtn.textContent = '✓ Saved!';
+      pasteBtn.textContent = '✓ Saved! Reloading…';
       pasteBtn.style.background = '#16a34a';
-      const reloadBtn = document.createElement('button');
-      reloadBtn.textContent = 'View All Entries ↓';
-      reloadBtn.style.cssText = 'margin-left:10px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 20px;font-size:14px;font-weight:700;cursor:pointer;';
-      reloadBtn.onclick = () => location.href = '/trends';
-      pasteBtn.parentNode.insertBefore(reloadBtn, pasteBtn.nextSibling);
+      // Auto-reload so the sidebar and entry list update immediately
+      setTimeout(() => { location.href = '/trends'; }, 1500);
 
     } catch(err) {
       pasteBtn.disabled = false;
