@@ -627,13 +627,34 @@
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Failed');
 
-      const kws = data.search_queries || [];
+      const kws  = data.search_queries || [];
+      const prods = data.top_products || [];
+
       kwPills.innerHTML = kws.length
         ? kws.map(k => `<span style="font-size:11px;font-weight:600;background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;">${k}</span>`).join('')
         : '<span style="font-size:12px;color:var(--gray-400);">No keywords found — try a clearer screenshot</span>';
 
+      // Show product pills if extracted
+      let prodHtml = '';
+      if (prods.length) {
+        prodHtml = `<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#7c3aed;margin:10px 0 6px;">🛍️ Products extracted (${prods.length}):</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+            ${prods.map(p => `<span style="font-size:11px;background:#f5f0ff;color:#7c3aed;padding:2px 8px;border-radius:10px;">${p}</span>`).join('')}
+          </div>`;
+      }
+      // Insert before the AI brief label
+      const briefLabel = briefDiv.previousElementSibling;
+      let existingProdDiv = document.getElementById('screenshot-prod-pills');
+      if (!existingProdDiv) {
+        existingProdDiv = document.createElement('div');
+        existingProdDiv.id = 'screenshot-prod-pills';
+        briefLabel.parentNode.insertBefore(existingProdDiv, briefLabel);
+      }
+      existingProdDiv.innerHTML = prodHtml;
+
       briefDiv.innerHTML = data.insight ? renderMd(data.insight) : '<span style="color:var(--gray-400);">No brief generated</span>';
       document.getElementById('pasteKeywords').value = kws.join('\n');
+      if (prods.length) document.getElementById('pasteProducts').value = prods.join('\n');
 
     } catch(e) {
       kwPills.innerHTML = `<span style="color:#dc2626;">Error: ${e.message}</span>`;

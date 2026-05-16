@@ -2344,38 +2344,67 @@ def trends_extract_screenshot():
             "type": "text",
             "text": (
                 f"These are {len(images)} screenshot(s) of the Pinterest Trends page for the '{category}' category. "
-                "Please extract ALL visible search query keywords/phrases shown across all the screenshots. "
-                "These are the search terms people are using on Pinterest — short keyword phrases, "
-                "often in a list or grid labeled 'Search Queries', 'Top Searches', or similar. "
-                "Return ONLY a plain list, one keyword per line, no numbering, no bullet points, no extra text. "
-                "Include every keyword you can read across all images, even if partially visible. "
-                "Do not include product names, UI labels, navigation text, or category headings — only the actual search query keywords."
+                "Please extract two things from across all the screenshots:\n\n"
+                "1. SEARCH QUERIES: All visible search query keywords/phrases — short keyword phrases people are searching on Pinterest, "
+                "often in a list or grid labeled 'Search Queries', 'Top Searches', or similar.\n\n"
+                "2. PRODUCT NAMES: All visible product names — these appear in 'Top Products' or 'Explore Top Products' sections, "
+                "usually longer phrases like actual product titles (e.g. 'Perricone MD High Potency Retinol Recovery Overnight Moisturizer').\n\n"
+                "Return your answer in EXACTLY this format, nothing else:\n"
+                "SEARCH_QUERIES:\n"
+                "keyword one\n"
+                "keyword two\n"
+                "...\n"
+                "PRODUCT_NAMES:\n"
+                "Full Product Name One\n"
+                "Full Product Name Two\n"
+                "...\n\n"
+                "Include every item you can read across all images. "
+                "If a section is not visible in any screenshot, leave it empty but still include the header."
             ),
         })
 
-        # Step 1: Extract keywords from all screenshots in one call
+        # Step 1: Extract keywords + product names from all screenshots in one call
         extract_msg = _client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=1000,
+            max_tokens=1500,
             messages=[{"role": "user", "content": content}],
         )
 
-        raw_kws = extract_msg.content[0].text.strip()
+        raw_text = extract_msg.content[0].text.strip()
 
-        # Parse + deduplicate
-        seen = set()
+        # Parse sections
         search_queries = []
-        for line in raw_kws.split('\n'):
-            kw = line.strip().strip('-•').strip().lower()
-            if not kw or len(kw) < 2 or len(kw) > 80:
-                continue
-            if kw in ('search queries', 'top searches', 'keywords', 'search terms', category.lower()):
-                continue
-            if kw not in seen:
-                seen.add(kw)
-                search_queries.append(kw)
+        product_names = []
+        current_section = None
+        seen_kw = set()
+        seen_prod = set()
 
-        # Step 2: Generate AI Strategy Brief from merged keywords
+        for line in raw_text.split('\n'):
+            line = line.strip()
+            if line.startswith('SEARCH_QUERIES:'):
+                current_section = 'kw'
+                continue
+            elif line.startswith('PRODUCT_NAMES:'):
+                current_section = 'prod'
+                continue
+            elif not line:
+                continue
+
+            cleaned = line.strip('-•').strip()
+            if not cleaned or len(cleaned) < 2:
+                continue
+
+            if current_section == 'kw':
+                kw = cleaned.lower()
+                if len(kw) <= 80 and kw not in seen_kw and kw not in ('search queries', 'top searches', 'keywords', category.lower()):
+                    seen_kw.add(kw)
+                    search_queries.append(kw)
+            elif current_section == 'prod':
+                if len(cleaned) <= 250 and cleaned.lower() not in seen_prod:
+                    seen_prod.add(cleaned.lower())
+                    product_names.append(cleaned)
+
+        # Step 2: Generate AI Strategy Brief from merged keywords + products
         brief_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
 
 Pinterest Trends data for category: {category}
@@ -2383,9 +2412,12 @@ Pinterest Trends data for category: {category}
 Top search queries (what people are actively searching):
 {', '.join(search_queries) if search_queries else 'none'}
 
+Top trending products on Pinterest right now:
+{', '.join(product_names) if product_names else 'none'}
+
 Give a focused strategic analysis covering:
 1. **Audience intent** — what is this person trying to achieve/feel?
-2. **Best products to pin** — which product types have highest click/buy potential and why?
+2. **Best products to pin** — which of the trending products have highest click/buy potential and why?
 3. **Pin angle** — what transformation or emotion should the pin lead with?
 4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
 5. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
@@ -2402,6 +2434,7 @@ Be specific, tactical, direct. No fluff. Use markdown headers."""
         return jsonify({
             "ok": True,
             "search_queries": search_queries,
+            "top_products": product_names,
             "insight": insight,
         })
 
