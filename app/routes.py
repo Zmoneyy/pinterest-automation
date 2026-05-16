@@ -900,16 +900,38 @@ def discover_products():
     manual_keyword = request.form.get("keyword", "").strip()
     trend_dicts = []
 
+    # Commission filter: only discover 10% commission categories (beauty)
+    BEAUTY_KEYWORDS = [
+        "blush", "bronzer", "foundation", "concealer", "serum", "essence",
+        "moisturizer", "lotion", "cream", "face", "skincare", "nail", "perfume",
+        "cologne", "makeup", "mascara", "lipstick", "eyeshadow", "primer",
+        "toner", "retinol", "vitamin c", "hyaluronic", "spf", "sunscreen",
+        "contour", "highlighter", "setting", "powder", "lip", "eye",
+    ]
+
+    def _is_beauty_entry(category_name):
+        cat = category_name.lower()
+        return any(kw in cat for kw in BEAUTY_KEYWORDS)
+
     if manual_keyword:
-        trend_dicts = [{"keyword": manual_keyword, "category": "general", "source_category": "Manual Search"}]
+        trend_dicts = [{"keyword": manual_keyword, "category": "luxury_beauty", "source_category": "Manual Search"}]
     else:
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
-        for entry in entries:
-            # Use ALL search queries + ALL top products — no limits
-            for kw in entry.sq_list() + entry.tp_list():
+        # Only use beauty entries (10% commission) — skip home decor, fitness, etc.
+        beauty_entries = [e for e in entries if _is_beauty_entry(e.category)]
+        for entry in beauty_entries:
+            # Top products first (exact product names → better Amazon matches)
+            for product_name in entry.tp_list():
+                trend_dicts.append({
+                    "keyword": product_name,
+                    "category": "luxury_beauty",
+                    "source_category": entry.category,
+                })
+            # Then search queries (keywords) — lower priority
+            for kw in entry.sq_list():
                 trend_dicts.append({
                     "keyword": kw,
-                    "category": entry.category.lower().replace(" ", "_"),
+                    "category": "luxury_beauty",
                     "source_category": entry.category,
                 })
         if not trend_dicts:

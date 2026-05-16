@@ -165,8 +165,18 @@
     <span style="font-size:12px;color:var(--gray-400);margin-left:4px;">— hit Approve to add to your library, Reject to discard</span>
   </div>
 
-  <div style="font-size:12px;color:#059669;font-weight:700;margin-bottom:12px;background:#d1fae5;padding:6px 12px;border-radius:8px;display:inline-block;">
-    💎 All 10% Amazon Luxury Beauty commission — approve to add to your pin library
+  {# Filter bar #}
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+    <span style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.05em;">Filter:</span>
+    <button onclick="filterCandidates('all')" id="filter-all"
+      style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;border:none;cursor:pointer;background:#1d4ed8;color:#fff;">
+      All ({{ pending_candidates|length }})
+    </button>
+    <button onclick="filterCandidates('10')" id="filter-10"
+      style="font-size:12px;font-weight:700;padding:4px 12px;border-radius:20px;border:1px solid #16a34a;cursor:pointer;background:#f0fdf4;color:#16a34a;">
+      💎 10% Commission only
+    </button>
+    <span style="font-size:11px;color:var(--gray-400);">— all results are from your beauty entries</span>
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;" id="pendingGrid">
@@ -348,6 +358,33 @@
 
 
 <script>
+  // ── Filter pending candidates by commission rate ──
+  function filterCandidates(rate) {
+    // Update button styles
+    ['all','10'].forEach(r => {
+      const btn = document.getElementById('filter-' + r);
+      if (!btn) return;
+      if (r === rate) {
+        btn.style.background = '#1d4ed8';
+        btn.style.color = '#fff';
+        btn.style.border = 'none';
+      } else {
+        btn.style.background = r === '10' ? '#f0fdf4' : '#f3f4f6';
+        btn.style.color = r === '10' ? '#16a34a' : '#374151';
+        btn.style.border = r === '10' ? '1px solid #16a34a' : '1px solid #e5e7eb';
+      }
+    });
+    document.querySelectorAll('#pendingGrid .product-card').forEach(card => {
+      if (rate === 'all') {
+        card.style.display = '';
+      } else {
+        // 10% = luxury_beauty category
+        const cat = card.dataset.category || '';
+        card.style.display = (cat === 'luxury_beauty') ? '' : 'none';
+      }
+    });
+  }
+
   function filterProducts(category) {
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('filter-' + category).classList.add('active');
