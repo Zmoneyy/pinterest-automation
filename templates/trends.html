@@ -363,7 +363,7 @@
     {% for e in entries %}
     <div class="entry-card" id="entry-{{ e.id }}"
       ondragover="event.preventDefault(); this.classList.add('drag-over')"
-      ondragleave="this.classList.remove('drag-over')"
+      ondragleave="if (!this.contains(event.relatedTarget)) this.classList.remove('drag-over')"
       ondrop="this.classList.remove('drag-over'); handleCardDrop(event, {{ e.id }})"
     >
       <div class="entry-card-header">
