@@ -617,7 +617,8 @@
   })();
 
   // ── Extract from screenshot via Claude vision ──
-  async function extractFromScreenshot() {
+  // silent=true suppresses alerts (used when called from Save)
+  async function extractFromScreenshot(silent = false) {
     const fileInput = document.getElementById('screenshotInput');
     const category  = document.getElementById('pasteCategory').value.trim();
     const btn       = document.getElementById('extractScreenshotBtn');
@@ -625,17 +626,15 @@
     const kwPills   = document.getElementById('screenshot-kw-pills');
     const briefDiv  = document.getElementById('screenshot-brief');
 
-    if (!fileInput.files.length) {
-      alert('Please select a screenshot first.');
-      return;
+    const files = Array.from(fileInput.files);
+    if (!files.length) {
+      if (!silent) alert('Please select a screenshot first.');
+      return false;
     }
     if (!category) {
-      alert('Please enter a category name first.');
-      return;
+      if (!silent) alert('Please enter a category name first.');
+      return false;
     }
-
-    const files = Array.from(fileInput.files);
-    if (!files.length) { alert('Please select at least one screenshot first.'); return; }
 
     btn.disabled = true;
     btn.textContent = `⏳ Reading ${files.length} screenshot${files.length > 1 ? 's' : ''}…`;
@@ -690,12 +689,16 @@
       document.getElementById('pasteKeywords').value = kws.join('\n');
       if (prods.length) document.getElementById('pasteProducts').value = prods.join('\n');
 
+      btn.disabled = false;
+      btn.textContent = 'Extract ▶';
+      return true;
+
     } catch(e) {
       kwPills.innerHTML = `<span style="color:#dc2626;">Error: ${e.message}</span>`;
+      btn.disabled = false;
+      btn.textContent = 'Extract ▶';
+      return false;
     }
-
-    btn.disabled = false;
-    btn.textContent = 'Extract ▶';
   }
 
   // ── Preview pasted product names (no fetch needed) ──
@@ -749,7 +752,15 @@
 
     if (hasFiles && !alreadyExtracted) {
       pasteBtn.textContent = '⏳ Extracting screenshots…';
-      await extractFromScreenshot();
+      const ok = await extractFromScreenshot(true);  // silent=true
+      if (!ok) {
+        pasteBtn.disabled = false;
+        pasteBtn.textContent = '💾 Save Data to Database';
+        status.style.display = 'inline';
+        status.style.color = 'var(--red)';
+        status.textContent = '✗ Screenshot extraction failed — try again';
+        return;
+      }
     }
 
     // ── Auto-preview products if not done yet ──
