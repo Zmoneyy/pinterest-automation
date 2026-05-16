@@ -303,10 +303,13 @@
       <input type="hidden" id="pasteProducts" value="">
     </div>
 
+    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#92400e;">
+      ⚠️ <strong>Extracting does NOT save.</strong> You must click <strong>Save Data</strong> below to commit the entry to the database.
+    </div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <button type="button" onclick="submitPastedKeywords()" id="pasteBtn"
-        style="background:#1d4ed8;color:#fff;border:none;border-radius:8px;padding:10px 24px;font-size:14px;font-weight:700;cursor:pointer;">
-        Save Data
+        style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:0.01em;">
+        💾 Save Data to Database
       </button>
       <span id="pasteStatus" style="font-size:13px;display:none;"></span>
     </div>
