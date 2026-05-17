@@ -544,34 +544,19 @@ def _discover_and_queue_products(db):
             logger.info(f"Skipping '{entry.category}' — no top products saved")
             continue
 
-        # Determine niche from category name
-        cat_lower = entry.category.lower()
-        if any(w in cat_lower for w in ["bed", "pillow", "blanket", "duvet", "quilt", "rug", "furniture",
-                                         "ottoman", "clock", "throw", "outdoor", "lawn", "garden", "decor",
-                                         "appliance", "pool", "spa"]):
-            niche = "home_decor"
-        elif any(w in cat_lower for w in ["wellness", "fitness", "supplement", "vitamin", "health"]):
-            niche = "fitness"
-        else:
-            niche = "beauty"
-
-        # For beauty: prioritize luxury beauty (10%) first, then regular beauty (3%)
-        # For home/fitness: include all products (3% and 1%)
-        if niche == "beauty":
-            luxury = [p for p in top_products if is_luxury_beauty(p)]
-            regular = [p for p in top_products if not is_luxury_beauty(p)]
-            ranked_products = luxury + regular  # luxury first
-        else:
-            ranked_products = top_products
+        # Only queue luxury beauty products — these earn 10% Amazon commission.
+        # Regular beauty = 3%, home decor = 3%, fitness = 1% — all excluded.
+        ranked_products = [p for p in top_products if is_luxury_beauty(p)]
+        niche = "luxury_beauty"
 
         if not ranked_products:
-            logger.info(f"Skipping '{entry.category}' — no products saved")
+            logger.info(f"Skipping '{entry.category}' — no luxury beauty (10%) products found")
             continue
 
         # Use the top keyword from the entry's search queries
         top_keyword = keywords[0] if keywords else entry.category
 
-        logger.info(f"Discovering from '{entry.category}' [{niche}]: {len(ranked_products)} products ({len([p for p in ranked_products if is_luxury_beauty(p)])} luxury)")
+        logger.info(f"Discovering from '{entry.category}': {len(ranked_products)} luxury beauty products (10% commission)")
 
         searched = 0
         for product_name in ranked_products:
