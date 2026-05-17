@@ -1116,5 +1116,23 @@
     const el = document.getElementById(`entry-${id}`);
     if (el) el.remove();
   }
+
+  // ── Scroll to top button ──
+  const scrollBtn = document.createElement('button');
+  scrollBtn.innerHTML = '↑';
+  scrollBtn.title = 'Back to top';
+  Object.assign(scrollBtn.style, {
+    position: 'fixed', bottom: '28px', right: '28px', zIndex: '999',
+    width: '44px', height: '44px', borderRadius: '50%',
+    background: '#1d4ed8', color: '#fff', border: 'none',
+    fontSize: '20px', fontWeight: '700', cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.2)', display: 'none',
+    lineHeight: '1'
+  });
+  scrollBtn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.body.appendChild(scrollBtn);
+  window.addEventListener('scroll', () => {
+    scrollBtn.style.display = window.scrollY > 300 ? 'block' : 'none';
+  });
 </script>
 {% endblock %}
