@@ -544,9 +544,12 @@ def _discover_and_queue_products(db):
             continue
         for product_name in entry.tp_list():
             q = product_name.strip()
-            if q and q.lower() not in seen_queries:
-                seen_queries.add(q.lower())
-                searches.append((q, entry.category))
+            if not q or q.lower() in seen_queries:
+                continue
+            if not is_luxury_beauty(q):
+                continue  # skip non-luxury brands — don't waste SerpAPI credits
+            seen_queries.add(q.lower())
+            searches.append((q, entry.category))
 
     if not searches:
         logger.warning("No beauty TrendEntry data found — add trend data first via the Trends tab")
@@ -564,6 +567,8 @@ def _discover_and_queue_products(db):
                 name = p.get("name", "")
                 if not name or not asin:
                     continue
+                if not is_luxury_beauty(name):
+                    continue  # hard filter — only 10% commission products ever queued
                 if asin in existing_asins:
                     continue
                 if name.lower().strip() in existing_names:

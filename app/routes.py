@@ -759,6 +759,7 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
 
         with app.app_context():
             from app.models import ProductCandidate, Product, TrendEntry
+            from app.amazon_api import is_luxury_beauty
             from config import Config
             associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
@@ -786,6 +787,8 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                     name = p.get("name", "")
                     if not name:
                         continue
+                    if not is_luxury_beauty(name):
+                        continue  # hard filter — only 10% commission products ever queued
                     if asin:
                         if ProductCandidate.query.filter_by(asin=asin).first():
                             continue
@@ -856,10 +859,12 @@ def discover_products():
         # Sort: High priority first, then Medium, then Low
         priority_order = {"high": 0, "medium": 1, "low": 2}
         beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
-        # TOP PRODUCTS ONLY — exact names = best Amazon matches
-        # Cap at 50 to protect SerpAPI quota (250/month free plan)
+        # TOP PRODUCTS ONLY — luxury brands only (10% commission), cap at 50 SerpAPI calls
+        from app.amazon_api import is_luxury_beauty
         for entry in beauty_entries:
             for product_name in entry.tp_list():
+                if not is_luxury_beauty(product_name):
+                    continue  # skip non-luxury brands (3% commission) — don't waste credits
                 trend_dicts.append({
                     "keyword": product_name,
                     "category": "luxury_beauty",
