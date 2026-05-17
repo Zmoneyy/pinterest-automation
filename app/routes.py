@@ -2320,6 +2320,14 @@ def trends_generate_brief(entry_id):
         from config import Config as _Cfg
         _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
 
+        # Accept optional metrics context passed from import script
+        req_data = request.get_json(force=True, silent=True) or {}
+        metrics_context = (req_data.get("metrics_context") or "").strip()
+
+        metrics_section = ""
+        if metrics_context:
+            metrics_section = f"\n\nAggregate Pinterest Trends metrics (30-day growth vs prior 30 days):\n{metrics_context}\n"
+
         text_prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials, an Amazon affiliate account focused on beauty, home decor, and wellness. Commission rates: 10% luxury beauty, 3% home decor, 1% fitness/general.
 
 Pinterest Trends data for category: {entry.category}
@@ -2328,14 +2336,14 @@ Top search queries (what people are actively searching):
 {', '.join(sq) if sq else 'none'}
 
 Top trending products on Pinterest right now:
-{', '.join(tp) if tp else 'none'}
+{', '.join(tp) if tp else 'none'}{metrics_section}
 
 Give a focused strategic analysis covering:
 1. **Audience intent** — what is this person trying to achieve/feel?
 2. **Best products to pin** — which of the trending products have highest click/buy potential and why?
 3. **Pin angle** — what transformation or emotion should the pin lead with?
 4. **Keywords to prioritize** — top 3-5 from search queries to use in pin titles
-5. **Outbound click signals** — if screenshots are attached, look at the outbound click bar charts and note which products/queries have the highest bars (most outbound clicks = most buyer intent). List the top ones specifically.
+5. **Outbound click signals** — {'use the aggregate metrics above to assess buyer intent for this category. Note which search queries (based on their transactional phrasing) are most likely driving outbound clicks.' if metrics_context and not screenshots else 'look at the outbound click bar charts in the screenshots and note which products/queries have the highest bars (most outbound clicks = most buyer intent). List the top ones specifically.' if screenshots else 'no screenshot or metrics data available — use directional logic based on keyword intent.'}
 6. **Worth it?** — given our commission structure, should we prioritize or deprioritize this category?
 
 Be specific, tactical, direct. No fluff. Use markdown headers."""

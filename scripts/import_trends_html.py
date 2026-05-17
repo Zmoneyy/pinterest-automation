@@ -35,6 +35,23 @@ def parse_html(path):
                     break
 
     if not category:
+        # Fallback: look for product-category-info div
+        info_div = soup.find(attrs={"data-test-id": "product-category-info"})
+        if info_div:
+            # First substantial text node is the category name
+            for tag in info_div.find_all(["h1", "h2", "h3"]):
+                text = tag.get_text(strip=True)
+                if text and len(text) > 3:
+                    category = text
+                    break
+            if not category:
+                # Just grab the first line of text
+                full_text = info_div.get_text(separator="\n", strip=True)
+                first_line = full_text.split("\n")[0].strip()
+                if first_line and len(first_line) > 3:
+                    category = first_line
+
+    if not category:
         # Fallback: look for the Related to "X" heading
         for tag in soup.find_all(["h2"]):
             text = tag.get_text(strip=True)
@@ -50,7 +67,7 @@ def parse_html(path):
         if kw:
             keywords.append(kw)
 
-    # Key metrics
+    # Key metrics (aggregate)
     metrics = {}
     for div in soup.find_all("div", attrs={"data-test-id": re.compile(r"-growth-summary$")}):
         metric_type = div["data-test-id"].replace("-growth-summary", "")
@@ -58,7 +75,26 @@ def parse_html(path):
         if pct_span:
             metrics[metric_type] = pct_span.get_text(strip=True)
 
-    return category, keywords, metrics
+    # Top products from carousel (brand/store names as listed on Pinterest)
+    products = []
+    carousel = soup.find(attrs={"data-test-id": "top-products-carousel-items"})
+    if carousel:
+        seen = set()
+        for child in carousel.children:
+            if not hasattr(child, "get_text"):
+                continue
+            # Each child is a product tile — grab the first link aria-label
+            for a in child.find_all("a"):
+                label = a.get("aria-label", "").replace("; Opens a new tab", "").strip()
+                text = a.get_text(strip=True).replace("; Opens a new tab", "").strip()
+                name = label or text
+                # Skip generic store names without context
+                if name and name not in seen and name not in {"Walmart", "Amazon", "Target", "SHEIN", "Sephora", "Ulta Beauty"}:
+                    seen.add(name)
+                    products.append(name)
+                    break
+
+    return category, keywords, metrics, products
 
 def find_entry(s, category):
     """Find the trend entry ID whose category name fuzzy-matches."""
@@ -87,8 +123,28 @@ def find_entry(s, category):
     return None, None
 
 def generate_brief(s, entry_id, category, keywords, metrics):
-    """Trigger AI brief generation for the entry."""
-    r = s.post(f"{BASE}/trends/generate-brief/{entry_id}", timeout=60)
+    """Trigger AI brief generation for the entry, passing metrics as context."""
+    # Build a metrics summary string to inject into the brief
+    metrics_text = ""
+    metric_labels = {
+        "OUTBOUND_CLICK": "Outbound clicks",
+        "ENGAGEMENT": "Engagement",
+        "SAVE": "Saves",
+        "IMPRESSION": "Impressions",
+    }
+    if metrics:
+        parts = []
+        for k, v in metrics.items():
+            label = metric_labels.get(k, k)
+            parts.append(f"{label}: {v} growth (last 30 days)")
+        metrics_text = "\n".join(parts)
+
+    # Pass metrics as extra context via POST body
+    r = s.post(
+        f"{BASE}/trends/generate-brief/{entry_id}",
+        json={"metrics_context": metrics_text},
+        timeout=60,
+    )
     return r.json()
 
 if __name__ == "__main__":
@@ -99,11 +155,12 @@ if __name__ == "__main__":
     path = sys.argv[1]
     print(f"\nParsing: {path}")
 
-    category, keywords, metrics = parse_html(path)
+    category, keywords, metrics, products = parse_html(path)
 
     print(f"\n📂 Category: {category}")
     print(f"🔍 Keywords ({len(keywords)}): {', '.join(keywords[:10])}{'...' if len(keywords) > 10 else ''}")
     print(f"📊 Metrics: {metrics}")
+    print(f"🛍️  Products found: {', '.join(products[:5]) if products else 'none'}")
 
     if not category or not keywords:
         print("\n❌ Could not extract category or keywords. Make sure this is a Pinterest Trends category page.")
@@ -118,6 +175,15 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print(f"✓ Matched entry: '{matched_name}' (id={entry_id})")
+
+    # Update products if we found any
+    if products:
+        r = s.post(f"{BASE}/trends/update-products/{entry_id}", json={"products": products}, timeout=10)
+        result = r.json()
+        if result.get("ok"):
+            print(f"✓ Updated {len(products)} products")
+        else:
+            print(f"⚠️  Products update: {result}")
 
     # Generate AI brief
     print(f"\n🧠 Generating AI brief...")
