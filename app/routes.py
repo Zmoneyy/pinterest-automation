@@ -784,7 +784,7 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                 cat = entry_category_map.get(query.lower(), "luxury_beauty")
 
                 try:
-                    products = search_products(query, category=cat, max_results=10)
+                    products = search_products(query, category=cat, max_results=5)
                 except Exception as e:
                     logger.error(f"SerpAPI search error for '{query}': {e}")
                     products = []
@@ -887,9 +887,9 @@ def discover_products():
         beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
 
         # Extract unique luxury brands from top_products — one search per brand
-        # 9 brands × 10 results = ~90 products, ~9 SerpAPI credits
+        # 18 brands × 5 results = ~90 diverse products (more brands = less shade repetition)
         seen_brands = {}  # brand_key -> (display_name, source_category)
-        TARGET_BRANDS = 9
+        TARGET_BRANDS = 18
 
         for entry in beauty_entries:
             for product_name in entry.tp_list():

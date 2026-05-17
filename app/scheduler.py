@@ -541,7 +541,7 @@ def _discover_and_queue_products(db):
 
     # Extract unique luxury brands — one brand search per brand, 10 results each
     seen_brands = {}  # brand_key -> (display_name, source_category)
-    TARGET_BRANDS = 9  # 9 brands × 10 results = ~90 products
+    TARGET_BRANDS = 18  # 18 brands × 5 results = ~90 diverse products
 
     for entry in entries:
         if not _is_beauty_entry(entry.category):
@@ -577,7 +577,7 @@ def _discover_and_queue_products(db):
     for product_name, source_category in searches:
         try:
             logger.info(f"  Searching: '{product_name}'")
-            results = search_products(product_name, category="luxury_beauty", max_results=10)
+            results = search_products(product_name, category="luxury_beauty", max_results=5)
 
             # Brand-level search (e.g. "Tatcha amazon") — Amazon often omits brand
             # from title. Trust the query brand, not just the result name.
