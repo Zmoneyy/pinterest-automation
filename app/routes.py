@@ -777,7 +777,7 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                 cat = entry_category_map.get(query.lower(), "luxury_beauty")
 
                 try:
-                    products = search_products(query, category=cat, max_results=5)
+                    products = search_products(query, category=cat, max_results=10)
                 except Exception as e:
                     logger.error(f"SerpAPI search error for '{query}': {e}")
                     products = []
@@ -828,8 +828,14 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
 @bp.route("/products/discover", methods=["POST"])
 @login_required
 def discover_products():
-    """Kick off background Amazon discovery using ALL TrendEntry keywords."""
+    """
+    Kick off background Amazon discovery.
+    Strategy: extract unique luxury brands from TrendEntry top_products,
+    search each brand on Amazon (10 results each) → ~9 searches = ~90 products.
+    Data-driven: brands come from TrendEntry, nothing hardcoded.
+    """
     from app.models import TrendEntry
+    from app.amazon_api import is_luxury_beauty, LUXURY_BEAUTY_BRANDS
 
     if _discovery_state["running"]:
         return redirect(url_for("main.products") + "?discovering=1")
@@ -837,7 +843,6 @@ def discover_products():
     manual_keyword = request.form.get("keyword", "").strip()
     trend_dicts = []
 
-    # Commission filter: only discover 10% commission categories (beauty)
     BEAUTY_KEYWORDS = [
         "blush", "bronzer", "foundation", "concealer", "serum", "essence",
         "moisturizer", "lotion", "cream", "face", "skincare", "nail", "perfume",
@@ -846,40 +851,53 @@ def discover_products():
         "contour", "highlighter", "setting", "powder", "lip", "eye",
     ]
 
-    def _is_beauty_entry(category_name):
-        cat = category_name.lower()
-        return any(kw in cat for kw in BEAUTY_KEYWORDS)
+    def _is_beauty_entry(cat):
+        return any(kw in cat.lower() for kw in BEAUTY_KEYWORDS)
+
+    def _extract_brand(product_name):
+        """Find the luxury brand in a product name. Returns title-cased brand string."""
+        name_lower = product_name.lower()
+        # Match longest brand first to avoid partial matches (e.g. "la mer" before "la")
+        for brand in sorted(LUXURY_BEAUTY_BRANDS, key=len, reverse=True):
+            if brand in name_lower:
+                return brand.title()
+        return None
 
     if manual_keyword:
         trend_dicts = [{"keyword": manual_keyword, "category": "luxury_beauty", "source_category": "Manual Search"}]
     else:
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
-        # Only beauty entries (10% commission) — skip home decor, fitness, etc.
         beauty_entries = [e for e in entries if _is_beauty_entry(e.category)]
-        # Sort: High priority first, then Medium, then Low
         priority_order = {"high": 0, "medium": 1, "low": 2}
         beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
-        # TOP PRODUCTS ONLY — luxury brands only (10% commission), cap at 50 SerpAPI calls
-        from app.amazon_api import is_luxury_beauty
+
+        # Extract unique luxury brands from top_products — one search per brand
+        # 9 brands × 10 results = ~90 products, ~9 SerpAPI credits
+        seen_brands = {}  # brand_key -> (display_name, source_category)
+        TARGET_BRANDS = 9
+
         for entry in beauty_entries:
             for product_name in entry.tp_list():
-                if not is_luxury_beauty(product_name):
-                    continue  # skip non-luxury brands (3% commission) — don't waste credits
-                trend_dicts.append({
-                    "keyword": product_name,
-                    "category": "luxury_beauty",
-                    "source_category": entry.category,
-                    "priority": entry.priority or "medium",
-                })
-                if len(trend_dicts) >= 50:
+                brand = _extract_brand(product_name)
+                if not brand:
+                    continue
+                brand_key = brand.lower()
+                if brand_key not in seen_brands:
+                    seen_brands[brand_key] = (brand, entry.category)
+                if len(seen_brands) >= TARGET_BRANDS:
                     break
-            if len(trend_dicts) >= 50:
+            if len(seen_brands) >= TARGET_BRANDS:
                 break
+
+        for brand_key, (brand_display, source_category) in seen_brands.items():
+            trend_dicts.append({
+                "keyword": f"{brand_display} amazon",
+                "category": "luxury_beauty",
+                "source_category": source_category,
+            })
+
         if not trend_dicts:
-            top_trends = TrendCache.query.order_by(TrendCache.score.desc()).limit(20).all()
-            if not top_trends:
-                return redirect(url_for("main.products") + "?error=no_trends")
-            trend_dicts = [{"keyword": t.keyword, "category": t.category, "source_category": t.category} for t in top_trends]
+            return redirect(url_for("main.products") + "?error=no_trends")
 
     from flask import current_app
     _run_discovery_background(current_app._get_current_object(), trend_dicts, manual_keyword)

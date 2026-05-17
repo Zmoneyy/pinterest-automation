@@ -539,17 +539,34 @@ def _discover_and_queue_products(db):
     searches = []  # list of (product_name, source_category)
     seen_queries = set()
 
+    # Extract unique luxury brands — one brand search per brand, 10 results each
+    seen_brands = {}  # brand_key -> (display_name, source_category)
+    TARGET_BRANDS = 9  # 9 brands × 10 results = ~90 products
+
     for entry in entries:
         if not _is_beauty_entry(entry.category):
             continue
         for product_name in entry.tp_list():
-            q = product_name.strip()
-            if not q or q.lower() in seen_queries:
+            # Find which luxury brand this product belongs to
+            name_lower = product_name.lower()
+            from app.amazon_api import LUXURY_BEAUTY_BRANDS
+            matched_brand = None
+            for brand in sorted(LUXURY_BEAUTY_BRANDS, key=len, reverse=True):
+                if brand in name_lower:
+                    matched_brand = brand.title()
+                    break
+            if not matched_brand:
                 continue
-            if not is_luxury_beauty(q):
-                continue  # skip non-luxury brands — don't waste SerpAPI credits
-            seen_queries.add(q.lower())
-            searches.append((q, entry.category))
+            brand_key = matched_brand.lower()
+            if brand_key not in seen_brands:
+                seen_brands[brand_key] = (matched_brand, entry.category)
+            if len(seen_brands) >= TARGET_BRANDS:
+                break
+        if len(seen_brands) >= TARGET_BRANDS:
+            break
+
+    for brand_key, (brand_display, source_category) in seen_brands.items():
+        searches.append((f"{brand_display} amazon", source_category))
 
     if not searches:
         logger.warning("No beauty TrendEntry data found — add trend data first via the Trends tab")
@@ -560,7 +577,7 @@ def _discover_and_queue_products(db):
     for product_name, source_category in searches:
         try:
             logger.info(f"  Searching: '{product_name}'")
-            results = search_products(product_name, category="luxury_beauty", max_results=5)
+            results = search_products(product_name, category="luxury_beauty", max_results=10)
 
             for p in results:
                 asin = p.get("asin", "")
