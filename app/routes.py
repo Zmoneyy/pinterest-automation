@@ -2273,9 +2273,11 @@ def trends_upload_screenshots(entry_id):
     images = data.get("images") or []
     if not images:
         return jsonify({"ok": False, "error": "No images provided."})
-    entry.screenshots_b64 = _json.dumps(images[:6])
+    existing = _json.loads(entry.screenshots_b64 or "[]")
+    combined = existing + images
+    entry.screenshots_b64 = _json.dumps(combined[:6])
     db.session.commit()
-    return jsonify({"ok": True, "count": len(images[:6])})
+    return jsonify({"ok": True, "count": len(combined[:6])})
 
 
 @bp.route("/trends/set-priority/<int:entry_id>", methods=["POST"])
