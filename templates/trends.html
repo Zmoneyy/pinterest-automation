@@ -394,7 +394,7 @@
         {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
         <button class="ss-btn{% if has_ss %} has-shots{% endif %}"
           id="ss-btn-{{ e.id }}"
-          title="{% if has_ss %}Screenshots saved — click to replace{% else %}Upload screenshots for AI brief{% endif %}"
+          title="{% if has_ss %}Screenshots saved — click to add/replace{% else %}Upload screenshots for AI brief{% endif %}"
           onclick="document.getElementById('ss-input-{{ e.id }}').click()">
           {% if has_ss %}📷 Screenshots ✓{% else %}📷 Add Screenshots{% endif %}
         </button>
@@ -404,6 +404,23 @@
 
         <button class="entry-delete-btn" type="button" title="Delete this entry"
           onclick="deleteEntry({{ e.id }})">✕</button>
+      </div>
+
+      {# Screenshot drop zone — always visible, drag files here #}
+      {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
+      <div id="ss-dropzone-{{ e.id }}"
+        data-has-ss="{{ 'true' if has_ss else 'false' }}"
+        ondragover="event.preventDefault(); this.classList.add('ss-dz-active')"
+        ondragleave="if(!this.contains(event.relatedTarget)) this.classList.remove('ss-dz-active')"
+        ondrop="event.preventDefault(); this.classList.remove('ss-dz-active'); handleCardDrop(event, {{ e.id }})"
+        class="ss-dropzone{{ ' ss-dz-saved' if has_ss else '' }}">
+        <div id="ss-dropzone-label-{{ e.id }}">
+          {% if has_ss %}
+            📷 Screenshots saved ✓ — drop new ones to replace or <span onclick="document.getElementById('ss-input-{{ e.id }}').click()" style="color:#1d4ed8;font-weight:700;text-decoration:underline;cursor:pointer;">browse</span>
+          {% else %}
+            📂 Drop screenshots here (multiple OK) or <span onclick="document.getElementById('ss-input-{{ e.id }}').click()" style="color:#1d4ed8;font-weight:700;text-decoration:underline;cursor:pointer;">browse</span>
+          {% endif %}
+        </div>
       </div>
 
       {% set sqs = e.sq_list() %}
@@ -471,20 +488,6 @@
             Save Products
           </button>
           <span id="save-prod-status-{{ e.id }}" style="font-size:12px;"></span>
-        </div>
-      </div>
-
-      {# Screenshot drop zone #}
-      {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
-      <div id="ss-dropzone-{{ e.id }}"
-        data-has-ss="{{ 'true' if has_ss else 'false' }}"
-        onclick="document.getElementById('ss-input-{{ e.id }}').click()"
-        ondragover="event.preventDefault(); this.classList.add('ss-dz-active')"
-        ondragleave="if(!this.contains(event.relatedTarget)) this.classList.remove('ss-dz-active')"
-        ondrop="event.preventDefault(); this.classList.remove('ss-dz-active'); handleCardDrop(event, {{ e.id }})"
-        class="ss-dropzone{{ ' ss-dz-saved' if has_ss else '' }}">
-        <div id="ss-dropzone-label-{{ e.id }}">
-          {% if has_ss %}📷 Screenshots saved ✓ — drop new ones to replace{% else %}📷 Drop screenshots here or click to browse{% endif %}
         </div>
       </div>
 
@@ -1025,14 +1028,14 @@
       btn.disabled = false;
       btn.textContent = `📷 Screenshots ✓`;
       btn.classList.add('has-shots');
-      btn.title = 'Screenshots saved — click to replace';
+      btn.title = 'Screenshots saved — click to add/replace';
       status.textContent = `✓ ${files.length} saved`;
       status.style.color = '#16a34a';
       // Update drop zone to show saved state
       const dz = document.getElementById(`ss-dropzone-${id}`);
       const dzLabel = document.getElementById(`ss-dropzone-label-${id}`);
       if (dz) { dz.classList.add('ss-dz-saved'); dz.dataset.hasSs = 'true'; }
-      if (dzLabel) dzLabel.textContent = '📷 Screenshots saved ✓ — drop new ones to replace';
+      if (dzLabel) dzLabel.innerHTML = `📷 Screenshots saved ✓ — drop new ones to replace or <span onclick="document.getElementById('ss-input-${id}').click()" style="color:#1d4ed8;font-weight:700;text-decoration:underline;cursor:pointer;">browse</span>`;
     } catch(e) {
       btn.disabled = false;
       btn.textContent = btn.classList.contains('has-shots') ? '📷 Screenshots ✓' : '📷 Add Screenshots';
