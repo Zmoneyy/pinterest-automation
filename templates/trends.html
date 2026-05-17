@@ -397,7 +397,7 @@
           id="ss-btn-{{ e.id }}"
           title="{% if has_ss %}Screenshots saved — click to add more{% else %}Upload screenshots for AI brief{% endif %}"
           onclick="document.getElementById('ss-input-{{ e.id }}').click()">
-          {% if has_ss %}📷 Screenshots ✓{% else %}📷 Add Screenshots{% endif %}
+          {% if has_ss %}📷 {{ e.ss_count() }} screenshot{{ 's' if e.ss_count() != 1 else '' }} ✓{% else %}📷 Add Screenshots{% endif %}
         </button>
         {% if has_ss %}
         <button id="ss-clear-btn-{{ e.id }}"

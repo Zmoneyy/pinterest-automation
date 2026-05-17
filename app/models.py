@@ -171,6 +171,11 @@ class TrendEntry(db.Model):
         try: return json.loads(self.full_page_kws or "[]")
         except: return []
 
+    def ss_count(self):
+        import json
+        try: return len(json.loads(self.screenshots_b64 or "[]"))
+        except: return 0
+
     def __repr__(self):
         return f"<TrendEntry {self.category} @ {self.saved_at}>"
 
