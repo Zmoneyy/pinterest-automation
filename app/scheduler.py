@@ -502,108 +502,124 @@ def _post_pin_pinterest(pin, db, now):
 
 def _discover_and_queue_products(db):
     """
-    Product discovery driven by TrendEntry data:
-    1. Pull top products from high/medium priority TrendEntry categories
-    2. Filter to luxury beauty only (10% commission) using brand name matching
-    3. Search Amazon for each product to get ASIN + image + price
-    4. Queue as ProductCandidate — with the entry's keyword + brief insight attached
-    5. User reviews candidates in the Discover & Queue tab
+    Efficient discovery — ~90 luxury beauty products (10% commission), ~6 SerpAPI calls.
 
-    Rate-limited: max 3 Amazon searches per entry, max 10 entries per run
-    to preserve SerpAPI quota (250/month free plan).
+    Strategy:
+    1. Load 37 hardcoded curated luxury products directly (0 SerpAPI calls)
+    2. Scan TrendEntry top_products for luxury brands NOT already covered by curated list
+    3. Do up to 6 brand-level searches (returns ~10 products each)
+    4. Cap at 90 total — all luxury beauty (10% commission), tied to trending categories
     """
     import time
     import random
     from app.models import ProductCandidate, TrendEntry
-    from app.amazon_api import search_products, is_luxury_beauty
+    from app.amazon_api import (
+        search_products, is_luxury_beauty,
+        get_curated_products, CURATED_LUXURY_PRODUCTS
+    )
+    from config import Config
 
-    logger.info("Starting TrendEntry-driven product discovery…")
+    logger.info("Starting luxury beauty product discovery (10% commission only)...")
 
-    existing_names = {c.name.lower().strip() for c in ProductCandidate.query.all()}
     existing_urls  = {c.amazon_url for c in ProductCandidate.query.all() if c.amazon_url}
+    existing_names = {c.name.lower().strip() for c in ProductCandidate.query.all()}
     total_added    = 0
+    TARGET         = 90
 
-    # Pull high priority entries first, then medium — skip low priority
-    entries = TrendEntry.query.filter(
-        TrendEntry.priority.in_(["high", "medium"])
-    ).order_by(
-        TrendEntry.priority.asc(),   # "high" sorts before "medium" alphabetically — fix below
-        TrendEntry.saved_at.desc()
-    ).limit(10).all()
+    associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-    # Sort so high > medium
-    priority_order = {"high": 0, "medium": 1}
-    entries = sorted(entries, key=lambda e: priority_order.get(e.priority or "medium", 1))
+    # STEP 1: Queue hardcoded curated luxury products (0 SerpAPI calls)
+    curated = get_curated_products(associate_tag)
+    for p in curated:
+        if total_added >= TARGET:
+            break
+        if p["amazon_url"] in existing_urls or p["name"].lower().strip() in existing_names:
+            continue
+        existing_urls.add(p["amazon_url"])
+        existing_names.add(p["name"].lower().strip())
+        db.session.add(ProductCandidate(
+            name=p["name"][:255], asin=p["asin"], amazon_url=p["amazon_url"],
+            category="luxury_beauty", image_url=p["image_url"], price=p["price"],
+            trend_keyword=p["trend_keyword"], status=ProductCandidate.STATUS_PENDING,
+        ))
+        total_added += 1
+
+    db.session.commit()
+    logger.info(f"  Step 1: {total_added} curated luxury products queued (0 SerpAPI calls)")
+
+    if total_added >= TARGET:
+        logger.info(f"Discovery complete: {total_added} products queued")
+        return
+
+    # STEP 2: Find luxury brands in TrendEntry not covered by curated list
+    curated_brands = {brand.lower() for _, _, _, brand in CURATED_LUXURY_PRODUCTS}
+
+    trending_brands = {}
+    entries = TrendEntry.query.filter(TrendEntry.priority.in_(["high", "medium"])).all()
 
     for entry in entries:
-        top_products = entry.tp_list()
-        keywords     = entry.sq_list()
-        insight      = (entry.insight or "")[:300]  # brief snippet for context
-
-        if not top_products:
-            logger.info(f"Skipping '{entry.category}' — no top products saved")
-            continue
-
-        # Only queue luxury beauty products — these earn 10% Amazon commission.
-        # Regular beauty = 3%, home decor = 3%, fitness = 1% — all excluded.
-        ranked_products = [p for p in top_products if is_luxury_beauty(p)]
-        niche = "luxury_beauty"
-
-        if not ranked_products:
-            logger.info(f"Skipping '{entry.category}' — no luxury beauty (10%) products found")
-            continue
-
-        # Use the top keyword from the entry's search queries
+        keywords = entry.sq_list()
         top_keyword = keywords[0] if keywords else entry.category
-
-        logger.info(f"Discovering from '{entry.category}': {len(ranked_products)} luxury beauty products (10% commission)")
-
-        searched = 0
-        for product_name in ranked_products:
-            if searched >= 3:  # cap at 3 Amazon searches per entry to save SerpAPI quota
-                break
-
-            # Skip if we already have this product queued
-            if product_name.lower().strip() in existing_names:
+        for product in entry.tp_list():
+            if not is_luxury_beauty(product):
                 continue
+            already_covered = any(b in product.lower() for b in curated_brands)
+            if already_covered:
+                continue
+            words = product.split()
+            if product.lower().startswith("dr."):
+                brand_query = f"{words[0]} {words[1]} skincare amazon"
+                brand_key   = f"{words[0]} {words[1]}".lower()
+            elif product.lower().startswith("la roche"):
+                brand_query = "La Roche-Posay skincare amazon"
+                brand_key   = "la roche-posay"
+            elif product.lower().startswith("jan marini"):
+                brand_query = "Jan Marini skincare amazon"
+                brand_key   = "jan marini"
+            else:
+                brand_query = f"{words[0]} luxury beauty skincare amazon"
+                brand_key   = words[0].lower()
+            if brand_key not in trending_brands:
+                trending_brands[brand_key] = (brand_query, top_keyword)
 
-            try:
-                results = search_products(product_name, category="luxury_beauty", max_results=1)
-                searched += 1
+    # STEP 3: Up to 6 brand-level SerpAPI searches (~10 products each)
+    searches_done = 0
+    for brand_key, (brand_query, trend_keyword) in list(trending_brands.items()):
+        if total_added >= TARGET or searches_done >= 6:
+            break
+        try:
+            logger.info(f"  Searching: '{brand_query}'")
+            results = search_products(brand_query, category="luxury_beauty", max_results=10)
+            searches_done += 1
 
-                for p in results:
-                    amazon_url = p.get("amazon_url", "")
-                    asin       = p.get("asin", "")
-                    if not asin or not amazon_url:
-                        continue
-                    if amazon_url in existing_urls:
-                        continue
+            for p in results:
+                if total_added >= TARGET:
+                    break
+                if not is_luxury_beauty(p.get("name", "")):
+                    continue
+                amazon_url = p.get("amazon_url", "")
+                asin       = p.get("asin", "")
+                if not asin or not amazon_url or amazon_url in existing_urls:
+                    continue
+                existing_urls.add(amazon_url)
+                existing_names.add(p["name"].lower().strip())
+                db.session.add(ProductCandidate(
+                    name=p["name"][:255], asin=asin, amazon_url=amazon_url,
+                    category="luxury_beauty", image_url=p.get("image_url", ""),
+                    price=p.get("price", ""), trend_keyword=trend_keyword,
+                    status=ProductCandidate.STATUS_PENDING,
+                ))
+                total_added += 1
 
-                    existing_urls.add(amazon_url)
-                    existing_names.add(product_name.lower().strip())
+            db.session.commit()
+            time.sleep(random.uniform(2, 3))
 
-                    candidate = ProductCandidate(
-                        name         = p.get("name", product_name)[:255],
-                        asin         = asin,
-                        amazon_url   = amazon_url,
-                        category     = niche,
-                        image_url    = p.get("image_url", ""),
-                        price        = p.get("price", ""),
-                        trend_keyword= top_keyword,
-                        status       = ProductCandidate.STATUS_PENDING,
-                    )
-                    db.session.add(candidate)
-                    total_added += 1
-                    logger.info(f"  Queued: {p.get('name', product_name)[:60]}")
+        except Exception as e:
+            db.session.rollback()
+            logger.warning(f"Search failed for '{brand_query}': {e}")
 
-                db.session.commit()
-                time.sleep(random.uniform(2, 4))  # rate limit SerpAPI calls
+    logger.info(f"Discovery complete: {total_added} luxury beauty products queued ({searches_done} SerpAPI calls used)")
 
-            except Exception as e:
-                db.session.rollback()
-                logger.warning(f"Discovery failed for '{product_name}': {e}")
-
-    logger.info(f"TrendEntry discovery complete: {total_added} luxury beauty candidates added")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
