@@ -116,7 +116,10 @@
 {% block content %}
 {# ── Header with "Find Products" form ── #}
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
-  <h1 class="page-title" style="margin-bottom:0;">Products</h1>
+  <div>
+    <h1 class="page-title" style="margin-bottom:2px;">Products</h1>
+    <p style="margin:0;font-size:13px;color:var(--gray-400);">Browse your Amazon affiliate products, see estimated earnings, and filter by commission rate</p>
+  </div>
   <form method="POST" action="{{ url_for('main.discover_products') }}" style="display:flex;gap:8px;align-items:center;">
     <input type="text" name="keyword" placeholder="Search Amazon (optional keyword)…"
       style="padding:8px 12px;border:1.5px solid var(--gray-200);border-radius:8px;font-size:13px;width:220px;">

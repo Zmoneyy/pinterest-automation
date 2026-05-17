@@ -156,7 +156,8 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="page-title">⚙ Setup</h1>
+<h1 class="page-title" style="margin-bottom:2px;">⚙ Setup</h1>
+<p style="margin:0 0 16px;font-size:13px;color:var(--gray-400);">Configure your Pinterest account, API keys, boards, and app settings</p>
 
 {% if request.args.get('success') == 'pinterest_connected' %}
   <div class="alert alert-success">Pinterest account connected successfully!</div>

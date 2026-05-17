@@ -277,7 +277,10 @@
 
 {# ── Page header ── #}
 <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:20px;">
-  <h1 class="page-title" style="margin-bottom:0;">Dashboard</h1>
+  <div>
+    <h1 class="page-title" style="margin-bottom:2px;">Dashboard</h1>
+    <p style="margin:0;font-size:13px;color:var(--gray-400);">Review, approve, and edit AI-generated pins before they go live on Pinterest</p>
+  </div>
   <div style="display:flex;gap:8px;flex-wrap:wrap;">
     <button class="btn btn-red btn-sm" onclick="document.getElementById('createPinModal').classList.add('open')">✏ Create Pin</button>
     <form method="POST" action="{{ url_for('main.api_trigger') }}" id="triggerForm" style="display:inline;">

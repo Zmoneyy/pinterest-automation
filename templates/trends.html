@@ -245,7 +245,8 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="page-title">Pinterest Trends</h1>
+<h1 class="page-title" style="margin-bottom:2px;">Pinterest Trends</h1>
+<p style="margin:0 0 16px;font-size:13px;color:var(--gray-400);">Research trending Pinterest keywords by category and save them to power your pin strategy</p>
 
 {% set error = request.args.get('error') %}
 {% if error == 'no_files' %}
