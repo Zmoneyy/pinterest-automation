@@ -412,7 +412,7 @@
         <span id="ss-status-{{ e.id }}" style="font-size:11px;"></span>
 
         <button class="entry-delete-btn" type="button" title="Delete this entry"
-          onclick="deleteEntry({{ e.id }})">✕</button>
+          onclick="deleteEntry({{ e.id }}, {{ e.tp_list()|length }}, '{{ e.category|replace("'", "\\'") }}')">✕</button>
       </div>
 
       {# Screenshot drop zone — always visible, drag files here #}
@@ -1142,8 +1142,10 @@
   }
 
   // ── Delete entry ──
-  async function deleteEntry(id) {
-    if (!confirm('Delete this category entry?')) return;
+  async function deleteEntry(id, productCount, categoryName) {
+    const msg = `⚠️ Delete "${categoryName}"?\n\nThis will permanently remove:\n• All ${productCount} products\n• All keywords\n• All screenshots\n• The AI brief\n\nThis CANNOT be undone. Type DELETE to confirm.`;
+    const input = prompt(msg);
+    if (input !== 'DELETE') return;
     await fetch(`/trends/delete-entry/${id}`, { method: 'POST' });
     const el = document.getElementById(`entry-${id}`);
     if (el) el.remove();
