@@ -237,7 +237,24 @@ LUXURY_BEAUTY_BRANDS = [
     "givenchy beauty", "tom ford beauty", "guerlain", "la prairie",
     "peter thomas roth", "sunday riley", "kate somerville", "perricone md",
     "tata harper", "ilia", "westman atelier", "merit", "rare beauty",
+    # Additional luxury beauty brands from TrendEntry products
+    "clinique", "jan marini", "caudalie", "dr. jart", "dr jart", "laneige",
+    "embryolisse", "erborian", "la roche-posay", "la roche posay", "avene",
+    "avène", "cle de peau", "beaute", "beauté", "kiehl's", "kiehls",
+    "origins", "fresh beauty", "olehenriksen", "ole henriksen",
+    "boscia", "belif", "innisfree", "missha", "some by mi",
+    "paula's choice", "paulas choice", "the ordinary", "niod",
+    "medik8", "image skincare", "obagi", "skinceuticals",
+    "murad", "glowbiotics", "revision skincare", "elta md",
+    "colorescience", "dermablend", "it cosmetics", "urban decay",
+    "too faced", "benefit cosmetics", "tarte", "becca", "smashbox",
 ]
+
+
+def is_luxury_beauty(product_name: str) -> bool:
+    """Return True if this product name contains a known luxury beauty brand (10% commission)."""
+    name_lower = product_name.lower()
+    return any(brand in name_lower for brand in LUXURY_BEAUTY_BRANDS)
 
 # ── Curated Luxury Beauty Catalogue ──────────────────────────────────────────
 # Hand-picked bestsellers across all 3 price tiers. All earn 10% Amazon commission.
