@@ -763,7 +763,14 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
             from config import Config
             associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-            # Build category map from TrendEntry so we know which category each product belongs to
+            # Pre-load existing ASINs and names (all statuses) to avoid duplicates
+            seen_asins  = {c.asin for c in ProductCandidate.query.all() if c.asin}
+            seen_asins |= {p.amazon_url.split("/dp/")[1].split("?")[0]
+                           for p in Product.query.all()
+                           if p.amazon_url and "/dp/" in p.amazon_url}
+            seen_names  = {c.name.lower().strip() for c in ProductCandidate.query.all()}
+
+            # Build category map from TrendEntry
             entry_category_map = {}
             for entry in TrendEntry.query.all():
                 for tp in entry.tp_list():
@@ -797,15 +804,14 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                     name_lower = name.lower()
                     if any(w in name_lower for w in ["pallet", "units", "bundle lot", "wholesale", "returned", "damaged"]):
                         continue
-                    # Skip if already seen (any status — including rejected, so rejects don't come back)
-                    if asin and ProductCandidate.query.filter_by(asin=asin).first():
+                    # Skip duplicates (in-memory check covers both DB and within-run dupes)
+                    if asin and asin in seen_asins:
                         continue
-                    if asin and Product.query.filter(Product.amazon_url.contains(asin)).first():
+                    if name.lower().strip() in seen_names:
                         continue
-                    if not asin and ProductCandidate.query.filter(
-                        db.func.lower(ProductCandidate.name) == name.lower().strip()
-                    ).first():
-                        continue
+
+                    seen_asins.add(asin)
+                    seen_names.add(name.lower().strip())
 
                     amazon_url = p.get("amazon_url") or (
                         _build_affiliate_url(asin, associate_tag) if asin else ""
