@@ -793,14 +793,19 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                         continue
                     if not query_is_luxury and not is_luxury_beauty(name):
                         continue  # only block if BOTH query and result name are non-luxury
-                    if asin:
-                        if ProductCandidate.query.filter_by(asin=asin).first():
-                            continue
-                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
-                            continue
-                    else:
-                        if ProductCandidate.query.filter_by(name=name).first():
-                            continue
+                    # Filter out wholesale/pallet/bundle junk listings
+                    name_lower = name.lower()
+                    if any(w in name_lower for w in ["pallet", "units", "bundle lot", "wholesale", "returned", "damaged"]):
+                        continue
+                    # Skip if already seen (any status — including rejected, so rejects don't come back)
+                    if asin and ProductCandidate.query.filter_by(asin=asin).first():
+                        continue
+                    if asin and Product.query.filter(Product.amazon_url.contains(asin)).first():
+                        continue
+                    if not asin and ProductCandidate.query.filter(
+                        db.func.lower(ProductCandidate.name) == name.lower().strip()
+                    ).first():
+                        continue
 
                     amazon_url = p.get("amazon_url") or (
                         _build_affiliate_url(asin, associate_tag) if asin else ""
