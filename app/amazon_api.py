@@ -91,7 +91,7 @@ def _search_via_serpapi(keyword: str, api_key: str, max_results: int = 5) -> lis
     """Search Amazon products using SerpAPI's Amazon Search engine."""
     params = {
         "engine": "amazon",
-        "q": keyword,
+        "k": keyword,
         "api_key": api_key,
         "amazon_domain": "amazon.com",
     }
