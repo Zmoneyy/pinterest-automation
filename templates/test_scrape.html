@@ -84,15 +84,22 @@
     Drag the button below into your browser's bookmarks bar. If your bookmarks bar is hidden: <strong>View → Show Bookmarks Bar</strong> (⌘+Shift+B).
   </p>
 
-  {# Bookmarklet href — JS is URL-encoded, app URL + password baked in #}
-  {% set bm_js %}javascript:(async function(){const APP='{{ app_url }}',TOK='{{ dashboard_password }}';const o=document.createElement('div');o.style='position:fixed;top:16px;right:16px;z-index:2147483647;background:#fff;border:2.5px solid #e60023;border-radius:12px;padding:14px 18px;font:600 14px/1.5 system-ui,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.18);min-width:260px;max-width:340px;';o.textContent='⏳ Reading page...';document.body.appendChild(o);try{const ci=document.querySelector('[data-test-id="product-category-info"]');const category=(ci?.querySelector('h1,h2,h3')?.textContent||document.title).replace(/[\-–|].*/,'').trim();const keywords=[...document.querySelectorAll('a[data-test-id^="trend-pill-"]')].map(a=>(a.getAttribute('aria-label')||'').replace('Go to the Trend Detail page for ','').trim()).filter(Boolean);const metrics={};document.querySelectorAll('[data-test-id$="-growth-summary"]').forEach(d=>{const t=d.dataset.testId.replace('-growth-summary','');const p=d.querySelector('.YLh4cb')?.textContent?.trim();if(p)metrics[t]=p;});const pins=[...new Set([...document.querySelectorAll('[data-test-id="top-products-carousel-items"] a[href]')].map(a=>a.href).filter(h=>h.includes('/pin/')))];o.textContent=`⏳ Saving (${keywords.length} keywords, ${pins.length} products)...`;const resp=await fetch(`${APP}/trends/bookmarklet-import`,{method:'POST',headers:{'Content-Type':'application/json','X-Import-Token':TOK},body:JSON.stringify({category,keywords,metrics,pins})});const d=await resp.json();if(d.ok){o.style.borderColor='#16a34a';o.innerHTML=`✅ <strong>Saved to "${d.matched}"</strong><br><span style='font-weight:400;font-size:12px'>${d.keywords} keywords · ${d.products} products${d.new_products?' · +'+d.new_products+' new products':''} · brief ${d.brief?'✓':'skipped'}</span>`;}else{o.style.borderColor='#dc2626';o.textContent='❌ '+d.error;}}catch(e){o.style.borderColor='#dc2626';o.textContent='❌ '+e.message;}setTimeout(()=>o.remove(),7000);})();{% endset %}
-
-  <a class="bm-link" href="{{ bm_js }}">📌 Aura Trends Import</a>
+  <a class="bm-link" id="bmLink" href="#">📌 Aura Trends Import</a>
 
   <div class="drag-hint">👆 Drag this button to your bookmarks bar — don't click it here</div>
 
   <div class="tip-box">
     ✅ The bookmarklet has your app URL and password built in — no setup needed after installing.
+  </div>
+
+  <div style="margin-top:20px;">
+    <div style="font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:8px;">Or paste this directly in the Chrome Console on any Pinterest Trends page (⌘+Option+J):</div>
+    <textarea id="consoleCode" rows="4" readonly
+      style="width:100%;font-family:monospace;font-size:11px;background:#1e1e2e;color:#cdd6f4;border-radius:8px;padding:12px;border:none;resize:none;cursor:pointer;"
+      onclick="this.select();document.execCommand('copy');document.getElementById('copyConfirm').textContent='✅ Copied!';">
+    </textarea>
+    <div id="copyConfirm" style="font-size:12px;color:#16a34a;margin-top:4px;"></div>
+    <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Click the box to copy · then paste in Console · press Enter</div>
   </div>
 </div>
 
@@ -153,8 +160,55 @@
 
 {% block scripts %}
 <script>
-  // Prevent accidental click on the bookmarklet link
-  document.querySelector('.bm-link').addEventListener('click', function(e) {
+  const APP = '{{ app_url }}';
+  const TOK = '{{ dashboard_password }}';
+
+  // The bookmarklet code — no backticks so it survives HTML encoding
+  const bmCode = '(async function(){'
+    + 'var APP="' + APP + '",TOK="' + TOK + '";'
+    + 'var o=document.createElement("div");'
+    + 'o.style="position:fixed;top:16px;right:16px;z-index:2147483647;background:#fff;border:2.5px solid #e60023;border-radius:12px;padding:14px 18px;font:600 14px/1.5 system-ui,sans-serif;box-shadow:0 4px 24px rgba(0,0,0,.18);min-width:260px;max-width:340px;";'
+    + 'o.textContent="\u23f3 Reading page...";'
+    + 'document.body.appendChild(o);'
+    + 'try{'
+    +   'var ci=document.querySelector("[data-test-id=\'product-category-info\']");'
+    +   'var category=((ci&&ci.querySelector("h1,h2,h3")&&ci.querySelector("h1,h2,h3").textContent)||document.title).replace(/[-\u2013|].*/,"").trim();'
+    +   'var keywords=[].slice.call(document.querySelectorAll("a[data-test-id^=\'trend-pill-\']")).map(function(a){return(a.getAttribute("aria-label")||"").replace("Go to the Trend Detail page for ","").trim();}).filter(Boolean);'
+    +   'var metrics={};'
+    +   '[].slice.call(document.querySelectorAll("[data-test-id$=\'-growth-summary\']")).forEach(function(d){'
+    +     'var t=d.dataset.testId.replace("-growth-summary","");'
+    +     'var s=d.querySelector(".YLh4cb");'
+    +     'if(s)metrics[t]=s.textContent.trim();'
+    +   '});'
+    +   'var pset={};'
+    +   '[].slice.call(document.querySelectorAll("[data-test-id=\'top-products-carousel-items\'] a[href]")).forEach(function(a){if(a.href.indexOf("/pin/")>-1)pset[a.href]=1;});'
+    +   'var pins=Object.keys(pset);'
+    +   'o.textContent="\u23f3 Saving "+keywords.length+" keywords, "+pins.length+" products...";'
+    +   'fetch(APP+"/trends/bookmarklet-import",{'
+    +     'method:"POST",'
+    +     'headers:{"Content-Type":"application/json","X-Import-Token":TOK},'
+    +     'body:JSON.stringify({category:category,keywords:keywords,metrics:metrics,pins:pins})'
+    +   '}).then(function(r){return r.json();}).then(function(d){'
+    +     'if(d.ok){'
+    +       'o.style.borderColor="#16a34a";'
+    +       'o.innerHTML="<strong>\u2705 Saved to \\""+d.matched+"\\"</strong><br><span style=\'font-weight:400;font-size:12px\'>"+d.keywords+" keywords \u00b7 "+d.products+" products \u00b7 brief "+(d.brief?"\u2713":"skipped")+"</span>";'
+    +     '}else{'
+    +       'o.style.borderColor="#dc2626";'
+    +       'o.textContent="\u274c "+d.error;'
+    +     '}'
+    +   '}).catch(function(e){o.style.borderColor="#dc2626";o.textContent="\u274c "+e.message;});'
+    + '}catch(e){o.style.borderColor="#dc2626";o.textContent="\u274c "+e.message;}'
+    + 'setTimeout(function(){o.remove();},7000);'
+    + '})();';
+
+  // Set bookmarklet href
+  document.getElementById('bmLink').href = 'javascript:' + bmCode;
+
+  // Populate console textarea
+  document.getElementById('consoleCode').value = bmCode;
+
+  // Prevent accidental click
+  document.getElementById('bmLink').addEventListener('click', function(e) {
     e.preventDefault();
     alert('Drag this button to your bookmarks bar — don\'t click it here.\n\nOnce installed, click it on a Pinterest Trends page.');
   });
