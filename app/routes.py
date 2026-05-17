@@ -2259,7 +2259,10 @@ def _suggest_boards_from_trends(trends):
 @bp.route("/test-scrape")
 @login_required
 def test_scrape():
-    return render_template("test_scrape.html")
+    from config import Config as _Cfg
+    import os
+    app_url = os.getenv("APP_URL", "https://pinterest-automation-814656203168.us-central1.run.app")
+    return render_template("test_scrape.html", app_url=app_url, dashboard_password=_Cfg.DASHBOARD_PASSWORD)
 
 
 @bp.route("/trends/upload-screenshots/<int:entry_id>", methods=["POST"])
@@ -2645,6 +2648,144 @@ def trends_extract_pin_products():
         return jsonify({"ok": False, "error": "Could not extract product names from those pins."})
 
     return jsonify({"ok": True, "products": products})
+
+
+@bp.route("/trends/bookmarklet-import", methods=["POST", "OPTIONS"])
+def trends_bookmarklet_import():
+    """
+    Accept data POSTed by the Pinterest Trends bookmarklet.
+    Auth: X-Import-Token header must match DASHBOARD_PASSWORD.
+    CORS open so the bookmarklet can POST from trends.pinterest.com.
+    """
+    from flask import make_response
+    import json as _json
+    import re
+    import requests as http_requests
+
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type, X-Import-Token",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+    }
+
+    if request.method == "OPTIONS":
+        return make_response("", 204, cors_headers)
+
+    # Token auth (no session needed — runs cross-origin from Pinterest)
+    from config import Config as _Cfg
+    token = request.headers.get("X-Import-Token", "")
+    if not token or token != (_Cfg.DASHBOARD_PASSWORD or ""):
+        return make_response(jsonify({"ok": False, "error": "Unauthorized"}), 401, cors_headers)
+
+    payload  = request.get_json(force=True) or {}
+    category = (payload.get("category") or "").strip()
+    keywords = [k.strip() for k in (payload.get("keywords") or []) if k.strip()]
+    metrics  = payload.get("metrics") or {}
+    pins     = payload.get("pins") or []
+
+    if not category or not keywords:
+        return make_response(jsonify({"ok": False, "error": "Missing category or keywords"}), 400, cors_headers)
+
+    # Fuzzy-match to existing TrendEntry
+    from app.models import TrendEntry
+    def _fuzzy(cat, entries):
+        cl = cat.lower().replace("&", "and").replace(" ", "")
+        for eid, name in entries:
+            nl = name.lower().replace("&", "and").replace(" ", "")
+            if cl in nl or nl in cl:
+                return eid, name
+            cw = set(re.findall(r"\w+", cat.lower()))
+            nw = set(re.findall(r"\w+", name.lower()))
+            if len(cw & nw) / max(len(cw), 1) >= 0.6:
+                return eid, name
+        return None, None
+
+    all_entries = [(str(e.id), e.category) for e in TrendEntry.query.all()]
+    entry_id, matched_name = _fuzzy(category, all_entries)
+    if not entry_id:
+        return make_response(
+            jsonify({"ok": False, "error": f'No entry found for "{category}". Add it in Trends first.'}),
+            404, cors_headers
+        )
+
+    entry = TrendEntry.query.get(int(entry_id))
+
+    # Merge keywords (never replace existing)
+    merged_sq = list(dict.fromkeys(entry.sq_list() + [k.lower() for k in keywords]))
+    entry.search_queries = _json.dumps(merged_sq)
+
+    # Fetch product names from pin URLs server-side
+    new_products = []
+    if pins:
+        UA   = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+        seen = set(entry.tp_list())
+        for url in pins[:20]:
+            if "pinterest.com/pin" not in url:
+                continue
+            try:
+                r    = http_requests.get(url, headers={"User-Agent": UA}, timeout=8)
+                m    = re.search(r'application/ld\+json">(.*?)</script>', r.text, re.DOTALL)
+                if m:
+                    d    = _json.loads(m.group(1))
+                    name = (d.get("headline") or d.get("name", "")).strip()
+                    if name and name not in seen and len(name) > 5:
+                        seen.add(name)
+                        new_products.append(name)
+            except Exception:
+                continue
+
+    # Merge products (never replace)
+    merged_tp = list(dict.fromkeys(entry.tp_list() + new_products))
+    if new_products:
+        entry.top_products = _json.dumps(merged_tp)
+
+    db.session.commit()
+
+    # Build metrics text for brief prompt
+    metric_labels = {"OUTBOUND_CLICK": "Outbound clicks", "ENGAGEMENT": "Engagement", "SAVE": "Saves"}
+    metrics_text  = "\n".join(f"{metric_labels.get(k,k)}: {v} growth (last 30 days)" for k, v in metrics.items())
+
+    # Generate AI brief
+    brief_ok = False
+    try:
+        import anthropic as _anthropic
+        _client = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY)
+        sq = entry.sq_list()
+        tp = entry.tp_list()
+        ms = f"\n\nAggregate metrics (30-day growth):\n{metrics_text}\n" if metrics_text else ""
+        prompt = f"""You are a Pinterest affiliate marketing strategist for Aura Girl Essentials (Amazon affiliate: beauty, home decor, wellness). Commission: 10% luxury beauty, 3% home decor, 1% general.
+
+Pinterest Trends category: {entry.category}
+Search queries: {', '.join(sq) if sq else 'none'}
+Trending products: {', '.join(tp[:20]) if tp else 'none'}{ms}
+
+Strategic analysis:
+1. **Audience intent** — what is this person trying to achieve?
+2. **Best products to pin** — highest click/buy potential and why?
+3. **Pin angle** — what transformation should the pin lead with?
+4. **Keywords to prioritize** — top 3-5 for pin titles
+5. **Outbound click signals** — {'use metrics to assess buyer intent; note most transactional query phrasings' if metrics_text else 'assess from keyword intent'}
+6. **Worth it?** — given commission structure, prioritize or deprioritize?
+
+Specific, tactical, direct. No fluff. Markdown headers."""
+        msg = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY).messages.create(
+            model="claude-sonnet-4-6", max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        entry.insight = msg.content[0].text.strip()
+        db.session.commit()
+        brief_ok = True
+    except Exception as e:
+        logger.warning(f"Bookmarklet brief generation failed: {e}")
+
+    return make_response(jsonify({
+        "ok":           True,
+        "matched":      matched_name,
+        "keywords":     len(merged_sq),
+        "products":     len(merged_tp),
+        "new_products": len(new_products),
+        "brief":        brief_ok,
+    }), 200, cors_headers)
 
 
 @bp.route("/trends/paste", methods=["POST"])
