@@ -969,6 +969,17 @@ def undo_candidate(candidate_id):
     return redirect(url_for("main.products"))
 
 
+@bp.route("/products/queue/clear-all", methods=["POST"])
+@login_required
+def clear_all_candidates():
+    """Delete all product candidates (pending + rejected) to start fresh."""
+    count = ProductCandidate.query.count()
+    ProductCandidate.query.delete()
+    db.session.commit()
+    logger.info(f"Cleared {count} product candidates")
+    return redirect(url_for("main.products"))
+
+
 @bp.route("/products/queue/approve-all", methods=["POST"])
 @login_required
 def approve_all_candidates():
