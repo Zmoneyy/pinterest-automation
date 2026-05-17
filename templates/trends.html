@@ -528,7 +528,7 @@
     <div class="sidebar-section-title" style="color:#1d4ed8;">✅ {{ entries|length }} Entr{{ 'y' if entries|length == 1 else 'ies' }} Saved</div>
     <div style="display:flex;flex-wrap:wrap;gap:5px;">
       {% for e in entries %}
-        <span style="font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:20px;">{{ e.category }}</span>
+        <a href="#entry-{{ e.id }}" style="font-size:12px;font-weight:600;background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:20px;text-decoration:none;">{{ e.category }}</a>
       {% endfor %}
     </div>
   </div>
