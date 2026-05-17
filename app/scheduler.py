@@ -579,13 +579,17 @@ def _discover_and_queue_products(db):
             logger.info(f"  Searching: '{product_name}'")
             results = search_products(product_name, category="luxury_beauty", max_results=10)
 
+            # Brand-level search (e.g. "Tatcha amazon") — Amazon often omits brand
+            # from title. Trust the query brand, not just the result name.
+            query_is_luxury = is_luxury_beauty(product_name)
+
             for p in results:
                 asin = p.get("asin", "")
                 name = p.get("name", "")
                 if not name or not asin:
                     continue
-                if not is_luxury_beauty(name):
-                    continue  # hard filter — only 10% commission products ever queued
+                if not query_is_luxury and not is_luxury_beauty(name):
+                    continue  # only block if BOTH query and result name are non-luxury
                 if asin in existing_asins:
                     continue
                 if name.lower().strip() in existing_names:

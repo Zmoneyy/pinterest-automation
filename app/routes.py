@@ -782,13 +782,17 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                     logger.error(f"SerpAPI search error for '{query}': {e}")
                     products = []
 
+                # For brand-level searches (e.g. "Tatcha amazon"), Amazon often omits
+                # the brand name from product titles. Trust the query instead of the title.
+                query_is_luxury = is_luxury_beauty(query)
+
                 for p in products:
                     asin = p.get("asin", "")
                     name = p.get("name", "")
                     if not name:
                         continue
-                    if not is_luxury_beauty(name):
-                        continue  # hard filter — only 10% commission products ever queued
+                    if not query_is_luxury and not is_luxury_beauty(name):
+                        continue  # only block if BOTH query and result name are non-luxury
                     if asin:
                         if ProductCandidate.query.filter_by(asin=asin).first():
                             continue
