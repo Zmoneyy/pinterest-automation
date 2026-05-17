@@ -137,89 +137,27 @@ def _fetch_amazon_product(asin: str) -> Optional[dict]:
     return None
 
 
-# Luxury beauty searches that reliably return 10% commission products
-LUXURY_BEAUTY_SEARCHES = [
-    ("charlotte tilbury amazon", "Charlotte Tilbury"),
-    ("tatcha skincare amazon", "Tatcha"),
-    ("drunk elephant serum amazon", "Drunk Elephant"),
-    ("rare beauty selena gomez amazon", "Rare Beauty"),
-    ("merit beauty amazon", "Merit"),
-    ("nars cosmetics amazon", "NARS"),
-    ("dyson airwrap amazon", "Dyson"),
-    ("sunday riley amazon", "Sunday Riley"),
-    ("peter thomas roth amazon", "Peter Thomas Roth"),
-    ("ilia beauty amazon", "ILIA"),
-    ("kate somerville amazon", "Kate Somerville"),
-    ("pat mcgrath amazon", "Pat McGrath"),
-    ("shiseido amazon", "Shiseido"),
-    ("estee lauder amazon", "Estée Lauder"),
-    ("lancôme amazon", "Lancôme"),
-    ("ysl beauty amazon", "YSL Beauty"),
-    ("tom ford beauty amazon", "Tom Ford Beauty"),
-    ("la mer moisturizer amazon", "La Mer"),
-    ("sk-ii facial treatment amazon", "SK-II"),
-    ("westman atelier amazon", "Westman Atelier"),
-]
-
-
 def discover_products_for_trends(trends: list[dict], per_trend: int = 3) -> list[dict]:
     """
-    Search Amazon for products. ALWAYS leads with luxury beauty (10% commission)
-    searches first, then trend-matched products.
+    Search Amazon for products matching Pinterest trend keywords.
+    All queries come from TrendEntry data — nothing hardcoded.
     """
     all_products = []
     seen_asins = set()
 
-    def _add_products(products, trend_keyword, source_category):
-        for p in products:
-            asin = p.get("asin", "")
-            if asin and asin not in seen_asins:
-                seen_asins.add(asin)
-                p["trend_keyword"]   = trend_keyword
-                p["source_category"] = source_category
-                all_products.append(p)
-
-    # ── STEP 1: Always search luxury beauty brands first (10% commission) ──
-    # Shuffle so we don't always get the same brands
-    luxury_searches = list(LUXURY_BEAUTY_SEARCHES)
-    random.shuffle(luxury_searches)
-    for query, brand in luxury_searches[:8]:   # top 8 luxury brands per run
-        products = search_products(query, category="luxury_beauty", max_results=3)
-        _add_products(products, brand, "Luxury Beauty (10%)")
-        time.sleep(random.uniform(1.5, 3))
-
-    # ── STEP 2: Trend-matched searches from TrendEntry categories ──
-    for trend in trends[:15]:
+    for trend in trends[:20]:
         keyword         = trend.get("keyword", "")
         niche           = trend.get("niche") or trend.get("category", "beauty")
         source_category = trend.get("source_category", "")
         if not keyword:
             continue
         products = search_products(keyword, category=niche, max_results=per_trend)
-        _add_products(products, keyword, source_category)
-        time.sleep(random.uniform(2, 4))
-
-    return all_products
-
-
-def discover_evergreen_products(per_query: int = 3) -> list[dict]:
-    """Search for evergreen high-commission beauty products."""
-    evergreen_queries = [
-        "best skincare serum amazon",
-        "vitamin c serum face amazon",
-        "retinol cream amazon best seller",
-        "hyaluronic acid moisturizer amazon",
-        "niacinamide serum amazon",
-    ]
-    all_products = []
-    seen_asins = set()
-
-    for query in evergreen_queries[:3]:
-        products = search_products(query, category="beauty", max_results=per_query)
         for p in products:
             asin = p.get("asin", "")
             if asin and asin not in seen_asins:
                 seen_asins.add(asin)
+                p["trend_keyword"]   = keyword
+                p["source_category"] = source_category
                 all_products.append(p)
         time.sleep(random.uniform(2, 4))
 
@@ -255,71 +193,6 @@ def is_luxury_beauty(product_name: str) -> bool:
     """Return True if this product name contains a known luxury beauty brand (10% commission)."""
     name_lower = product_name.lower()
     return any(brand in name_lower for brand in LUXURY_BEAUTY_BRANDS)
-
-# ── Curated Luxury Beauty Catalogue ──────────────────────────────────────────
-# Hand-picked bestsellers across all 3 price tiers. All earn 10% Amazon commission.
-# Format: (asin, name, price, brand)
-CURATED_LUXURY_PRODUCTS = [
-    # ── Entry Luxury $30–$75 ──
-    ("B01N8QNZ4A", "Charlotte Tilbury Matte Revolution Lipstick in Pillow Talk", "38.00", "Charlotte Tilbury"),
-    ("B0BVQPK7M1", "Charlotte Tilbury Hollywood Flawless Filter Foundation", "49.00", "Charlotte Tilbury"),
-    ("B08QS58TZQ", "Charlotte Tilbury Airbrush Flawless Setting Spray", "38.00", "Charlotte Tilbury"),
-    ("B07TGMJRHQ", "Rare Beauty by Selena Gomez Soft Pinch Liquid Blush", "23.00", "Rare Beauty"),
-    ("B09B5Q9B8T", "Rare Beauty Perfect Strokes Universal Volumizing Mascara", "22.00", "Rare Beauty"),
-    ("B0BZMB76WJ", "Merit Beauty Day Glow Highlighting Balm", "38.00", "Merit Beauty"),
-    ("B09LSPWMQC", "Merit Beauty The Minimalist Complexion Stick", "38.00", "Merit Beauty"),
-    ("B001UE8NVS", "NARS Radiant Creamy Concealer", "34.00", "NARS"),
-    ("B00ARL9IN0", "NARS All Day Luminous Weightless Foundation", "54.00", "NARS"),
-    ("B07WZZKN92", "Tatcha The Dewy Skin Cream Plumping & Hydrating Moisturizer", "68.00", "Tatcha"),
-    ("B00VW16HCS", "Tatcha The Water Cream Oil-Free Pore Minimizing Moisturizer", "68.00", "Tatcha"),
-    ("B08CXVXZ4M", "Drunk Elephant Lala Retro Whipped Moisturizer", "62.00", "Drunk Elephant"),
-    ("B01LX6SXBW", "Hourglass Veil Mineral Primer", "52.00", "Hourglass"),
-    ("B00NT8GVYE", "Sunday Riley Good Genes All-In-One Lactic Acid Treatment", "35.00", "Sunday Riley"),
-    ("B09NPYF82Z", "Westman Atelier Baby Cheeks Blush Stick", "48.00", "Westman Atelier"),
-    # ── Mid Luxury $75–$150 ──
-    ("B01M1E0YAY", "Drunk Elephant C-Firma Fresh Day Serum", "90.00", "Drunk Elephant"),
-    ("B07ZQYB98N", "Drunk Elephant Protini Polypeptide Moisturizer", "90.00", "Drunk Elephant"),
-    ("B0856QV3TT", "Tatcha The Silk Serum Wrinkle Smoothing Retinol Alternative", "110.00", "Tatcha"),
-    ("B0016FXNWC", "SK-II Facial Treatment Essence", "99.00", "SK-II"),
-    ("B01NBXKWRG", "Estée Lauder Advanced Night Repair Synchronized Multi-Recovery Complex", "115.00", "Estée Lauder"),
-    ("B07MRZQZKK", "Peter Thomas Roth Peptide 21 Wrinkle Resist Serum", "130.00", "Peter Thomas Roth"),
-    ("B07H4J5TSK", "Kate Somerville ExfoliKate Intensive Exfoliating Treatment", "85.00", "Kate Somerville"),
-    ("B00LG6YWKI", "Shiseido Benefiance Wrinkle Smoothing Cream", "75.00", "Shiseido"),
-    ("B07QF7XLLZ", "Sunday Riley C.E.O. 15% Vitamin C Brightening Serum", "85.00", "Sunday Riley"),
-    ("B00COSOAYW", "Lancôme Génifique Youth Activating Serum", "115.00", "Lancôme"),
-    ("B01LXFAIRY", "Pat McGrath Labs MatteTrance Lipstick", "38.00", "Pat McGrath"),
-    ("B09VQKFP9Y", "ILIA Super Serum Skin Tint SPF 40 Foundation", "48.00", "ILIA Beauty"),
-    # ── High Luxury $150+ ──
-    ("B0017RBM92", "La Mer The Moisturizing Soft Cream", "195.00", "La Mer"),
-    ("B00B62RBUU", "La Mer The Treatment Lotion", "220.00", "La Mer"),
-    ("B001F0ASDG", "SK-II Facial Treatment Essence Full Size", "185.00", "SK-II"),
-    ("B08GPBZXPD", "Augustinus Bader The Rich Cream", "265.00", "Augustinus Bader"),
-    ("B09GZBXD6B", "Dyson Airwrap Multi-Styler Complete Long", "599.00", "Dyson"),
-    ("B08LKP9GQ1", "Dyson Supersonic Hair Dryer", "429.00", "Dyson"),
-    ("B0B8VBD47Q", "Tom Ford Soleil Neige Eau de Parfum", "220.00", "Tom Ford Beauty"),
-    ("B00BVHHQAA", "La Prairie Skin Caviar Luxe Cream", "450.00", "La Prairie"),
-    ("B06Y15NJZM", "Sisley Paris Black Rose Cream Mask", "145.00", "Sisley"),
-    ("B07RQP8NVB", "Tatcha Violet-C Brightening Serum", "88.00", "Tatcha"),
-]
-
-
-def get_curated_products(associate_tag: str = "auragirlcreat-20") -> list[dict]:
-    """Return the full curated luxury beauty catalogue as product dicts."""
-    products = []
-    for asin, name, price, brand in CURATED_LUXURY_PRODUCTS:
-        affiliate_url = f"https://www.amazon.com/dp/{asin}?tag={associate_tag}&linkCode=ll1&language=en_US"
-        image_url = f"https://images-na.ssl-images-amazon.com/images/I/{asin}._SL500_.jpg"
-        products.append({
-            "name": name,
-            "asin": asin,
-            "amazon_url": affiliate_url,
-            "image_url": image_url,
-            "price": price,
-            "category": "luxury_beauty",
-            "trend_keyword": brand,
-            "source_category": "Luxury Beauty (10%)",
-        })
-    return products
 
 
 def _guess_category(name: str) -> str:

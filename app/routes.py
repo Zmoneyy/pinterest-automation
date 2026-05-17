@@ -721,36 +721,6 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
     """Search Amazon for luxury beauty products via SerpAPI and queue them as ProductCandidates."""
     import threading
 
-    # Luxury beauty brand searches — 10% commission, variety of price tiers
-    LUXURY_SEARCHES = [
-        ("charlotte tilbury amazon",         "Charlotte Tilbury"),
-        ("tatcha skincare amazon",            "Tatcha"),
-        ("drunk elephant serum amazon",       "Drunk Elephant"),
-        ("rare beauty selena gomez amazon",   "Rare Beauty"),
-        ("merit beauty amazon",               "Merit Beauty"),
-        ("nars cosmetics amazon",             "NARS"),
-        ("dyson airwrap amazon",              "Dyson"),
-        ("sunday riley amazon",               "Sunday Riley"),
-        ("peter thomas roth amazon",          "Peter Thomas Roth"),
-        ("ilia beauty amazon",                "ILIA Beauty"),
-        ("kate somerville amazon",            "Kate Somerville"),
-        ("pat mcgrath amazon",                "Pat McGrath"),
-        ("shiseido amazon",                   "Shiseido"),
-        ("estee lauder advanced night repair","Estée Lauder"),
-        ("lancôme genifique amazon",          "Lancôme"),
-        ("ysl beauty amazon",                 "YSL Beauty"),
-        ("tom ford beauty amazon",            "Tom Ford Beauty"),
-        ("la mer moisturizer amazon",         "La Mer"),
-        ("sk-ii facial treatment amazon",     "SK-II"),
-        ("augustinus bader amazon",           "Augustinus Bader"),
-        ("la prairie amazon",                 "La Prairie"),
-        ("hourglass cosmetics amazon",        "Hourglass"),
-        ("sisley paris amazon",               "Sisley"),
-        ("westman atelier amazon",            "Westman Atelier"),
-        ("perricone md amazon",               "Perricone MD"),
-        ("tata harper amazon",                "Tata Harper"),
-    ]
-
     def _worker():
         global _discovery_state
         import random, time
@@ -758,53 +728,17 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
 
         serpapi_key = _get_serpapi_key()
 
-        # Fall back to curated catalogue if no SerpAPI key
         if not serpapi_key:
-            from app.amazon_api import get_curated_products
-            catalogue = get_curated_products()
-            _discovery_state["running"]    = True
-            _discovery_state["added"]      = 0
-            _discovery_state["done"]       = 0
-            _discovery_state["total"]      = len(catalogue)
-            _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
-            _discovery_state["current"]    = "⚠️ No SerpAPI key — loading curated list…"
-
-            with app.app_context():
-                from app.models import ProductCandidate, Product
-                for i, p in enumerate(catalogue):
-                    asin = p.get("asin", "")
-                    _discovery_state["current"] = f"💎 {p.get('trend_keyword', '')}…"
-                    _discovery_state["done"]    = i + 1
-                    if asin:
-                        if ProductCandidate.query.filter_by(asin=asin).first():
-                            continue
-                        if Product.query.filter(Product.amazon_url.contains(asin)).first():
-                            continue
-                    else:
-                        if ProductCandidate.query.filter_by(name=p["name"]).first():
-                            continue
-                    db.session.add(ProductCandidate(
-                        name=p["name"], asin=asin, amazon_url=p["amazon_url"],
-                        category="luxury_beauty", source_category="Luxury Beauty (10%)",
-                        image_url=p.get("image_url"), price=p.get("price"),
-                        trend_keyword=p.get("trend_keyword", ""),
-                        status=ProductCandidate.STATUS_PENDING,
-                    ))
-                    _discovery_state["added"] += 1
-                db.session.commit()
             _discovery_state["running"] = False
-            _discovery_state["current"] = f"✅ Done — {_discovery_state['added']} products added (curated fallback)"
+            _discovery_state["current"] = "❌ SerpAPI key not configured — add it in Setup"
             return
 
-        # Build search list from TrendEntry top products (primary)
-        # trend_dicts comes from discover_products() — it's already tp_list() + sq_list()
-        # Prioritize top products (exact product names) over general search queries
+        # Build search list from TrendEntry top products
         searches = []
 
         if manual_keyword:
             searches.append((manual_keyword, manual_keyword))
         elif trend_dicts:
-            # Deduplicate and build (query, label) pairs from trend entries
             seen_q = set()
             for td in trend_dicts:
                 q = td.get("keyword", "").strip()
@@ -813,9 +747,9 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                     label = td.get("source_category", q)
                     searches.append((q, label))
         else:
-            # No entries yet — fall back to luxury brand searches
-            searches = list(LUXURY_SEARCHES)
-            random.shuffle(searches)
+            _discovery_state["running"] = False
+            _discovery_state["current"] = "❌ No trend data — add products via the Trends tab first"
+            return
 
         _discovery_state["running"]    = True
         _discovery_state["added"]      = 0

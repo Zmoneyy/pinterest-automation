@@ -502,123 +502,98 @@ def _post_pin_pinterest(pin, db, now):
 
 def _discover_and_queue_products(db):
     """
-    Efficient discovery — ~90 luxury beauty products (10% commission), ~6 SerpAPI calls.
-
-    Strategy:
-    1. Load 37 hardcoded curated luxury products directly (0 SerpAPI calls)
-    2. Scan TrendEntry top_products for luxury brands NOT already covered by curated list
-    3. Do up to 6 brand-level searches (returns ~10 products each)
-    4. Cap at 90 total — all luxury beauty (10% commission), tied to trending categories
+    Data-driven discovery — searches Amazon using exact product names from TrendEntry.top_products.
+    Only beauty categories (10% commission). All queries come from what Pinterest users are
+    actually searching for — nothing hardcoded.
     """
     import time
     import random
     from app.models import ProductCandidate, TrendEntry
-    from app.amazon_api import (
-        search_products, is_luxury_beauty,
-        get_curated_products, CURATED_LUXURY_PRODUCTS
-    )
+    from app.amazon_api import search_products, is_luxury_beauty
     from config import Config
 
-    logger.info("Starting luxury beauty product discovery (10% commission only)...")
+    logger.info("Starting product discovery from TrendEntry data...")
 
-    existing_urls  = {c.amazon_url for c in ProductCandidate.query.all() if c.amazon_url}
+    existing_asins = {c.asin for c in ProductCandidate.query.all() if c.asin}
     existing_names = {c.name.lower().strip() for c in ProductCandidate.query.all()}
     total_added    = 0
-    TARGET         = 90
 
     associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-    # STEP 1: Queue hardcoded curated luxury products (0 SerpAPI calls)
-    curated = get_curated_products(associate_tag)
-    for p in curated:
-        if total_added >= TARGET:
-            break
-        if p["amazon_url"] in existing_urls or p["name"].lower().strip() in existing_names:
-            continue
-        existing_urls.add(p["amazon_url"])
-        existing_names.add(p["name"].lower().strip())
-        db.session.add(ProductCandidate(
-            name=p["name"][:255], asin=p["asin"], amazon_url=p["amazon_url"],
-            category="luxury_beauty", image_url=p["image_url"], price=p["price"],
-            trend_keyword=p["trend_keyword"], status=ProductCandidate.STATUS_PENDING,
-        ))
-        total_added += 1
+    BEAUTY_KEYWORDS = [
+        "blush", "bronzer", "foundation", "concealer", "serum", "essence",
+        "moisturizer", "lotion", "cream", "face", "skincare", "nail", "perfume",
+        "makeup", "mascara", "lipstick", "eyeshadow", "primer", "toner",
+        "retinol", "vitamin c", "hyaluronic", "spf", "sunscreen", "contour",
+        "highlighter", "setting", "powder", "lip", "eye",
+    ]
 
-    db.session.commit()
-    logger.info(f"  Step 1: {total_added} curated luxury products queued (0 SerpAPI calls)")
+    def _is_beauty_entry(category_name):
+        return any(kw in category_name.lower() for kw in BEAUTY_KEYWORDS)
 
-    if total_added >= TARGET:
-        logger.info(f"Discovery complete: {total_added} products queued")
-        return
+    # Collect all top_products from high/medium priority beauty TrendEntries
+    entries = TrendEntry.query.filter(
+        TrendEntry.priority.in_(["high", "medium"])
+    ).order_by(TrendEntry.saved_at.desc()).all()
 
-    # STEP 2: Find luxury brands in TrendEntry not covered by curated list
-    curated_brands = {brand.lower() for _, _, _, brand in CURATED_LUXURY_PRODUCTS}
-
-    trending_brands = {}
-    entries = TrendEntry.query.filter(TrendEntry.priority.in_(["high", "medium"])).all()
+    searches = []  # list of (product_name, source_category)
+    seen_queries = set()
 
     for entry in entries:
-        keywords = entry.sq_list()
-        top_keyword = keywords[0] if keywords else entry.category
-        for product in entry.tp_list():
-            if not is_luxury_beauty(product):
-                continue
-            already_covered = any(b in product.lower() for b in curated_brands)
-            if already_covered:
-                continue
-            words = product.split()
-            if product.lower().startswith("dr."):
-                brand_query = f"{words[0]} {words[1]} skincare amazon"
-                brand_key   = f"{words[0]} {words[1]}".lower()
-            elif product.lower().startswith("la roche"):
-                brand_query = "La Roche-Posay skincare amazon"
-                brand_key   = "la roche-posay"
-            elif product.lower().startswith("jan marini"):
-                brand_query = "Jan Marini skincare amazon"
-                brand_key   = "jan marini"
-            else:
-                brand_query = f"{words[0]} luxury beauty skincare amazon"
-                brand_key   = words[0].lower()
-            if brand_key not in trending_brands:
-                trending_brands[brand_key] = (brand_query, top_keyword)
+        if not _is_beauty_entry(entry.category):
+            continue
+        for product_name in entry.tp_list():
+            q = product_name.strip()
+            if q and q.lower() not in seen_queries:
+                seen_queries.add(q.lower())
+                searches.append((q, entry.category))
 
-    # STEP 3: Up to 6 brand-level SerpAPI searches (~10 products each)
-    searches_done = 0
-    for brand_key, (brand_query, trend_keyword) in list(trending_brands.items()):
-        if total_added >= TARGET or searches_done >= 6:
-            break
+    if not searches:
+        logger.warning("No beauty TrendEntry data found — add trend data first via the Trends tab")
+        return
+
+    logger.info(f"  {len(searches)} products from TrendEntry data to search on Amazon")
+
+    for product_name, source_category in searches:
         try:
-            logger.info(f"  Searching: '{brand_query}'")
-            results = search_products(brand_query, category="luxury_beauty", max_results=10)
-            searches_done += 1
+            logger.info(f"  Searching: '{product_name}'")
+            results = search_products(product_name, category="luxury_beauty", max_results=5)
 
             for p in results:
-                if total_added >= TARGET:
-                    break
-                if not is_luxury_beauty(p.get("name", "")):
+                asin = p.get("asin", "")
+                name = p.get("name", "")
+                if not name or not asin:
                     continue
-                amazon_url = p.get("amazon_url", "")
-                asin       = p.get("asin", "")
-                if not asin or not amazon_url or amazon_url in existing_urls:
+                if asin in existing_asins:
                     continue
-                existing_urls.add(amazon_url)
-                existing_names.add(p["name"].lower().strip())
+                if name.lower().strip() in existing_names:
+                    continue
+
+                existing_asins.add(asin)
+                existing_names.add(name.lower().strip())
+
+                from app.amazon_api import _build_affiliate_url
+                amazon_url = _build_affiliate_url(asin, associate_tag)
+
                 db.session.add(ProductCandidate(
-                    name=p["name"][:255], asin=asin, amazon_url=amazon_url,
-                    category="luxury_beauty", image_url=p.get("image_url", ""),
-                    price=p.get("price", ""), trend_keyword=trend_keyword,
+                    name=name[:255], asin=asin, amazon_url=amazon_url,
+                    category="luxury_beauty",
+                    source_category=source_category,
+                    image_url=p.get("image_url", ""),
+                    price=p.get("price", ""),
+                    trend_keyword=product_name,
                     status=ProductCandidate.STATUS_PENDING,
                 ))
                 total_added += 1
 
             db.session.commit()
-            time.sleep(random.uniform(2, 3))
+            time.sleep(random.uniform(1.5, 2.5))
 
         except Exception as e:
             db.session.rollback()
-            logger.warning(f"Search failed for '{brand_query}': {e}")
+            logger.warning(f"Search failed for '{product_name}': {e}")
 
-    logger.info(f"Discovery complete: {total_added} luxury beauty products queued ({searches_done} SerpAPI calls used)")
+    logger.info(f"Discovery complete: {total_added} products queued from TrendEntry data")
 
 
 
