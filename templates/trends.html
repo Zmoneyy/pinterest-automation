@@ -394,10 +394,18 @@
         {% set has_ss = e.screenshots_b64 and e.screenshots_b64 != '[]' %}
         <button class="ss-btn{% if has_ss %} has-shots{% endif %}"
           id="ss-btn-{{ e.id }}"
-          title="{% if has_ss %}Screenshots saved — click to add/replace{% else %}Upload screenshots for AI brief{% endif %}"
+          title="{% if has_ss %}Screenshots saved — click to add more{% else %}Upload screenshots for AI brief{% endif %}"
           onclick="document.getElementById('ss-input-{{ e.id }}').click()">
           {% if has_ss %}📷 Screenshots ✓{% else %}📷 Add Screenshots{% endif %}
         </button>
+        {% if has_ss %}
+        <button id="ss-clear-btn-{{ e.id }}"
+          onclick="clearScreenshots({{ e.id }})"
+          title="Clear all screenshots"
+          style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;cursor:pointer;">
+          ✕ Clear
+        </button>
+        {% endif %}
         <input type="file" id="ss-input-{{ e.id }}" multiple accept="image/*" style="display:none"
           onchange="uploadScreenshots({{ e.id }}, this)">
         <span id="ss-status-{{ e.id }}" style="font-size:11px;"></span>
@@ -1107,6 +1115,28 @@
       status.style.color = '#dc2626';
     }
     btn.disabled = false; btn.textContent = 'Save Products';
+  }
+
+  // ── Clear screenshots from an entry ──
+  async function clearScreenshots(id) {
+    if (!confirm('Clear all screenshots for this entry?')) return;
+    const btn    = document.getElementById(`ss-btn-${id}`);
+    const status = document.getElementById(`ss-status-${id}`);
+    const resp = await fetch(`/trends/clear-screenshots/${id}`, { method: 'POST' });
+    const data = await resp.json();
+    if (!data.ok) { status.textContent = '✗ Failed'; return; }
+    btn.textContent = '📷 Add Screenshots';
+    btn.classList.remove('has-shots');
+    btn.title = 'Upload screenshots for AI brief';
+    const clearBtn = document.getElementById(`ss-clear-btn-${id}`);
+    if (clearBtn) clearBtn.remove();
+    const dz = document.getElementById(`ss-dropzone-${id}`);
+    const dzLabel = document.getElementById(`ss-dropzone-label-${id}`);
+    if (dz) { dz.classList.remove('ss-dz-saved'); dz.dataset.hasSs = 'false'; }
+    if (dzLabel) dzLabel.innerHTML = `📂 Drop screenshots here (multiple OK) or <span onclick="document.getElementById('ss-input-${id}').click()" style="color:#1d4ed8;font-weight:700;text-decoration:underline;cursor:pointer;">browse</span>`;
+    status.textContent = '✓ Cleared';
+    status.style.color = '#6b7280';
+    setTimeout(() => status.textContent = '', 2000);
   }
 
   // ── Delete entry ──

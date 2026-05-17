@@ -2280,6 +2280,16 @@ def trends_upload_screenshots(entry_id):
     return jsonify({"ok": True, "count": len(combined[:6])})
 
 
+@bp.route("/trends/clear-screenshots/<int:entry_id>", methods=["POST"])
+@login_required
+def trends_clear_screenshots(entry_id):
+    from app.models import TrendEntry
+    entry = TrendEntry.query.get_or_404(entry_id)
+    entry.screenshots_b64 = "[]"
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route("/trends/set-priority/<int:entry_id>", methods=["POST"])
 @login_required
 def trends_set_priority(entry_id):
