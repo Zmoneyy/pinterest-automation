@@ -954,6 +954,21 @@
     }
   }
 
+  function showToast(msg, ok) {
+    let t = document.getElementById('bulk-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'bulk-toast';
+      t.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;color:#fff;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.2);transition:opacity 0.3s;';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.style.background = ok ? '#1a7a4a' : '#b91c1c';
+    t.style.opacity = '1';
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => { t.style.opacity = '0'; }, 4000);
+  }
+
   async function sendToTailwind(pinId, btn) {
     const orig = btn.textContent;
     btn.disabled = true;
@@ -962,18 +977,20 @@
       const resp = await fetch(`/pins/${pinId}/send-to-tailwind`, { method: 'POST' });
       const data = await resp.json();
       if (data.ok) {
-        btn.textContent = '✓ Sent!';
+        btn.textContent = '✓ Sent to Tailwind!';
         btn.style.background = '#e6f4ea';
         btn.style.borderColor = '#1a7a4a';
         btn.style.color = '#1a7a4a';
+        showToast('✓ Pin sent to Tailwind as a draft! Open Tailwind to schedule it.', true);
       } else {
-        btn.textContent = '✗ Failed';
+        btn.textContent = orig;
         btn.disabled = false;
-        setTimeout(() => { btn.textContent = orig; }, 3000);
+        showToast('✗ ' + (data.error || 'Failed to send to Tailwind'), false);
       }
     } catch(e) {
       btn.textContent = orig;
       btn.disabled = false;
+      showToast('✗ Network error — try again', false);
     }
   }
 
