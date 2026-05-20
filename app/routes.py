@@ -939,9 +939,13 @@ def discover_products():
                         seen_brands[brand_key] = (brand, entry.category)
 
             elif niche == "home_decor":
-                # Home: search exact product names (no brand filter needed)
-                for product_name in entry.tp_list():
-                    q = product_name.strip()
+                # Home: pick the first product per category as the search query
+                # Cap at 20 total home searches to protect SerpAPI quota
+                if len(seen_home_kws) >= 20:
+                    continue
+                products = entry.tp_list()
+                if products:
+                    q = products[0].strip()  # first = most prominent in TrendEntry
                     if q and q.lower() not in seen_home_kws:
                         seen_home_kws.add(q.lower())
                         trend_dicts.append({
