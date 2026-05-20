@@ -784,7 +784,7 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                 cat = entry_category_map.get(query.lower(), "luxury_beauty")
 
                 try:
-                    products = search_products(query, category=cat, max_results=5)
+                    products = search_products(query, category=cat, max_results=10)
                 except Exception as e:
                     logger.error(f"SerpAPI search error for '{query}': {e}")
                     products = []
@@ -792,6 +792,18 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                 # For brand-level searches (e.g. "Tatcha amazon"), Amazon often omits
                 # the brand name from product titles. Trust the query instead of the title.
                 query_is_luxury = is_luxury_beauty(query)
+
+                def _base_product_name(name):
+                    """Strip shade/color/size variants to get the base product name.
+                    SerpAPI returns results by popularity, so first match = most popular shade."""
+                    import re
+                    # Remove anything after " - ", " in ", " | ", " (", shade/color keywords
+                    base = re.split(r'\s[-|]\s|\s+in\s+|\s*\(', name)[0]
+                    # Remove size/shade descriptors at end
+                    base = re.sub(r'\s*,.*$', '', base)
+                    return base.lower().strip()
+
+                seen_base_names_this_brand = set()
 
                 for p in products:
                     asin = p.get("asin", "")
@@ -809,6 +821,11 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                         continue
                     if name.lower().strip() in seen_names:
                         continue
+                    # Skip shade/size variants — keep only the first (most popular) per product
+                    base = _base_product_name(name)
+                    if base in seen_base_names_this_brand:
+                        continue
+                    seen_base_names_this_brand.add(base)
 
                     seen_asins.add(asin)
                     seen_names.add(name.lower().strip())
