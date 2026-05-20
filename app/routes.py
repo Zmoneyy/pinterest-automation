@@ -903,10 +903,10 @@ def discover_products():
         priority_order = {"high": 0, "medium": 1, "low": 2}
         beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
 
-        # Extract unique luxury brands from top_products — one search per brand
-        # 18 brands × 5 results = ~90 diverse products (more brands = less shade repetition)
+        # Extract ALL unique luxury brands from TrendEntry — no arbitrary cap
+        # More brands = more Pinterest search intent coverage = more clicks
+        # Real cap is SerpAPI quota (250/month) — typical TrendEntry data has 15-30 brands
         seen_brands = {}  # brand_key -> (display_name, source_category)
-        TARGET_BRANDS = 18
 
         for entry in beauty_entries:
             for product_name in entry.tp_list():
@@ -916,10 +916,6 @@ def discover_products():
                 brand_key = brand.lower()
                 if brand_key not in seen_brands:
                     seen_brands[brand_key] = (brand, entry.category)
-                if len(seen_brands) >= TARGET_BRANDS:
-                    break
-            if len(seen_brands) >= TARGET_BRANDS:
-                break
 
         for brand_key, (brand_display, source_category) in seen_brands.items():
             trend_dicts.append({

@@ -541,7 +541,7 @@ def _discover_and_queue_products(db):
 
     # Extract unique luxury brands — one brand search per brand, 10 results each
     seen_brands = {}  # brand_key -> (display_name, source_category)
-    TARGET_BRANDS = 18  # 18 brands × 5 results = ~90 diverse products
+    TARGET_BRANDS = 999  # effectively no cap — search all unique brands in TrendEntry data
 
     for entry in entries:
         if not _is_beauty_entry(entry.category):
