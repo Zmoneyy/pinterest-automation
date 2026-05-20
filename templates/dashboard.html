@@ -657,7 +657,7 @@ async function sendToTailwind(pinId, btn) {
 
   {% if draft_pins %}
   <div style="background:#f5f0ff;border:1px solid #d4b8ff;border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#5b21b6;">
-    💜 <strong>These are your drafts.</strong> Click <strong>View Page</strong> to check how the shop page looks, then <strong>Edit</strong> to tweak content, then <strong>Schedule</strong> when you're ready to post.
+    💜 <strong>These are your drafts.</strong> Click <strong>View Page</strong> to preview, <strong>Edit</strong> to tweak, then <strong>📤 Tailwind</strong> to send to Tailwind as a draft — Tailwind will SmartSchedule it for you.
   </div>
   <div class="pin-list">
     {% for pin in draft_pins %}
@@ -761,8 +761,8 @@ async function sendToTailwind(pinId, btn) {
           View Page
         </a>
         <button type="button" class="btn btn-sm btn-gray" onclick="toggleDraftEdit({{ pin.id }})">Edit</button>
-        <button type="button" class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;"
-                onclick="toggleDraftSched({{ pin.id }})">Schedule</button>
+        <button type="button" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;"
+                onclick="sendToTailwind({{ pin.id }}, this)">📤 Tailwind</button>
         <form method="POST" action="{{ url_for('main.delete_pin', pin_id=pin.id) }}"
               onsubmit="return confirm('Delete this draft?')">
           <button type="submit" class="btn btn-ghost btn-sm" style="color:#ccc;width:100%;">✕ Delete</button>
