@@ -1025,11 +1025,12 @@ def undo_candidate(candidate_id):
 @bp.route("/products/queue/clear-all", methods=["POST"])
 @login_required
 def clear_all_candidates():
-    """Delete all product candidates (pending + rejected) to start fresh."""
-    count = ProductCandidate.query.count()
-    ProductCandidate.query.delete()
+    """Delete only PENDING candidates. Rejected stay as permanent blocklist so
+    the same products don't come back on the next discovery run."""
+    count = ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).count()
+    ProductCandidate.query.filter_by(status=ProductCandidate.STATUS_PENDING).delete()
     db.session.commit()
-    logger.info(f"Cleared {count} product candidates")
+    logger.info(f"Cleared {count} pending candidates (rejected kept as blocklist)")
     return redirect(url_for("main.products"))
 
 

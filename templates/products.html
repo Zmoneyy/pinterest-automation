@@ -127,8 +127,8 @@
       <button type="submit" class="btn btn-red">🔍 Find Products</button>
     </form>
     <form method="POST" action="{{ url_for('main.clear_all_candidates') }}"
-      onsubmit="return confirm('Clear all product candidates? This cannot be undone.')">
-      <button type="submit" style="padding:8px 14px;border:1.5px solid #e53e3e;border-radius:8px;font-size:13px;color:#e53e3e;background:transparent;cursor:pointer;">🗑 Clear Queue</button>
+      onsubmit="return confirm('Clear pending products? Rejected products are kept so they never come back.')">
+      <button type="submit" style="padding:8px 14px;border:1.5px solid #e53e3e;border-radius:8px;font-size:13px;color:#e53e3e;background:transparent;cursor:pointer;">🗑 Clear Pending</button>
     </form>
   </div>
 </div>
