@@ -1204,6 +1204,9 @@ def send_pin_to_tailwind(pin_id):
 
     pin = Pin.query.get_or_404(pin_id)
 
+    if pin.pinterest_pin_id:
+        return jsonify({"ok": False, "error": "Already sent to Tailwind — check your Tailwind drafts."})
+
     tailwind_key = Setting.get("tailwind_api_key", "") or Config.TAILWIND_API_KEY
     if not tailwind_key:
         return jsonify({"ok": False, "error": "Tailwind API key not set — add it in Setup."})

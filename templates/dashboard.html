@@ -734,8 +734,12 @@
           View Page
         </a>
         <button type="button" class="btn btn-sm btn-gray" onclick="toggleDraftEdit({{ pin.id }})">Edit</button>
+        {% if pin.pinterest_pin_id %}
+        <button type="button" class="btn btn-sm" style="background:#1a7a4a;color:#fff;border:none;cursor:default;" disabled>✓ In Tailwind</button>
+        {% else %}
         <button type="button" class="btn btn-sm" style="background:#f97316;color:#fff;border:none;"
                 onclick="sendToTailwind({{ pin.id }}, this)">📤 Tailwind</button>
+        {% endif %}
         <form method="POST" action="{{ url_for('main.delete_pin', pin_id=pin.id) }}"
               onsubmit="return confirm('Delete this draft?')">
           <button type="submit" class="btn btn-ghost btn-sm" style="color:#ccc;width:100%;">✕ Delete</button>
