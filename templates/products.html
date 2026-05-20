@@ -210,6 +210,10 @@
           {% else %}
             <span style="font-size:11px;padding:2px 7px;border-radius:8px;font-weight:700;background:#f3f4f6;color:#374151;">{{ rate }}%</span>
           {% endif %}
+          {% if c.price %}
+            {% set est = (c.price | float) * (rate / 100) %}
+            <span style="font-size:11px;padding:2px 7px;border-radius:8px;font-weight:700;background:#eff6ff;color:#1d4ed8;">≈ ${{ "%.2f"|format(est) }}/sale</span>
+          {% endif %}
         </div>
         {% if c.source_category %}
           <span style="font-size:10px;font-weight:700;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;margin-top:2px;display:inline-block;">📂 {{ c.source_category }}</span>
