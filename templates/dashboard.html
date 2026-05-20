@@ -505,33 +505,6 @@
   </div>
   {% endif %}
 
-<div id="tailwind-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;"></div>
-<script>
-async function sendToTailwind(pinId, btn) {
-  btn.disabled = true;
-  const orig = btn.textContent;
-  btn.textContent = '⏳ Sending...';
-  try {
-    const resp = await fetch(`/pins/${pinId}/send-to-tailwind`, { method: 'POST' });
-    const data = await resp.json();
-    const toast = document.getElementById('tailwind-toast');
-    toast.textContent = data.ok ? '✓ Sent to Tailwind as draft!' : '✗ ' + (data.error || 'Failed');
-    toast.style.background = data.ok ? '#1a7a4a' : '#b91c1c';
-    toast.style.display = 'block';
-    setTimeout(() => { toast.style.display = 'none'; }, 4000);
-    if (data.ok) {
-      btn.textContent = '✓ Sent';
-      btn.style.background = '#1a7a4a';
-    } else {
-      btn.disabled = false;
-      btn.textContent = orig;
-    }
-  } catch(e) {
-    btn.disabled = false;
-    btn.textContent = orig;
-  }
-}
-</script>
 
 
 {# ══════════════════════════════════════════════════════════════
@@ -1061,6 +1034,36 @@ async function sendToTailwind(pinId, btn) {
 {% endblock %}
 
 {% block scripts %}
+<div id="tailwind-toast" style="display:none;position:fixed;bottom:28px;left:50%;transform:translateX(-50%);padding:14px 24px;border-radius:12px;font-size:15px;font-weight:700;color:#fff;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.2);"></div>
+<script>
+async function sendToTailwind(pinId, btn) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Sending...';
+  try {
+    const resp = await fetch(`/pins/${pinId}/send-to-tailwind`, { method: 'POST' });
+    const data = await resp.json();
+    const toast = document.getElementById('tailwind-toast');
+    if (data.ok) {
+      toast.textContent = '✓ Pin sent to Tailwind as a draft! Open Tailwind to schedule it.';
+      toast.style.background = '#1a7a4a';
+      btn.textContent = '✓ Sent to Tailwind!';
+      btn.style.background = '#1a7a4a';
+      btn.style.color = '#fff';
+    } else {
+      toast.textContent = '✗ ' + (data.error || 'Failed to send to Tailwind');
+      toast.style.background = '#b91c1c';
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 5000);
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+</script>
 <script>
   function openPinModalFromEl(el) {
     const imagePath = el.dataset.imgPath;
