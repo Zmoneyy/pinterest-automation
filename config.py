@@ -37,6 +37,7 @@ class Config:
     OPENAI_API_KEY    = os.environ.get("OPENAI_API_KEY", "")
     BLOTATO_API_KEY    = os.environ.get("BLOTATO_API_KEY", "")
     BLOTATO_ACCOUNT_ID = os.environ.get("BLOTATO_ACCOUNT_ID", "5694")
+    TAILWIND_API_KEY   = os.environ.get("TAILWIND_API_KEY", "")
 
     PINTEREST_BOARDS = {
         "Beauty Finds & Skincare":              os.environ.get("PINTEREST_BOARD_BEAUTY",           "1140044161863463132"),

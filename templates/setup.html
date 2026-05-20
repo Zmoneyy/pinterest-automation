@@ -439,6 +439,42 @@
 </div>
 
 
+{# ── Tailwind API Key ── #}
+<div class="setup-section">
+  <h2>📅 Tailwind (Pin Scheduling)</h2>
+
+  {% if tailwind_configured %}
+    <div class="check-item ok" style="margin-bottom:16px;">
+      <div class="check-icon" style="background:#d1fae5;color:#065f46;">✓</div>
+      <div>
+        <strong>Tailwind API key is set</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Pins will be scheduled via Tailwind.</div>
+      </div>
+    </div>
+  {% else %}
+    <div class="check-item bad" style="margin-bottom:16px;">
+      <div class="check-icon" style="background:#fee2e2;color:#991b1b;">✕</div>
+      <div>
+        <strong>No Tailwind API key</strong>
+        <div style="font-size:13px;color:var(--gray-600);margin-top:2px;">Add your key below to enable pin scheduling.</div>
+      </div>
+    </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('main.save_tailwind_key') }}">
+    <input
+      type="text"
+      name="tailwind_api_key"
+      placeholder="Paste your Tailwind API key here..."
+      value="{{ tailwind_key_masked }}"
+      style="width:100%;font-family:monospace;font-size:13px;padding:10px;border:1.5px solid var(--gray-200);border-radius:8px;box-sizing:border-box;"
+    >
+    <div style="margin-top:10px;">
+      <button type="submit" class="btn btn-red">Save Tailwind Key</button>
+    </div>
+  </form>
+</div>
+
 {# ── Manual controls ── #}
 <div class="setup-section">
   <h2>🔧 Manual Controls</h2>

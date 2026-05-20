@@ -1133,6 +1133,11 @@ def setup():
     from config import Config
     config_board_ids = set(Config.PINTEREST_BOARDS.values())
 
+    tailwind_key = Setting.get("tailwind_api_key", "") or Config.TAILWIND_API_KEY
+    tailwind_configured = bool(tailwind_key)
+    # Show only last 6 chars for security
+    tailwind_key_masked = ("•" * (len(tailwind_key) - 6) + tailwind_key[-6:]) if len(tailwind_key) > 6 else tailwind_key
+
     return render_template(
         "setup.html",
         config_status=config_status,
@@ -1143,6 +1148,8 @@ def setup():
         cookie_status=cookie_status,
         stored_cookie=stored_cookie,
         config_board_ids=config_board_ids,
+        tailwind_configured=tailwind_configured,
+        tailwind_key_masked=tailwind_key_masked,
     )
 
 
@@ -1155,6 +1162,19 @@ def save_pinterest_cookie():
     if cookie:
         Setting.set("pinterest_session_cookie", cookie)
         logger.info("Pinterest session cookie updated.")
+    return redirect(url_for("main.setup"))
+
+
+# ── Tailwind API key ──────────────────────────────────────────────────────
+
+@bp.route("/setup/tailwind-key", methods=["POST"])
+@login_required
+def save_tailwind_key():
+    key = request.form.get("tailwind_api_key", "").strip()
+    # Don't overwrite with masked placeholder
+    if key and not set(key).issubset({"•"}):
+        Setting.set("tailwind_api_key", key)
+        logger.info("Tailwind API key updated.")
     return redirect(url_for("main.setup"))
 
 
