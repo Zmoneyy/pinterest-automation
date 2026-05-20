@@ -765,12 +765,28 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
             from config import Config
             associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-            # Pre-load existing ASINs and names (all statuses) to avoid duplicates
-            seen_asins  = {c.asin for c in ProductCandidate.query.all() if c.asin}
+            # Pre-load existing ASINs and names to avoid duplicates:
+            # - Pending/approved: always skip (already in queue or approved)
+            # - Rejected: only skip if rejected within last 30 days (re-surface after that)
+            # - Approved products in Product table: always skip
+            from datetime import timedelta
+            thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+
+            skip_candidates = ProductCandidate.query.filter(
+                db.or_(
+                    ProductCandidate.status.in_([ProductCandidate.STATUS_PENDING, ProductCandidate.STATUS_APPROVED]),
+                    db.and_(
+                        ProductCandidate.status == ProductCandidate.STATUS_REJECTED,
+                        ProductCandidate.discovered_at >= thirty_days_ago,
+                    )
+                )
+            ).all()
+
+            seen_asins  = {c.asin for c in skip_candidates if c.asin}
             seen_asins |= {p.amazon_url.split("/dp/")[1].split("?")[0]
                            for p in Product.query.all()
                            if p.amazon_url and "/dp/" in p.amazon_url}
-            seen_names  = {c.name.lower().strip() for c in ProductCandidate.query.all()}
+            seen_names  = {c.name.lower().strip() for c in skip_candidates}
 
 
             for i, (query, label, cat, min_price) in enumerate(searches):
