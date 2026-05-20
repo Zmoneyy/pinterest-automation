@@ -367,15 +367,22 @@ def _next_peak_slot(now: datetime) -> datetime:
 
 
 def _post_pin_pinterest(pin, db, now):
-    """Post a pin to Pinterest via Blotato and update DB status."""
+    """Send a pin to Tailwind (drafts queue) and optionally schedule it."""
     import requests as req
-    from app.models import Pin
+    from app.models import Pin, Setting
     from config import Config
 
     if not pin.image_url:
         pin.post_error = "No image uploaded — please add an image and re-schedule."
         db.session.commit()
         logger.error(f"Pin #{pin.id} has no image URL — cannot post.")
+        return
+
+    tailwind_key = Setting.get("tailwind_api_key", "") or Config.TAILWIND_API_KEY
+    if not tailwind_key:
+        pin.post_error = "Tailwind API key not configured — add it in Setup."
+        db.session.commit()
+        logger.error(f"Pin #{pin.id}: Tailwind API key missing.")
         return
 
     # Build full description with hashtags
@@ -419,71 +426,55 @@ def _post_pin_pinterest(pin, db, now):
 
     link = pin.amazon_url or pin.shop_url or Config.benable_url_for_niche("beauty")
 
-    # If scheduled time is in the past, post immediately (5 min from now)
-    scheduled = pin.scheduled_for or _next_peak_slot(now)
-    # Make scheduled timezone-aware if it isn't
-    if scheduled.tzinfo is None:
-        scheduled = scheduled.replace(tzinfo=timezone.utc)
-    if scheduled <= now:
-        publish_at = now + timedelta(minutes=5)
-    else:
-        publish_at = scheduled
-
-    blotato_headers = {
-        "blotato-api-key": Config.BLOTATO_API_KEY,
+    # Tailwind account ID (from /v1/accounts response)
+    tailwind_account_id = "1641739"
+    base_url = f"https://api-v1.tailwind.ai/v1/accounts/{tailwind_account_id}"
+    headers = {
+        "Authorization": f"Bearer {tailwind_key}",
         "Content-Type": "application/json",
     }
 
     try:
-        # Step 1: Upload image to Blotato
-        media_resp = req.post(
-            "https://backend.blotato.com/v2/media",
-            headers=blotato_headers,
-            json={"url": pin.image_url},
+        # Step 1: Create the post as a draft in Tailwind
+        create_resp = req.post(
+            f"{base_url}/posts",
+            headers=headers,
+            json={
+                "mediaUrl": pin.image_url,
+                "title": (pin.title or "")[:100],
+                "description": full_desc[:500],
+                "url": link,
+                "boardId": board_id,
+            },
             timeout=60,
         )
-        media_resp.raise_for_status()
-        media_url = media_resp.json().get("url")
-        if not media_url:
-            raise ValueError(f"Blotato media upload returned no URL: {media_resp.text}")
+        if not create_resp.ok:
+            logger.error(f"Tailwind create error {create_resp.status_code}: {create_resp.text[:500]}")
+        create_resp.raise_for_status()
 
-        # Step 2: Post via Blotato
-        payload = {
-            "post": {
-                "accountId": Config.BLOTATO_ACCOUNT_ID,
-                "content": {
-                    "text": full_desc[:500],
-                    "mediaUrls": [media_url],
-                    "platform": "pinterest",
-                },
-                "target": {
-                    "targetType": "pinterest",
-                    "boardId": board_id,
-                    "title": (pin.title or "")[:100],
-                    "link": link,
-                },
-            },
-            "scheduledTime": publish_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        }
+        tailwind_post_id = create_resp.json()["data"]["post"]["id"]
 
-        post_resp = req.post(
-            "https://backend.blotato.com/v2/posts",
-            headers=blotato_headers,
-            json=payload,
-            timeout=30,
-        )
-        if not post_resp.ok:
-            logger.error(f"Blotato post error {post_resp.status_code}: {post_resp.text[:500]}")
-        post_resp.raise_for_status()
+        # Step 2: Schedule it if we have a future time
+        scheduled = pin.scheduled_for
+        if scheduled:
+            if scheduled.tzinfo is None:
+                scheduled = scheduled.replace(tzinfo=timezone.utc)
+            if scheduled > now:
+                sched_resp = req.post(
+                    f"{base_url}/posts/{tailwind_post_id}/schedule",
+                    headers=headers,
+                    json={"sendAt": scheduled.strftime("%Y-%m-%dT%H:%M:%SZ")},
+                    timeout=30,
+                )
+                if not sched_resp.ok:
+                    logger.warning(f"Tailwind schedule failed (pin still saved as draft): {sched_resp.text[:200]}")
 
-        blotato_id = post_resp.json().get("postSubmissionId", "")
         pin.status = Pin.STATUS_POSTED
         pin.posted_at = now
-        pin.scheduled_for = publish_at
-        pin.pinterest_pin_id = str(blotato_id)
+        pin.pinterest_pin_id = tailwind_post_id
         pin.post_error = None
         db.session.commit()
-        logger.info(f"Pin #{pin.id} posted via Blotato ✓  board={board_id}  scheduled={publish_at.isoformat()}")
+        logger.info(f"Pin #{pin.id} sent to Tailwind ✓  post_id={tailwind_post_id}  board={board_id}")
 
     except Exception as e:
         error_msg = str(e)
@@ -492,7 +483,7 @@ def _post_pin_pinterest(pin, db, now):
             db.session.commit()
         except Exception:
             db.session.rollback()
-        logger.error(f"Blotato post failed for pin #{pin.id}: {e}", exc_info=True)
+        logger.error(f"Tailwind post failed for pin #{pin.id}: {e}", exc_info=True)
         raise
 
 
