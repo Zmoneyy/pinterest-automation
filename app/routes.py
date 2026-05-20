@@ -235,6 +235,22 @@ def schedule_draft_pin(pin_id):
     return redirect(url_for("main.dashboard", status="scheduled"))
 
 
+@bp.route("/pins/<int:pin_id>/update", methods=["POST"])
+@login_required
+def update_pin(pin_id):
+    """JSON endpoint to update a draft pin's fields (used by bulk upload resave)."""
+    pin = Pin.query.get_or_404(pin_id)
+    data = request.get_json() or {}
+    if "title" in data:       pin.title       = data["title"].strip()
+    if "description" in data: pin.description = data["description"].strip()
+    if "hashtags" in data:    pin.hashtags    = data["hashtags"].strip()
+    if "alt_text" in data:    pin.alt_text    = data["alt_text"].strip() or None
+    if "amazon_url" in data:  pin.amazon_url  = data["amazon_url"].strip() or None
+    if "board_name" in data:  pin.board_name  = data["board_name"].strip() or None
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route("/pin/<int:pin_id>/edit-scheduled", methods=["POST"])
 @login_required
 def edit_scheduled_pin(pin_id):

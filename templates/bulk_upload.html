@@ -882,15 +882,36 @@
       const data = await resp.json();
       if (!data.ok) throw new Error(data.error || 'Save failed');
 
-      btn.textContent  = '✓ Saved!';
+      const pinId  = data.pins?.[0]?.pin_id;
+      const shopUrl = data.pins?.[0]?.shop_url;
+
+      // Mark card with saved pin ID for resave
+      const card = btn.closest('.pin-card');
+      if (card && pinId) card.dataset.pinId = pinId;
+
+      // Update Save Draft → Resave
+      btn.textContent  = '↺ Resave';
       btn.style.background = '#e6f4ea';
       btn.style.borderColor = '#1a7a4a';
       btn.style.color = '#1a7a4a';
+      btn.disabled = false;
+      btn.onclick = () => resaveDraft(idx, btn);
+
+      // Show Tailwind button
+      const header = btn.closest('div');
+      if (pinId && !header.querySelector('.tailwind-btn')) {
+        const tw = document.createElement('button');
+        tw.className = 'tailwind-btn';
+        tw.textContent = '📤 Tailwind';
+        tw.style.cssText = 'font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;border:1.5px solid #f97316;background:#fff8f0;color:#f97316;cursor:pointer;';
+        tw.onclick = () => sendToTailwind(pinId, tw);
+        header.insertBefore(tw, btn);
+      }
+
       status.style.display = 'inline';
       status.style.color   = '#1a7a4a';
-      const shopUrl = data.pins?.[0]?.shop_url;
       status.innerHTML = shopUrl
-        ? `✓ Draft saved — <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
+        ? `✓ Saved — <a href="${shopUrl}" target="_blank" style="color:#7c3aed;font-weight:600;">View Page →</a>`
         : '✓ Draft saved!';
     } catch(err) {
       btn.disabled    = false;
@@ -898,6 +919,61 @@
       status.style.display = 'inline';
       status.style.color   = 'var(--red)';
       status.textContent   = '✗ ' + err.message;
+    }
+  }
+
+  async function resaveDraft(idx, btn) {
+    const card  = btn.closest('.pin-card');
+    const pinId = card?.dataset.pinId;
+    if (!pinId) return;
+
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    try {
+      const resp = await fetch(`/pins/${pinId}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title:       (document.getElementById(`title-${idx}`) || {}).value?.trim() || '',
+          description: (document.getElementById(`desc-${idx}`) || {}).value?.trim() || '',
+          hashtags:    (document.getElementById(`tags-${idx}`) || {}).value?.trim() || '',
+          alt_text:    (document.getElementById(`alt-${idx}`) || {}).value?.trim() || '',
+          amazon_url:  (document.getElementById(`amazon-url-${idx}`) || {}).value?.trim() || '',
+          board_name:  (document.getElementById(`board-${idx}`) || {}).value?.trim() || '',
+        }),
+      });
+      const data = await resp.json();
+      if (!data.ok) throw new Error('Resave failed');
+      btn.textContent = '✓ Resaved!';
+      setTimeout(() => { btn.textContent = '↺ Resave'; btn.disabled = false; }, 2000);
+    } catch(e) {
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  }
+
+  async function sendToTailwind(pinId, btn) {
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Sending…';
+    try {
+      const resp = await fetch(`/pins/${pinId}/send-to-tailwind`, { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        btn.textContent = '✓ Sent!';
+        btn.style.background = '#e6f4ea';
+        btn.style.borderColor = '#1a7a4a';
+        btn.style.color = '#1a7a4a';
+      } else {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+        setTimeout(() => { btn.textContent = orig; }, 3000);
+      }
+    } catch(e) {
+      btn.textContent = orig;
+      btn.disabled = false;
     }
   }
 
