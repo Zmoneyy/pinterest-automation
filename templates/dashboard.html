@@ -484,9 +484,17 @@
           {% endif %}
         </div>
       </div>
-      <form method="POST" action="{{ url_for('main.reject_pin', pin_id=pin.id) }}">
-        <button type="submit" class="btn btn-ghost btn-sm">✕</button>
-      </form>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button
+          class="btn btn-sm"
+          style="background:#f97316;color:#fff;border:none;white-space:nowrap;"
+          onclick="sendToTailwind({{ pin.id }}, this)">
+          📤 Send to Tailwind
+        </button>
+        <form method="POST" action="{{ url_for('main.reject_pin', pin_id=pin.id) }}">
+          <button type="submit" class="btn btn-ghost btn-sm">✕</button>
+        </form>
+      </div>
     </div>
     {% endfor %}
   </div>
@@ -496,6 +504,34 @@
     <div class="empty-text">No approved pins yet.</div>
   </div>
   {% endif %}
+
+<div id="tailwind-toast" style="display:none;position:fixed;bottom:24px;right:24px;background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;"></div>
+<script>
+async function sendToTailwind(pinId, btn) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Sending...';
+  try {
+    const resp = await fetch(`/pins/${pinId}/send-to-tailwind`, { method: 'POST' });
+    const data = await resp.json();
+    const toast = document.getElementById('tailwind-toast');
+    toast.textContent = data.ok ? '✓ Sent to Tailwind as draft!' : '✗ ' + (data.error || 'Failed');
+    toast.style.background = data.ok ? '#1a7a4a' : '#b91c1c';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    if (data.ok) {
+      btn.textContent = '✓ Sent';
+      btn.style.background = '#1a7a4a';
+    } else {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+</script>
 
 
 {# ══════════════════════════════════════════════════════════════

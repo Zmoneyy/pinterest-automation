@@ -1178,6 +1178,72 @@ def save_tailwind_key():
     return redirect(url_for("main.setup"))
 
 
+# ── Send pin to Tailwind ──────────────────────────────────────────────────
+
+@bp.route("/pins/<int:pin_id>/send-to-tailwind", methods=["POST"])
+@login_required
+def send_pin_to_tailwind(pin_id):
+    import requests as req
+    from config import Config
+
+    pin = Pin.query.get_or_404(pin_id)
+
+    tailwind_key = Setting.get("tailwind_api_key", "") or Config.TAILWIND_API_KEY
+    if not tailwind_key:
+        return jsonify({"ok": False, "error": "Tailwind API key not set — add it in Setup."})
+
+    if not pin.image_url:
+        return jsonify({"ok": False, "error": "Pin has no image — upload an image first."})
+
+    # Build description
+    raw_hashtags = pin.hashtags or ""
+    hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list()) if raw_hashtags.startswith("[") else raw_hashtags.strip()
+    full_desc = pin.description or ""
+    if hashtag_str and hashtag_str not in full_desc:
+        full_desc = f"{full_desc}\n{hashtag_str}"
+    disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
+    if disclosure not in full_desc:
+        full_desc = f"{full_desc}\n{disclosure}"
+
+    # Board ID
+    board_id = Config.PINTEREST_BOARDS.get(pin.board_name or "")
+    if not board_id:
+        categories = [p.category for p in pin.products if p.category]
+        niche = max(set(categories), key=categories.count) if categories else "beauty"
+        niche_boards = {
+            "beauty":     Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"),
+            "home_decor": Config.PINTEREST_BOARDS.get("Glam Home Decor Ideas"),
+            "fitness":    Config.PINTEREST_BOARDS.get("Wellness & Self Care Essentials"),
+        }
+        board_id = niche_boards.get(niche, Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"))
+
+    link = pin.amazon_url or pin.shop_url or Config.benable_url_for_niche("beauty")
+
+    tailwind_account_id = "1641739"
+    try:
+        resp = req.post(
+            f"https://api-v1.tailwind.ai/v1/accounts/{tailwind_account_id}/posts",
+            headers={"Authorization": f"Bearer {tailwind_key}", "Content-Type": "application/json"},
+            json={
+                "mediaUrl": pin.image_url,
+                "title": (pin.title or "")[:100],
+                "description": full_desc[:500],
+                "url": link,
+                "boardId": board_id,
+            },
+            timeout=60,
+        )
+        resp.raise_for_status()
+        tailwind_post_id = resp.json()["data"]["post"]["id"]
+        pin.pinterest_pin_id = tailwind_post_id
+        db.session.commit()
+        logger.info(f"Pin #{pin_id} sent to Tailwind as draft: {tailwind_post_id}")
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"Send to Tailwind failed for pin #{pin_id}: {e}")
+        return jsonify({"ok": False, "error": str(e)[:200]})
+
+
 
 @bp.route("/api/shopping-trends")
 @login_required
