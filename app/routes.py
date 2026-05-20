@@ -737,15 +737,17 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
         searches = []
 
         if manual_keyword:
-            searches.append((manual_keyword, manual_keyword))
+            searches.append((manual_keyword, manual_keyword, "luxury_beauty", 25))
         elif trend_dicts:
             seen_q = set()
             for td in trend_dicts:
                 q = td.get("keyword", "").strip()
                 if q and q not in seen_q:
                     seen_q.add(q)
-                    label = td.get("source_category", q)
-                    searches.append((q, label))
+                    label     = td.get("source_category", q)
+                    category  = td.get("category", "luxury_beauty")
+                    min_price = td.get("min_price", 25)
+                    searches.append((q, label, category, min_price))
         else:
             _discovery_state["running"] = False
             _discovery_state["current"] = "❌ No trend data — add products via the Trends tab first"
@@ -770,18 +772,10 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                            if p.amazon_url and "/dp/" in p.amazon_url}
             seen_names  = {c.name.lower().strip() for c in ProductCandidate.query.all()}
 
-            # Build category map from TrendEntry
-            entry_category_map = {}
-            for entry in TrendEntry.query.all():
-                for tp in entry.tp_list():
-                    entry_category_map[tp.lower()] = entry.category
 
-            for i, (query, label) in enumerate(searches):
+            for i, (query, label, cat, min_price) in enumerate(searches):
                 _discovery_state["current"] = f"🔍 Searching: {query[:50]}…"
                 _discovery_state["done"]    = i + 1
-
-                # Guess category from entry map, fall back to luxury_beauty
-                cat = entry_category_map.get(query.lower(), "luxury_beauty")
 
                 try:
                     products = search_products(query, category=cat, max_results=10)
@@ -810,11 +804,19 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
                     name = p.get("name", "")
                     if not name:
                         continue
-                    if not query_is_luxury and not is_luxury_beauty(name):
-                        continue  # only block if BOTH query and result name are non-luxury
+                    # Luxury beauty filter (skip for home decor — no brand filter needed)
+                    if cat == "luxury_beauty" and not query_is_luxury and not is_luxury_beauty(name):
+                        continue
                     # Filter out wholesale/pallet/bundle junk listings
                     name_lower = name.lower()
                     if any(w in name_lower for w in ["pallet", "units", "bundle lot", "wholesale", "returned", "damaged"]):
+                        continue
+                    # Price minimum filter
+                    try:
+                        price = float(str(p.get("price", 0)).replace("$", "").replace(",", "") or 0)
+                    except (ValueError, TypeError):
+                        price = 0
+                    if min_price and price < min_price:
                         continue
                     # Skip duplicates (in-memory check covers both DB and within-run dupes)
                     if asin and asin in seen_asins:
@@ -875,6 +877,13 @@ def discover_products():
     manual_keyword = request.form.get("keyword", "").strip()
     trend_dicts = []
 
+    # Commission rates and price minimums per category
+    # Min price ensures commission is worth a pin slot
+    CATEGORY_CONFIG = {
+        "luxury_beauty": {"rate": 10, "min_price": 25,  "label": "Luxury Beauty"},
+        "home_decor":    {"rate": 3,  "min_price": 75,  "label": "Home Decor"},
+    }
+
     BEAUTY_KEYWORDS = [
         "blush", "bronzer", "foundation", "concealer", "serum", "essence",
         "moisturizer", "lotion", "cream", "face", "skincare", "nail", "perfume",
@@ -882,14 +891,23 @@ def discover_products():
         "toner", "retinol", "vitamin c", "hyaluronic", "spf", "sunscreen",
         "contour", "highlighter", "setting", "powder", "lip", "eye",
     ]
+    HOME_KEYWORDS = [
+        "home", "decor", "candle", "vase", "throw", "blanket", "rug", "lamp",
+        "shelf", "organizer", "pillow", "frame", "wall", "furniture", "bedroom",
+        "living room", "kitchen", "bathroom", "aesthetic", "quilt", "comforter",
+        "duvet", "sheet", "bed", "ottoman",
+    ]
 
-    def _is_beauty_entry(cat):
-        return any(kw in cat.lower() for kw in BEAUTY_KEYWORDS)
+    def _entry_category(cat):
+        cat = cat.lower()
+        if any(kw in cat for kw in BEAUTY_KEYWORDS):
+            return "luxury_beauty"
+        if any(kw in cat for kw in HOME_KEYWORDS):
+            return "home_decor"
+        return None
 
     def _extract_brand(product_name):
-        """Find the luxury brand in a product name. Returns title-cased brand string."""
         name_lower = product_name.lower()
-        # Match longest brand first to avoid partial matches (e.g. "la mer" before "la")
         for brand in sorted(LUXURY_BEAUTY_BRANDS, key=len, reverse=True):
             if brand in name_lower:
                 return brand.title()
@@ -899,29 +917,47 @@ def discover_products():
         trend_dicts = [{"keyword": manual_keyword, "category": "luxury_beauty", "source_category": "Manual Search"}]
     else:
         entries = TrendEntry.query.order_by(TrendEntry.saved_at.desc()).all()
-        beauty_entries = [e for e in entries if _is_beauty_entry(e.category)]
         priority_order = {"high": 0, "medium": 1, "low": 2}
-        beauty_entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
+        entries.sort(key=lambda e: priority_order.get(e.priority or "medium", 1))
 
-        # Extract ALL unique luxury brands from TrendEntry — no arbitrary cap
-        # More brands = more Pinterest search intent coverage = more clicks
-        # Real cap is SerpAPI quota (250/month) — typical TrendEntry data has 15-30 brands
-        seen_brands = {}  # brand_key -> (display_name, source_category)
+        seen_brands   = {}  # for beauty — deduplicate by brand
+        seen_home_kws = set()  # for home — deduplicate by product name
 
-        for entry in beauty_entries:
-            for product_name in entry.tp_list():
-                brand = _extract_brand(product_name)
-                if not brand:
-                    continue
-                brand_key = brand.lower()
-                if brand_key not in seen_brands:
-                    seen_brands[brand_key] = (brand, entry.category)
+        for entry in entries:
+            niche = _entry_category(entry.category)
+            if not niche:
+                continue
 
+            if niche == "luxury_beauty":
+                # Beauty: extract unique luxury brands → brand-level search
+                for product_name in entry.tp_list():
+                    brand = _extract_brand(product_name)
+                    if not brand:
+                        continue
+                    brand_key = brand.lower()
+                    if brand_key not in seen_brands:
+                        seen_brands[brand_key] = (brand, entry.category)
+
+            elif niche == "home_decor":
+                # Home: search exact product names (no brand filter needed)
+                for product_name in entry.tp_list():
+                    q = product_name.strip()
+                    if q and q.lower() not in seen_home_kws:
+                        seen_home_kws.add(q.lower())
+                        trend_dicts.append({
+                            "keyword": q,
+                            "category": "home_decor",
+                            "source_category": entry.category,
+                            "min_price": CATEGORY_CONFIG["home_decor"]["min_price"],
+                        })
+
+        # Add beauty brand searches
         for brand_key, (brand_display, source_category) in seen_brands.items():
             trend_dicts.append({
                 "keyword": f"{brand_display} amazon",
                 "category": "luxury_beauty",
                 "source_category": source_category,
+                "min_price": CATEGORY_CONFIG["luxury_beauty"]["min_price"],
             })
 
         if not trend_dicts:
