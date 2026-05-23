@@ -1215,14 +1215,18 @@ function updateCharCount(idx, field, max) {
   }
 
   function parsePPPText(text) {
+    // Normalize: strip markdown links like [text][1] and [text](url), clean bold **text**
+    const clean = text
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')   // [text][ref] → text
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')    // [text](url) → text
+      .replace(/\*\*/g, '');                        // **bold** → bold
+
     function extract(patterns) {
       for (const pat of patterns) {
-        const re = new RegExp(pat + '\\s*\\n+([\\s\\S]+?)(?=\\n---|\\n##|\\n###|$)', 'i');
-        const m = text.match(re);
-        if (m) {
-          // For description, return the full block (multi-line)
-          return m[1].trim().replace(/\*+/g, '');
-        }
+        // Match # or ## or ### headings
+        const re = new RegExp('#{1,3}\\s*' + pat + '\\s*\\n+([\\s\\S]+?)(?=\\n#{1,3}\\s|\\n---|$)', 'i');
+        const m = clean.match(re);
+        if (m) return m[1].trim();
       }
       return '';
     }
@@ -1230,32 +1234,33 @@ function updateCharCount(idx, field, max) {
     function extractFirstLine(patterns) {
       const block = extract(patterns);
       if (!block) return '';
-      return block.split('\n')[0].trim().replace(/^-+\s*/, '');
+      return block.split('\n')[0].trim().replace(/^[-*]+\s*/, '');
     }
 
-    const title      = extractFirstLine(['##[^#]*Pin Title[^#\\n]*']);
-    const alt_text   = extractFirstLine(['##[^#]*Alt Text[^#\\n]*']);
-    const board_name = extractFirstLine(['##[^#]*Board Name[^#\\n]*']);
+    const title      = extractFirstLine(['Pinterest Pin Title', 'Pin Title', 'Optimized Pin Title']);
+    const alt_text   = extractFirstLine(['Alt Text']);
+    const board_name = extractFirstLine(['Board Name', 'Pinterest Board']);
 
-    // Description: collect all lines from the section
-    const descBlock = extract(['##[^#]*Pin Description[^#\\n]*', '##[^#]*Description[^#\\n]*']);
+    // Description: join all non-empty lines in the section
+    const descBlock = extract(['Pinterest Pin Description', 'Optimized Pin Description', 'Pin Description', 'Description']);
     const description = descBlock
-      ? descBlock.split('\n').map(l => l.trim().replace(/^-+\s*/, '')).filter(Boolean).join(' ')
+      ? descBlock.split('\n').map(l => l.trim().replace(/^[-*]+\s*/, '')).filter(Boolean).join(' ')
       : '';
 
-    // Hashtags from Supporting Keywords section
-    const kwSection = extract(['###[^#]*Supporting Keywords', '##[^#]*Supporting Keywords']);
-    let hashtags = '';
-    if (kwSection) {
-      const kws = kwSection.split(/[,\n]/).map(k => k.trim().replace(/^-+\s*/, '').trim()).filter(k => k && !k.startsWith('#'));
-      hashtags = kws.map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
+    // Hashtags — grab #tags already in text first
+    const hashMatch = clean.match(/#\w[\w]*/g);
+    let hashtags = hashMatch ? [...new Set(hashMatch)].slice(0, 20).join(' ') : '';
+
+    // Also try Supporting Keywords section if no hashtags found
+    if (!hashtags) {
+      const kwSection = extract(['Supporting Keywords']);
+      if (kwSection) {
+        const kws = kwSection.split(/[,\n*]/).map(k => k.trim().replace(/^[-*]+\s*/, '').trim()).filter(k => k && !k.startsWith('#'));
+        hashtags = kws.map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
+      }
     }
-    // Also catch already-formatted hashtags
-    const hashMatch = text.match(/#\w[\w]*/g);
-    if (hashMatch && !hashtags) {
-      hashtags = [...new Set(hashMatch)].slice(0, 20).join(' ');
-    }
-    const primaryKw = extractFirstLine(['##[^#]*Primary Keyword']);
+
+    const primaryKw = extractFirstLine(['Primary Keyword']);
     if (primaryKw) {
       const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
       if (hashtags && !hashtags.includes(tag)) hashtags = tag + ' ' + hashtags;
