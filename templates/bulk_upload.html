@@ -1221,20 +1221,36 @@ function updateCharCount(idx, field, max) {
   }
 
   function parsePPPText(text) {
-    // Normalize: strip markdown links like [text][1] and [text](url), clean bold **text**
+    // Normalize markdown links
     const clean = text
-      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')   // [text][ref] → text
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')    // [text](url) → text
-      .replace(/\*\*/g, '');                        // **bold** → bold
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
 
-    function extract(patterns) {
+    // Two extraction strategies:
+    // 1. Heading-style: # Pin Title\ncontent
+    // 2. Label-style: **Pin Title:** content (same line or next lines)
+
+    function extractHeading(patterns) {
       for (const pat of patterns) {
-        // Match # or ## or ### headings
         const re = new RegExp('#{1,3}\\s*' + pat + '\\s*\\n+([\\s\\S]+?)(?=\\n#{1,3}\\s|\\n---|$)', 'i');
         const m = clean.match(re);
-        if (m) return m[1].trim();
+        if (m) return m[1].replace(/\*\*/g, '').trim();
       }
       return '';
+    }
+
+    function extractLabel(patterns) {
+      for (const pat of patterns) {
+        // Matches **Label:** value (rest of line, possibly continuing on next lines until blank or next **)
+        const re = new RegExp('\\*{0,2}' + pat + '\\*{0,2}:?\\*{0,2}\\s*([^\\n]+(?:\\n(?!\\s*\\*{0,2}[A-Z][^:]+:)[^\\n]+)*)', 'i');
+        const m = clean.match(re);
+        if (m) return m[1].replace(/\*\*/g, '').trim();
+      }
+      return '';
+    }
+
+    function extract(patterns) {
+      return extractHeading(patterns) || extractLabel(patterns);
     }
 
     function extractFirstLine(patterns) {
@@ -1247,8 +1263,9 @@ function updateCharCount(idx, field, max) {
     const alt_text   = extractFirstLine(['Pinterest Alt Text', 'Alt Text']);
     const board_name = extractFirstLine(['SEO Board Name', 'Pinterest Board Name', 'Board Name', 'Pinterest Board']);
 
-    // Description: join all non-empty lines in the section
-    const descBlock = extract(['Optimized Pin Description', 'Pinterest Pin Description', 'Pin Description']);
+    // Description: join non-empty lines
+    const descBlock = extractHeading(['Optimized Pin Description', 'Pinterest Pin Description', 'Pin Description'])
+      || extractLabel(['Pin Description', 'Optimized Pin Description']);
     const description = descBlock
       ? descBlock.split('\n').map(l => l.trim().replace(/^[-*]+\s*/, '')).filter(Boolean).join(' ')
       : '';
