@@ -445,6 +445,7 @@ def _post_pin_pinterest(pin, db, now):
                 "description": full_desc[:500],
                 "url": link,
                 "boardId": board_id,
+                **({"altText": pin.alt_text[:500]} if pin.alt_text else {}),
             },
             timeout=60,
         )
