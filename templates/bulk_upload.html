@@ -1170,7 +1170,7 @@ function updateCharCount(idx, field, max) {
     const boardKeywords = [
       { board: 'Nail Inspo & Nail Art Ideas',            keys: ['nail','nails','nail art','nail inspo','manicure','gel nail','nail polish'] },
       { board: 'Hair Care Essentials',                   keys: ['hair','haircare','shampoo','conditioner','scalp','hair growth','hair mask','dry hair','frizz'] },
-      { board: 'Makeup Finds Under $50',                 keys: ['makeup','mascara','foundation','concealer','blush','bronzer','lipstick','lip gloss','eyeliner','eyeshadow','contour'] },
+      { board: 'Makeup Finds Under $50',                 keys: ['makeup','mascara','foundation','concealer','blush','lipstick','lip gloss','eyeliner','eyeshadow','contour'] },
       { board: 'Fitness Finds on Amazon',                keys: ['fitness','workout','gym','yoga','protein','supplement','resistance band','exercise','weight loss'] },
       { board: 'Wellness & Self Care Essentials',        keys: ['self care','selfcare','wellness','vitamin','collagen','gut health','sleep','stress','mental health','bath'] },
       { board: 'Garden & Plant Inspo',                   keys: ['garden','plant','planter','indoor plant','succulent','flower','gardening','pot','greenery'] },
@@ -1237,12 +1237,12 @@ function updateCharCount(idx, field, max) {
       return block.split('\n')[0].trim().replace(/^[-*]+\s*/, '');
     }
 
-    const title      = extractFirstLine(['Pinterest Pin Title', 'Pin Title', 'Optimized Pin Title']);
-    const alt_text   = extractFirstLine(['Alt Text']);
-    const board_name = extractFirstLine(['Board Name', 'Pinterest Board']);
+    const title      = extractFirstLine(['Optimized Pin Title', 'Pinterest Pin Title', 'Pin Title']);
+    const alt_text   = extractFirstLine(['Pinterest Alt Text', 'Alt Text']);
+    const board_name = extractFirstLine(['SEO Board Name', 'Pinterest Board Name', 'Board Name', 'Pinterest Board']);
 
     // Description: join all non-empty lines in the section
-    const descBlock = extract(['Pinterest Pin Description', 'Optimized Pin Description', 'Pin Description', 'Description']);
+    const descBlock = extract(['Optimized Pin Description', 'Pinterest Pin Description', 'Pin Description']);
     const description = descBlock
       ? descBlock.split('\n').map(l => l.trim().replace(/^[-*]+\s*/, '')).filter(Boolean).join(' ')
       : '';
