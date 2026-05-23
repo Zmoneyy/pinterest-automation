@@ -1214,10 +1214,15 @@ def send_pin_to_tailwind(pin_id):
     if not pin.image_url:
         return jsonify({"ok": False, "error": "Pin has no image — upload an image first."})
 
-    # Build description
+    # Build description — strip markdown artifacts from PPP output
+    import re as _re
     raw_hashtags = pin.hashtags or ""
     hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list()) if raw_hashtags.startswith("[") else raw_hashtags.strip()
     full_desc = pin.description or ""
+    full_desc = _re.sub(r'\[([^\]]+)\]\[[^\]]*\]', r'\1', full_desc)  # [text][ref] → text
+    full_desc = _re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', full_desc)   # [text](url) → text
+    full_desc = _re.sub(r'\*+', '', full_desc)                          # **bold** → plain
+    full_desc = full_desc.strip()
     if hashtag_str and hashtag_str not in full_desc:
         full_desc = f"{full_desc}\n{hashtag_str}"
     disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
