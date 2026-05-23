@@ -1221,78 +1221,94 @@ function updateCharCount(idx, field, max) {
   }
 
   function parsePPPText(text) {
-    // Normalize markdown links
-    const clean = text
-      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+    // Normalize: strip markdown links, normalize **Label:** → Label:
+    let t = text
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')       // [text][ref] → text
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')        // [text](url) → text
+      .replace(/\*{1,2}([^*\n]+?):\*{1,2}/g, '$1:')  // **Label:** → Label:
+      .replace(/\*\*/g, '');                            // remaining ** → plain
 
-    // Two extraction strategies:
-    // 1. Heading-style: # Pin Title\ncontent
-    // 2. Label-style: **Pin Title:** content (same line or next lines)
+    // Build a section map by scanning line by line
+    // Detects: "# Heading" and "Label: value" patterns
+    const sections = {};
+    let currentKey = null;
 
-    function extractHeading(patterns) {
-      for (const pat of patterns) {
-        const re = new RegExp('#{1,3}\\s*' + pat + '\\s*\\n+([\\s\\S]+?)(?=\\n#{1,3}\\s|\\n---|$)', 'i');
-        const m = clean.match(re);
-        if (m) return m[1].replace(/\*\*/g, '').trim();
+    for (const rawLine of t.split('\n')) {
+      const line = rawLine.trim();
+
+      // # Heading line
+      const headingMatch = line.match(/^#{1,3}\s*(.+)/);
+      if (headingMatch) {
+        currentKey = headingMatch[1].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (!sections[currentKey]) sections[currentKey] = [];
+        continue;
+      }
+
+      // Label: value (short label, colon, optional value on same line)
+      const labelMatch = line.match(/^([A-Za-z][A-Za-z &\/()]{1,40}?):\s*(.*)/);
+      if (labelMatch) {
+        const key = labelMatch[1].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        currentKey = key;
+        sections[key] = labelMatch[2] ? [labelMatch[2]] : [];
+        continue;
+      }
+
+      // Content line
+      if (currentKey) {
+        if (!sections[currentKey]) sections[currentKey] = [];
+        sections[currentKey].push(line);
+      }
+    }
+
+    // Lookup helper — tries multiple label variations
+    function get(...keys) {
+      for (const key of keys) {
+        const k = key.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        // Exact match first
+        if (sections[k] && sections[k].some(l => l.trim())) {
+          return sections[k].filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean).join(' ');
+        }
+        // Partial match
+        for (const sKey of Object.keys(sections)) {
+          if ((sKey.includes(k) || k.includes(sKey)) && sections[sKey].some(l => l.trim())) {
+            return sections[sKey].filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean).join(' ');
+          }
+        }
       }
       return '';
     }
 
-    function extractLabel(patterns) {
-      for (const pat of patterns) {
-        // Matches **Label:** value (rest of line, possibly continuing on next lines until blank or next **)
-        const re = new RegExp('\\*{0,2}' + pat + '\\*{0,2}:?\\*{0,2}\\s*([^\\n]+(?:\\n(?!\\s*\\*{0,2}[A-Z][^:]+:)[^\\n]+)*)', 'i');
-        const m = clean.match(re);
-        if (m) return m[1].replace(/\*\*/g, '').trim();
-      }
-      return '';
+    function getLine(...keys) {
+      const block = get(...keys);
+      return block ? block.split(/\s{2,}|\n/)[0].trim() : '';
     }
 
-    function extract(patterns) {
-      return extractHeading(patterns) || extractLabel(patterns);
-    }
+    const title       = getLine('pin title', 'optimized pin title', 'pinterest pin title');
+    const alt_text    = getLine('alt text', 'pinterest alt text');
+    const board_name  = getLine('seo board name', 'board name', 'pinterest board name', 'pinterest board');
+    const description = get('pin description', 'optimized pin description', 'pinterest pin description');
 
-    function extractFirstLine(patterns) {
-      const block = extract(patterns);
-      if (!block) return '';
-      return block.split('\n')[0].trim().replace(/^[-*]+\s*/, '');
-    }
-
-    const title      = extractFirstLine(['Optimized Pin Title', 'Pinterest Pin Title', 'Pin Title']);
-    const alt_text   = extractFirstLine(['Pinterest Alt Text', 'Alt Text']);
-    const board_name = extractFirstLine(['SEO Board Name', 'Pinterest Board Name', 'Board Name', 'Pinterest Board']);
-
-    // Description: join non-empty lines
-    const descBlock = extractHeading(['Optimized Pin Description', 'Pinterest Pin Description', 'Pin Description'])
-      || extractLabel(['Pin Description', 'Optimized Pin Description']);
-    const description = descBlock
-      ? descBlock.split('\n').map(l => l.trim().replace(/^[-*]+\s*/, '')).filter(Boolean).join(' ')
-      : '';
-
-    // Hashtags — grab #tags already in text first
-    const hashMatch = clean.match(/#\w[\w]*/g);
+    // Hashtags: grab #tags already in text
+    const hashMatch = t.match(/#\w[\w]*/g);
     let hashtags = hashMatch ? [...new Set(hashMatch)].slice(0, 20).join(' ') : '';
 
-    // Also try Supporting Keywords section if no hashtags found
+    // Fall back to Supporting Keywords if no hashtags
     if (!hashtags) {
-      const kwSection = extract(['Supporting Keywords']);
-      if (kwSection) {
-        const kws = kwSection.split(/[,\n*]/).map(k => k.trim().replace(/^[-*]+\s*/, '').trim()).filter(k => k && !k.startsWith('#'));
-        hashtags = kws.map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
-      }
+      const kw = get('supporting keywords', 'supporting seo keywords', 'primary pinterest keywords');
+      if (kw) hashtags = kw.split(/[,\n]/).map(k => k.trim()).filter(k => k && !k.startsWith('#'))
+        .map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
     }
 
-    const primaryKw = extractFirstLine(['Primary Keyword']);
+    // Prepend primary keyword as hashtag
+    const primaryKw = getLine('primary keyword', 'primary pinterest keyword');
     if (primaryKw) {
       const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
-      if (hashtags && !hashtags.includes(tag)) hashtags = tag + ' ' + hashtags;
-      else if (!hashtags) hashtags = tag;
+      if (!hashtags.includes(tag)) hashtags = (tag + ' ' + hashtags).trim();
     }
 
-    // Extract any Amazon URL in the pasted text
-    const amazonMatch = text.match(/https?:\/\/(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')]+/);
-    const amazon_url = amazonMatch ? amazonMatch[0].trim() : '';
+    // Amazon URL
+    const amazonMatch = text.match(/https?:\/\/(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')\]]+/);
+    const amazon_url = amazonMatch ? amazonMatch[0].replace(/[)\].,]+$/, '').trim() : '';
 
     return { title, description, alt_text, board_name, hashtags: hashtags.trim(), amazon_url };
   }
