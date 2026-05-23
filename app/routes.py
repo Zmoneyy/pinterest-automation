@@ -1214,15 +1214,36 @@ def send_pin_to_tailwind(pin_id):
     if not pin.image_url:
         return jsonify({"ok": False, "error": "Pin has no image — upload an image first."})
 
-    # Build description — strip markdown artifacts from PPP output
     import re as _re
+    from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
+
+    def clean_text(t):
+        """Strip all markdown artifacts from PPP output."""
+        t = _re.sub(r'\[([^\]]+)\]\[[^\]]*\]', r'\1', t)   # [text][ref] → text
+        t = _re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', t)    # [text](url) → text
+        t = _re.sub(r'\*+', '', t)                           # **bold** → plain
+        t = _re.sub(r'#{1,6}\s*', '', t)                    # ## headings → plain
+        t = _re.sub(r'\n{3,}', '\n\n', t)                  # collapse blank lines
+        return t.strip()
+
+    def clean_url(u):
+        """Keep only the essential Amazon URL, strip tracking params."""
+        if not u:
+            return u
+        try:
+            parsed = urlparse(u)
+            # Strip utm_* and chatgpt params, keep tag and ASIN path
+            qs = parse_qs(parsed.query, keep_blank_values=False)
+            keep = {k: v for k, v in qs.items() if k in ('tag', 'linkCode', 'linkId')}
+            clean = parsed._replace(query=urlencode(keep, doseq=True))
+            return urlunparse(clean)
+        except Exception:
+            return u
+
+    # Build description
     raw_hashtags = pin.hashtags or ""
     hashtag_str = " ".join(f"#{h}" for h in pin.hashtags_list()) if raw_hashtags.startswith("[") else raw_hashtags.strip()
-    full_desc = pin.description or ""
-    full_desc = _re.sub(r'\[([^\]]+)\]\[[^\]]*\]', r'\1', full_desc)  # [text][ref] → text
-    full_desc = _re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', full_desc)   # [text](url) → text
-    full_desc = _re.sub(r'\*+', '', full_desc)                          # **bold** → plain
-    full_desc = full_desc.strip()
+    full_desc = clean_text(pin.description or "")
     if hashtag_str and hashtag_str not in full_desc:
         full_desc = f"{full_desc}\n{hashtag_str}"
     disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
@@ -1241,24 +1262,33 @@ def send_pin_to_tailwind(pin_id):
         }
         board_id = niche_boards.get(niche, Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare"))
 
-    link = pin.amazon_url or pin.shop_url or Config.benable_url_for_niche("beauty")
+    link = clean_url(pin.amazon_url or pin.shop_url or Config.benable_url_for_niche("beauty"))
+    title = clean_text(pin.title or "")[:100]
+    alt   = clean_text(pin.alt_text or "")[:500]
 
     tailwind_account_id = "1641739"
+    payload = {
+        "mediaUrl":    pin.image_url,
+        "title":       title,
+        "description": full_desc[:500],
+        "url":         link,
+        "boardId":     board_id,
+    }
+    if alt:
+        payload["altText"] = alt
+
+    logger.info(f"Sending pin #{pin_id} to Tailwind: title={repr(title[:40])} board={board_id} url={link[:60]}")
+
     try:
         resp = req.post(
             f"https://api-v1.tailwind.ai/v1/accounts/{tailwind_account_id}/posts",
             headers={"Authorization": f"Bearer {tailwind_key}", "Content-Type": "application/json"},
-            json={
-                "mediaUrl": pin.image_url,
-                "title": (pin.title or "")[:100],
-                "description": full_desc[:800],
-                "url": link,
-                "boardId": board_id,
-                **({"altText": pin.alt_text[:500]} if pin.alt_text else {}),
-            },
+            json=payload,
             timeout=60,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            logger.error(f"Tailwind 400 body for pin #{pin_id}: {resp.text[:500]}")
+            return jsonify({"ok": False, "error": f"Tailwind error: {resp.text[:200]}"})
         tailwind_post_id = resp.json()["data"]["post"]["id"]
         pin.pinterest_pin_id = tailwind_post_id
         db.session.commit()
