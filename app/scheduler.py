@@ -442,7 +442,7 @@ def _post_pin_pinterest(pin, db, now):
             json={
                 "mediaUrl": pin.image_url,
                 "title": (pin.title or "")[:100],
-                "description": full_desc[:500],
+                "description": full_desc[:800],
                 "url": link,
                 "boardId": board_id,
                 **({"altText": pin.alt_text[:500]} if pin.alt_text else {}),

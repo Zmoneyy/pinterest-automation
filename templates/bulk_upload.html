@@ -751,15 +751,15 @@
               oninput="updateCharCount(${idx}, 'title', 100)">
           </div>
 
-          <!-- DESCRIPTION (required, max 500) -->
+          <!-- DESCRIPTION (required, max 800) -->
           <div class="field-row">
             <label>
               Description <span class="req">required for reach</span>
-              <span class="char-count" id="desc-count-${idx}">0 / 500</span>
+              <span class="char-count" id="desc-count-${idx}">0 / 800</span>
             </label>
-            <textarea class="pin-input description" id="desc-${idx}" maxlength="500"
+            <textarea class="pin-input description" id="desc-${idx}" maxlength="800"
               placeholder="Write a keyword-rich description. Include your primary keyword in the first sentence, then benefits, then a soft CTA. Example: This vitamin C serum is a must-have for glowing skin. It fades dark spots, evens skin tone, and gives your face a natural glow. Shop it on Amazon via my link below ✨"
-              oninput="updateCharCount(${idx}, 'desc', 500)"></textarea>
+              oninput="updateCharCount(${idx}, 'desc', 800)"></textarea>
           </div>
 
           <!-- HASHTAGS + ALT TEXT row -->
@@ -1152,8 +1152,8 @@ function updateCharCount(idx, field, max) {
       updateCharCount(idx, 'title', 100);
     }
     if (parsed.description) {
-      document.getElementById(`desc-${idx}`).value = parsed.description.substring(0, 500);
-      updateCharCount(idx, 'desc', 500);
+      document.getElementById(`desc-${idx}`).value = parsed.description.substring(0, 800);
+      updateCharCount(idx, 'desc', 800);
     }
     if (parsed.hashtags) {
       document.getElementById(`tags-${idx}`).value = parsed.hashtags;
