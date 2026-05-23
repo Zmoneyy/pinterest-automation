@@ -1163,23 +1163,44 @@ function updateCharCount(idx, field, max) {
       document.getElementById(`alt-${idx}`).value = parsed.alt_text.substring(0, 500);
       updateCharCount(idx, 'alt', 500);
     }
-    if (parsed.board_name) {
-      const sel = document.getElementById(`board-${idx}`);
+    // Auto-route board from content keywords
+    const sel = document.getElementById(`board-${idx}`);
+    const contentText = [parsed.title, parsed.description, parsed.hashtags].join(' ').toLowerCase();
+
+    const boardKeywords = [
+      { board: 'Nail Inspo & Nail Art Ideas',            keys: ['nail','nails','nail art','nail inspo','manicure','gel nail','nail polish'] },
+      { board: 'Hair Care Essentials',                   keys: ['hair','haircare','shampoo','conditioner','scalp','hair growth','hair mask','dry hair','frizz'] },
+      { board: 'Makeup Finds Under $50',                 keys: ['makeup','mascara','foundation','concealer','blush','bronzer','lipstick','lip gloss','eyeliner','eyeshadow','contour'] },
+      { board: 'Fitness Finds on Amazon',                keys: ['fitness','workout','gym','yoga','protein','supplement','resistance band','exercise','weight loss','wellness routine'] },
+      { board: 'Wellness & Self Care Essentials',        keys: ['self care','selfcare','wellness','supplement','vitamin','collagen','gut health','sleep','stress','mental health','bath'] },
+      { board: 'Garden & Plant Inspo',                   keys: ['garden','plant','planter','indoor plant','succulent','flower','gardening','pot','greenery'] },
+      { board: 'Mother\'s Day Gift Ideas',               keys: ['mother\'s day','mom gift','gift for mom','gift for her','mothers day'] },
+      { board: 'Luxury Look for Less Home Decor',        keys: ['luxury look for less','dupe','look for less','affordable luxury','high end look'] },
+      { board: 'Amazon Home Finds',                      keys: ['amazon home','home find','home essential','kitchen','bedroom','bathroom','living room','home organization','storage'] },
+      { board: 'Aesthetic Home Decor for Cozy Spaces',   keys: ['cozy','aesthetic home','cozy home','hygge','warm home','cozy space','cozy decor'] },
+      { board: 'Aesthetic Home Finds',                   keys: ['aesthetic','home decor','decor find','home inspo','interior'] },
+      { board: 'Glam Home Decor Ideas',                  keys: ['glam','home decor','decor','candle','throw pillow','vase','wall art','rug'] },
+      { board: 'Affordable Beauty Essentials',           keys: ['affordable','drugstore','budget beauty','under $','dupe','cheap'] },
+      { board: 'Beauty Finds & Skincare',                keys: ['serum','moisturizer','skincare','spf','sunscreen','retinol','vitamin c','eye cream','face','skin','beauty','glow'] },
+    ];
+
+    let matched = null;
+    for (const { board, keys } of boardKeywords) {
+      if (keys.some(k => contentText.includes(k))) { matched = board; break; }
+    }
+
+    // Fall back to PPP board name if no keyword match
+    if (!matched && parsed.board_name) {
       const pWords = parsed.board_name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
       let bestOpt = null, bestScore = 0;
       Array.from(sel.options).forEach(o => {
-        const oLower = o.value.toLowerCase();
-        const score = pWords.filter(w => oLower.includes(w)).length;
+        const score = pWords.filter(w => o.value.toLowerCase().includes(w)).length;
         if (score > bestScore) { bestScore = score; bestOpt = o; }
       });
-      // Also try substring match as fallback
-      if (!bestOpt) {
-        bestOpt = Array.from(sel.options).find(o =>
-          o.value.toLowerCase().includes(parsed.board_name.toLowerCase().split(' ')[0])
-        );
-      }
-      if (bestOpt) sel.value = bestOpt.value;
+      if (bestOpt) matched = bestOpt.value;
     }
+
+    if (matched) sel.value = matched;
     if (parsed.amazon_url) {
       document.getElementById(`amazon-url-${idx}`).value = parsed.amazon_url;
     }
