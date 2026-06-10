@@ -374,7 +374,7 @@
       {{ entries|length }} categor{{ 'y' if entries|length == 1 else 'ies' }} saved
     </div>
     {% for e in entries %}
-    <div class="entry-card" id="entry-{{ e.id }}">
+    <div class="entry-card" id="entry-{{ e.id }}" data-id="{{ e.id }}">
       <div class="entry-card-header">
         <div class="entry-cat-name">🛍️ {{ e.category }}</div>
         {% if e.saved_at %}
@@ -384,11 +384,11 @@
         {# Priority toggle #}
         {% set p = e.priority or 'medium' %}
         <div style="display:flex;gap:3px;align-items:center;" title="Set priority based on outbound click volume">
-          <button onclick="setPriority({{ e.id }}, 'high')"
+          <button data-id="{{ e.id }}" onclick="setPriority(+this.dataset.id, 'high')"
             class="prio-btn{% if p == 'high' %} prio-active-high{% endif %}">🔥</button>
-          <button onclick="setPriority({{ e.id }}, 'medium')"
+          <button data-id="{{ e.id }}" onclick="setPriority(+this.dataset.id, 'medium')"
             class="prio-btn{% if p == 'medium' %} prio-active-med{% endif %}">⚡</button>
-          <button onclick="setPriority({{ e.id }}, 'low')"
+          <button data-id="{{ e.id }}" onclick="setPriority(+this.dataset.id, 'low')"
             class="prio-btn{% if p == 'low' %} prio-active-low{% endif %}">—</button>
         </div>
         {# Screenshot upload button #}
@@ -401,18 +401,19 @@
         </button>
         {% if has_ss %}
         <button id="ss-clear-btn-{{ e.id }}"
-          onclick="clearScreenshots({{ e.id }})"
+          data-id="{{ e.id }}" onclick="clearScreenshots(+this.dataset.id)"
           title="Clear all screenshots"
           style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;border:1px solid #fca5a5;background:#fef2f2;color:#dc2626;cursor:pointer;">
           ✕ Clear
         </button>
         {% endif %}
         <input type="file" id="ss-input-{{ e.id }}" multiple accept="image/*" style="display:none"
-          onchange="uploadScreenshots({{ e.id }}, this)">
+          data-id="{{ e.id }}" onchange="uploadScreenshots(+this.dataset.id, this)">
         <span id="ss-status-{{ e.id }}" style="font-size:11px;"></span>
 
         <button class="entry-delete-btn" type="button" title="Delete this entry"
-          onclick="deleteEntry({{ e.id }}, {{ e.tp_list()|length }}, '{{ e.category|replace("'", "\\'") }}')">✕</button>
+          data-id="{{ e.id }}" data-count="{{ e.tp_list()|length }}" data-cat="{{ e.category|e }}"
+          onclick="deleteEntry(+this.dataset.id, +this.dataset.count, this.dataset.cat)">✕</button>
       </div>
 
       {# Screenshot drop zone — always visible, drag files here #}
@@ -421,7 +422,7 @@
         data-has-ss="{{ 'true' if has_ss else 'false' }}"
         ondragover="event.preventDefault(); this.classList.add('ss-dz-active')"
         ondragleave="if(!this.contains(event.relatedTarget)) this.classList.remove('ss-dz-active')"
-        ondrop="event.preventDefault(); this.classList.remove('ss-dz-active'); handleCardDrop(event, {{ e.id }})"
+        data-id="{{ e.id }}" ondrop="event.preventDefault(); this.classList.remove('ss-dz-active'); handleCardDrop(event, +this.dataset.id)"
         class="ss-dropzone{{ ' ss-dz-saved' if has_ss else '' }}">
         <div id="ss-dropzone-label-{{ e.id }}">
           {% if has_ss %}
@@ -457,7 +458,7 @@
         {% else %}
           <span style="font-size:10px;color:var(--gray-400);font-weight:400;text-transform:none;">← create pins for these!</span>
         {% endif %}
-        <button onclick="toggleAddProducts({{ e.id }})"
+        <button data-id="{{ e.id }}" onclick="toggleAddProducts(+this.dataset.id)"
           style="margin-left:auto;font-size:11px;font-weight:700;background:#f5f0ff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:6px;padding:2px 8px;cursor:pointer;">
           + Add Products
         </button>
@@ -492,7 +493,7 @@
         </div>
         <div id="add-extract-status-{{ e.id }}" style="font-size:12px;margin-top:4px;"></div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:8px;">
-          <button onclick="saveProducts({{ e.id }})" id="save-prod-btn-{{ e.id }}"
+          <button data-id="{{ e.id }}" onclick="saveProducts(+this.dataset.id)" id="save-prod-btn-{{ e.id }}"
             style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:7px 18px;font-size:13px;font-weight:700;cursor:pointer;">
             Save Products
           </button>
@@ -508,7 +509,7 @@
           <div style="font-size:13px;color:#166534;line-height:1.6;">{{ e.insight | md }}</div>
         </div>
         {% else %}
-        <button onclick="generateBrief({{ e.id }})" id="brief-btn-{{ e.id }}"
+        <button data-id="{{ e.id }}" onclick="generateBrief(+this.dataset.id)" id="brief-btn-{{ e.id }}"
           style="font-size:11px;font-weight:700;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;padding:5px 12px;cursor:pointer;">
           🧠 Generate AI Brief
         </button>
