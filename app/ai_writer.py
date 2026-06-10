@@ -239,7 +239,6 @@ def _template_roundup(
     year = datetime.datetime.now().year
     next_year = year + 1
     kw = trend_keyword.title()
-    kw_tag = trend_keyword.replace(" ", "").lower()
 
     return {
         "theme":       theme,
