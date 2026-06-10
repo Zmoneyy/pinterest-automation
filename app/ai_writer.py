@@ -163,6 +163,8 @@ def _build_roundup_prompt(
 {theme_suggestion}
 
 Trending keyword: {trend_keyword}
+Products in the collage:
+{products_str}
 Affiliate link: {benable_url}
 {season_context}
 

@@ -12,10 +12,7 @@ Result: Every pin title, description, and hashtag starts from a real
 keyword people are searching on Pinterest right now.
 """
 
-import json
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 import requests
 

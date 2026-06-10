@@ -8,7 +8,6 @@ Flow:
   4. Return top results → scheduler adds to ProductCandidate queue
 """
 import logging
-import re
 import time
 import random
 from typing import Optional

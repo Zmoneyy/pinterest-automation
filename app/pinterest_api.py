@@ -108,8 +108,6 @@ def _get_pinterest_trends(token: str, region: str, limit: int) -> list[dict]:
             kw = item.get("keyword") or item.get("normalized_keyword", "")
             if not kw:
                 continue
-            ts = item.get("time_series", [])
-            # pct_growth_mom from time series if available
             monthly = item.get("pct_growth_mom", item.get("growth_rate", 0))
             trends.append({
                 "keyword": kw,

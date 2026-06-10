@@ -10,7 +10,6 @@ import io
 import logging
 import math
 import os
-import random
 import uuid
 from typing import Optional
 
@@ -195,7 +194,6 @@ def generate_dalle3_pin(
     DALL-E 3 can create lifestyle backgrounds, glow effects, and photorealistic
     product scenes — much closer to the Pin Perfect Pro / gpt-image-2 style.
     """
-    import requests as req
     from openai import OpenAI
     from config import Config
 
@@ -780,7 +778,7 @@ def _wrap_text(text, font, max_width):
     return lines if lines else [text]
 
 
-def _paste_with_alpha(canvas: "PILImage.Image", img: "PILImage.Image", x: int, y: int):
+def _paste_with_alpha(canvas, img, x: int, y: int):
     """Paste an RGBA image onto an RGB canvas using its alpha channel as mask."""
     if img.mode == "RGBA":
         canvas.paste(img, (x, y), mask=img.split()[3])
@@ -1694,8 +1692,6 @@ def _draw_product_mosaic(canvas, products: list):
     White/near-white backgrounds are removed so products appear to float
     on the cream canvas — exactly like Jackie Aina's style.
     """
-    from PIL import Image
-
     n       = len(products)
     n_rows  = math.ceil(n / 2)
     pad     = MARGIN
@@ -1810,8 +1806,6 @@ def _remove_white_background(img, threshold: int = 235):
     Replace near-white pixels with transparency so products float on cream.
     Works best for typical Amazon product images on white backgrounds.
     """
-    from PIL import Image
-
     data    = img.getdata()
     new_data = []
     for r, g, b, a in data:

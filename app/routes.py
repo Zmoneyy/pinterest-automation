@@ -584,6 +584,7 @@ def import_amazon_url():
     from app.amazon_api import AMAZON_HEADERS
     from bs4 import BeautifulSoup
     import re as _re
+    import requests
 
     url = request.form.get("amazon_url", "").strip()
     if not url:
@@ -704,13 +705,6 @@ def delete_product(product_id):
 
 # ── Product discovery (Amazon PA API) ────────────────────────────────────
 
-def _price_float(price_str) -> float:
-    try:
-        return float(re.sub(r"[^\d.]", "", price_str or "0") or 0)
-    except Exception:
-        return 0.0
-
-
 @bp.route("/products/queue")
 @login_required
 def product_queue():
@@ -738,9 +732,8 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
     import threading
 
     def _worker():
-        global _discovery_state
         import random, time
-        from app.amazon_api import _get_serpapi_key, search_products, _build_affiliate_url, _guess_category
+        from app.amazon_api import _get_serpapi_key, search_products, _build_affiliate_url
 
         serpapi_key = _get_serpapi_key()
 
@@ -776,7 +769,7 @@ def _run_discovery_background(app, trend_dicts=None, manual_keyword=None):
         _discovery_state["started_at"] = datetime.now(timezone.utc).isoformat()
 
         with app.app_context():
-            from app.models import ProductCandidate, Product, TrendEntry
+            from app.models import ProductCandidate, Product
             from app.amazon_api import is_luxury_beauty
             from config import Config
             associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
@@ -901,7 +894,7 @@ def discover_products():
     Data-driven: brands come from TrendEntry, nothing hardcoded.
     """
     from app.models import TrendEntry
-    from app.amazon_api import is_luxury_beauty, LUXURY_BEAUTY_BRANDS
+    from app.amazon_api import LUXURY_BEAUTY_BRANDS
 
     if _discovery_state["running"]:
         return redirect(url_for("main.products") + "?discovering=1")
@@ -1502,7 +1495,6 @@ def fetch_amazon_images():
     """
     import re, uuid, requests as req
     from google.cloud import storage as gcs
-    from config import Config
 
     data = request.get_json()
     amazon_urls = data.get("urls", [])[:4]  # max 4 products
@@ -1657,10 +1649,6 @@ def fetch_amazon_images():
             blob.upload_from_string(img_resp.content, content_type=content_type)
             gcs_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
 
-            # Use the full resolved URL — Pinterest trusts long amazon.com URLs more than short links
-            # Strip tracking params that change but keep the affiliate tag
-            from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-            parsed = urlparse(url)
             # Keep only the path (which has the ASIN) + affiliate tag
             full_affiliate_url = f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
 
@@ -1784,7 +1772,6 @@ def upload_pin_publish():
         title       = data.get("title", "")
         description = data.get("description", "")
         board_name      = data.get("board_name", "")
-        niche           = data.get("niche", "beauty")
         trend_keyword   = data.get("trend_keyword", "")
         scheduled_time  = data.get("scheduled_time")
 
@@ -1819,7 +1806,6 @@ def upload_pin_publish():
             return jsonify({"ok": False, "error": "No image provided. Upload an image or generate one."}), 400
 
         # Save Pin to DB so we get a real ID → use for /shop/pin/<id> link
-        from datetime import datetime, timezone
         scheduled_dt = None
         if scheduled_time:
             try:
@@ -1930,7 +1916,7 @@ def upload_pin_publish():
 @login_required
 def bulk_upload():
     from config import Config
-    from datetime import timedelta, date
+    from datetime import timedelta
     boards = list(Config.PINTEREST_BOARDS.keys())
 
     # Upcoming scheduled pins for the sidebar calendar (next 60 days)
@@ -1987,7 +1973,6 @@ def bulk_upload_submit():
     import uuid as _uuid
     from datetime import timedelta
     from google.cloud import storage as gcs
-    from config import Config
 
     try:
         data         = request.get_json()
@@ -1995,6 +1980,13 @@ def bulk_upload_submit():
         start_date   = data.get("start_date", "")     # ISO date string "2026-04-28"
         pins_per_day = int(data.get("pins_per_day", 3))
         post_times   = data.get("post_times", ["09:00", "13:00", "19:00"])  # HH:MM UTC
+        # Respect the user's pins-per-day choice, and never enter the
+        # scheduling loop with an empty time list (it would never terminate)
+        post_times = [t for t in post_times if t and ":" in t]
+        if not post_times:
+            post_times = ["09:00", "13:00", "19:00"]
+        if pins_per_day > 0:
+            post_times = post_times[:pins_per_day]
 
         if not pins_data:
             return jsonify({"ok": False, "error": "No pins provided"}), 400
@@ -2426,7 +2418,6 @@ def _suggest_boards_from_trends(trends):
         },
     ]
 
-    keyword_set = set(all_kws)
     suggestions = []
 
     for cluster in clusters:
@@ -2589,7 +2580,6 @@ def trends_preview_insight():
     Accepts: category, search_queries (list), top_products (list), full_page (raw text).
     Parses full_page the same way trends_paste() does to extract keywords/products.
     """
-    import re as _re
     data = request.get_json(force=True) or {}
     category   = data.get("category", "").strip() or "Unknown"
     sq_sample  = list(data.get("search_queries", []))
@@ -2966,7 +2956,7 @@ Strategic analysis:
 6. **Worth it?** — given commission structure, prioritize or deprioritize?
 
 Specific, tactical, direct. No fluff. Markdown headers."""
-        msg = _anthropic.Anthropic(api_key=_Cfg.ANTHROPIC_API_KEY).messages.create(
+        msg = _client.messages.create(
             model="claude-sonnet-4-6", max_tokens=1200,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -3145,9 +3135,7 @@ def trends_paste():
 
     # ── Merge into TrendCache ──
     # Search queries: 100→80, top products hints: 60→20
-    sq_set = set(search_queries_kws)
     sq_total = len(search_queries_kws) or 1
-    prod_total = len(top_products_kws) or 1
     saved = 0
 
     for i, kw in enumerate(search_queries_kws):

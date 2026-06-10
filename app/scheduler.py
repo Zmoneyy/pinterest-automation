@@ -13,9 +13,7 @@ Flow (fully automated — no product pre-approval needed):
 import json
 import logging
 import random
-import re
 import uuid
-import io
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -529,7 +527,6 @@ def _discover_and_queue_products(db):
     ).order_by(TrendEntry.saved_at.desc()).all()
 
     searches = []  # list of (product_name, source_category)
-    seen_queries = set()
 
     # Extract unique luxury brands — one brand search per brand, 10 results each
     seen_brands = {}  # brand_key -> (display_name, source_category)
