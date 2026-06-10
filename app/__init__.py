@@ -131,6 +131,19 @@ def _run_migrations():
     except Exception:
         db.session.rollback()
 
+    # Enable RLS on any public table missing it — blocks Supabase's public
+    # REST API from reading/writing our tables. The app connects directly as
+    # the table owner, which bypasses RLS, so this never affects the app.
+    try:
+        rows = db.session.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' AND NOT rowsecurity"
+        )).fetchall()
+        for (table,) in rows:
+            db.session.execute(text(f'ALTER TABLE public."{table}" ENABLE ROW LEVEL SECURITY'))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()  # non-Postgres DBs (local sqlite) don't have pg_tables
+
 
 def _remove_sample_data():
     """Remove placeholder sample products that were seeded on first run."""
