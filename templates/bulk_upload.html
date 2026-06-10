@@ -1245,7 +1245,7 @@ function updateCharCount(idx, field, max) {
       }
 
       // **Bold label:** value  OR  **Bold label** (standalone heading, no colon)
-      const boldLabel = line.match(/^\*{1,2}([^*\n]{2,60}?)\*{1,2}:?\s*(.*)/);
+      const boldLabel = line.match(/^\*{1,2}([^*\n]{2,150}?)\*{1,2}:?\s*(.*)/);
       if (boldLabel) {
         const key = boldLabel[1].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
         currentKey = key;
