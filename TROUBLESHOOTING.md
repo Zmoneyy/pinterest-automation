@@ -194,3 +194,23 @@ if (m) {
 | Long strings from full page = products | Lines >25 chars in full page dump are product names, not keywords |
 | `location.reload()` preserves query params | Use `location.href = '/path'` for clean navigation |
 | SerpAPI is 250/month free, resets May 10 | Do not run auto-discovery; manual only |
+
+---
+
+## 12. PPP parser broke on every new paste format (now regression-tested)
+
+**Symptom:** Pasting Pin Perfect Pro / ChatGPT pin text into Bulk Upload filled fields with garbage or nothing. Happened three separate times.
+
+**Root causes (one per format):**
+- Old parser only knew markdown (`## headings`, `**bold**`, `Label: value`)
+- New ChatGPT format uses emoji headers (`📍Pinterest SEO Title`) with no markdown — matched nothing
+- Real pastes from ChatGPT arrive as ONE run-on line (line breaks stripped on copy) — the line scanner saw a single giant line and the first label swallowed everything
+
+**What fixed it:**
+- Parser re-inserts line breaks before ⸻ separators, emoji markers, and `*` bullets before scanning
+- Header detection matches known header names as line *prefixes*, so content on the same line as its header still routes correctly
+- File: `templates/bulk_upload.html` → `parsePPPText()`
+
+**Protection:** `python3 scripts/test_ppp_parser.py` runs all 3 formats through the real parser (22 assertions). A `.git/hooks/pre-commit` hook runs it automatically whenever `bulk_upload.html` is committed and blocks the commit on failure.
+
+**Rule:** When pasted text "doesn't parse," FIRST check whether the paste has line breaks at all. Test with the exact bytes the user pasted, not a prettified reconstruction.
