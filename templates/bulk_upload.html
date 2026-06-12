@@ -1227,21 +1227,31 @@ function updateCharCount(idx, field, max) {
     // Normalize: strip markdown links
     let t = text
       .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      // Run-on pastes lose their line breaks when copied (e.g. from ChatGPT).
+      // Re-insert breaks before ⸻ separators, emoji section markers, and bullets
+      // so the line-by-line scanner below still sees the structure.
+      .replace(/[⸻]+/g, '\n')
+      .replace(/(\p{Extended_Pictographic}️?)/gu, '\n$1')
+      .replace(/\s\*\s+/g, '\n* ');
 
     // Build a section map by scanning line by line
     const sections = {};
     let currentKey = null;
 
-    // Headers that appear as standalone lines with no colon (often emoji-prefixed,
-    // e.g. "📍Pinterest SEO Title", "📝 Pinterest Description", "📌 Board Ideas")
-    const HEADER_NAMES = new Set([
+    // Headers that may appear with no colon, often emoji-prefixed, and possibly
+    // with their content on the same line ("📍Pinterest SEO Title Charlotte ...").
+    // Longest names first so "pinterest seo title" wins over "seo title".
+    const HEADER_LIST = [
       'pin title', 'pinterest pin title', 'pinterest seo title', 'seo title', 'pinterest title',
-      'pin description', 'pinterest description', 'description',
-      'board name', 'board ideas', 'pinterest board', 'seo board name',
-      'alt text', 'pinterest alt text', 'keywords', 'supporting keywords', 'hashtags',
-      'pin text overlay', 'canva pin design', 'ai lifestyle mockup prompt', 'extra pin variations',
-    ]);
+      'optimized pin title', 'pin description', 'pinterest description', 'optimized pin description',
+      'description', 'board name', 'board ideas', 'pinterest board name', 'pinterest board',
+      'seo board name', 'alt text', 'pinterest alt text', 'keywords', 'supporting keywords',
+      'hashtags', 'pin text overlay', 'canva pin design', 'ai lifestyle mockup prompt',
+      'extra pin variations',
+    ].sort((a, b) => b.length - a.length);
+    const HEADER_REGEXES = HEADER_LIST.map(name =>
+      [name, new RegExp('^' + name.replace(/ /g, '\\s+') + '\\b\\s*:?\\s*', 'i')]);
 
     for (const rawLine of t.split('\n')) {
       const line = rawLine.trim();
@@ -1266,11 +1276,17 @@ function updateCharCount(idx, field, max) {
         continue;
       }
 
-      // Standalone header line with no colon (emoji headers land here)
-      const norm = stripped.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-      if (!stripped.includes(':') && HEADER_NAMES.has(norm)) {
-        currentKey = norm;
+      // Known header at the start of the line — with or without a colon, and
+      // possibly followed by its content on the same line (run-on pastes)
+      let headerHit = null;
+      for (const [name, re] of HEADER_REGEXES) {
+        const m = stripped.match(re);
+        if (m) { headerHit = [name, stripped.slice(m[0].length).trim()]; break; }
+      }
+      if (headerHit) {
+        currentKey = headerHit[0];
         if (!sections[currentKey]) sections[currentKey] = [];
+        if (headerHit[1]) sections[currentKey].push(headerHit[1].replace(/\*\*/g, ''));
         continue;
       }
 
