@@ -2,10 +2,12 @@
 """
 Regression test for the PPP (Pin Perfect Pro) parser in templates/bulk_upload.html.
 
-The parser has broken three times, each from a new paste format:
+The parser has broken four times, each from a new paste format:
   1. Old markdown format (## headings, **bold labels**)
   2. Emoji-header format with line breaks (📍Pinterest SEO Title, ⸻ separators)
   3. Same format as a run-on single line (line breaks lost when copying from ChatGPT)
+  4. Full markdown with emoji INSIDE headings ("# 📌 Pinterest Pin Title (SEO
+     Optimized)") and values as standalone **bold** lines under the heading
 
 This script extracts the real parsePPPText() from the template and runs all
 three formats through node, asserting on title/description/board/hashtags.
@@ -22,6 +24,7 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE = os.path.join(ROOT, "templates", "bulk_upload.html")
 RUNON_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_runon_paste.txt")
+MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_full.txt")
 
 
 def extract_parser_js() -> str:
@@ -42,6 +45,7 @@ def extract_parser_js() -> str:
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
 RUNON = open(RUNON_FIXTURE, encoding="utf-8").read().strip()
+MARKDOWN_FULL = open(MARKDOWN_FULL_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -150,6 +154,25 @@ def main():
                 "description": {"startsWith": "Looking for a setting spray"},
                 "board_name": {"equals": "Luxury Beauty Finds"},
                 "hashtags": {"includes": ["#charlottetilburysettingspray"]},
+            },
+        },
+        {
+            "name": "Full markdown with emoji headings + standalone bold values",
+            "text": MARKDOWN_FULL,
+            "expect": {
+                "title": {
+                    "equals": "Charlotte Tilbury Magic Cream Review: The Luxury Moisturizer for Glowing Skin"
+                },
+                "description": {
+                    "startsWith": "Discover why Charlotte Tilbury Magic Cream",
+                    "includes": ["beauty upgrade!"],
+                    # Design/citation noise must never leak into the description
+                    "notIncludes": ["Amazon][1]", "Canvas", "characters)", "Talking About"],
+                },
+                "alt_text": {"startsWith": "Gold jar of Charlotte Tilbury Magic Cream"},
+                "board_name": {"equals": "Luxury Skincare Favorites"},
+                "hashtags": {"includes": ["#CharlotteTilbury", "#LuxurySkincare"]},
+                "amazon_url": {"equals": "https://www.amazon.com/dp/B0GFWLDP4W?tag=auragirlcreat-20"},
             },
         },
         {

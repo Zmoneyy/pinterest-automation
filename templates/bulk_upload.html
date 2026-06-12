@@ -1224,16 +1224,23 @@ function updateCharCount(idx, field, max) {
   }
 
   function parsePPPText(text) {
-    // Normalize: strip markdown links
+    // Normalize: strip citation refs like ([Amazon][1]), then markdown links
     let t = text
+      .replace(/\(\[[^\]]*\]\[[^\]]*\]\)/g, '')
       .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
       .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      // Run-on pastes lose their line breaks when copied (e.g. from ChatGPT).
-      // Re-insert breaks before ⸻ separators, emoji section markers, and bullets
-      // so the line-by-line scanner below still sees the structure.
-      .replace(/[⸻]+/g, '\n')
-      .replace(/(\p{Extended_Pictographic}️?)/gu, '\n$1')
-      .replace(/\s\*\s+/g, '\n* ');
+      .replace(/[⸻]+/g, '\n');
+
+    // Run-on pastes lose their line breaks when copied (e.g. from ChatGPT).
+    // Only then re-insert breaks before emoji section markers and bullets —
+    // doing this on well-formed markdown would split "# 📌 Heading" lines apart.
+    // Count lines of the ORIGINAL text (⸻ replacement above adds line breaks).
+    const nonEmptyLines = text.split('\n').filter(l => l.trim()).length;
+    if (nonEmptyLines <= 3 && t.length > 200) {
+      t = t
+        .replace(/(\p{Extended_Pictographic}️?)/gu, '\n$1')
+        .replace(/\s\*\s+/g, '\n* ');
+    }
 
     // Build a section map by scanning line by line
     const sections = {};
@@ -1248,7 +1255,7 @@ function updateCharCount(idx, field, max) {
       'description', 'board name', 'board ideas', 'pinterest board name', 'pinterest board',
       'seo board name', 'alt text', 'pinterest alt text', 'keywords', 'supporting keywords',
       'hashtags', 'pin text overlay', 'canva pin design', 'ai lifestyle mockup prompt',
-      'extra pin variations',
+      'extra pin variations', 'primary keyword', 'suggested pinterest hashtags',
     ].sort((a, b) => b.length - a.length);
     const HEADER_REGEXES = HEADER_LIST.map(name =>
       [name, new RegExp('^' + name.replace(/ /g, '\\s+') + '\\b\\s*:?\\s*', 'i')]);
@@ -1267,12 +1274,26 @@ function updateCharCount(idx, field, max) {
         continue;
       }
 
-      // **Bold label:** value  OR  **Bold label** (standalone heading, no colon)
+      // **Bold label:** value  OR  **Bold label** (standalone)
       const boldLabel = line.match(/^\*{1,2}([^*\n]{2,150}?)\*{1,2}:?\s*(.*)/);
       if (boldLabel) {
-        const key = boldLabel[1].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-        currentKey = key;
-        sections[key] = boldLabel[2] ? [boldLabel[2].replace(/\*\*/g, '').trim()] : [];
+        const inner = boldLabel[1].trim();
+        const val   = boldLabel[2] ? boldLabel[2].replace(/\*\*/g, '').trim() : '';
+        const key   = inner.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (val) {
+          // **Label:** value
+          currentKey = key;
+          sections[key] = [val];
+        } else if (HEADER_REGEXES.some(([, re]) => re.test(key))) {
+          // Standalone bold that names a known section → it's a header
+          currentKey = key;
+          if (!sections[currentKey]) sections[currentKey] = [];
+        } else if (currentKey) {
+          // Standalone bold that is a VALUE under the current heading
+          // (e.g. the actual title bolded below "# 📌 Pinterest Pin Title")
+          if (!sections[currentKey]) sections[currentKey] = [];
+          sections[currentKey].push(inner);
+        }
         continue;
       }
 
@@ -1358,9 +1379,13 @@ function updateCharCount(idx, field, max) {
       if (!hashtags.includes(tag)) hashtags = (tag + ' ' + hashtags).trim();
     }
 
-    // Amazon URL
+    // Amazon URL — canonicalize to /dp/ASIN with our affiliate tag so pastes
+    // carrying foreign tracking params (utm_source=chatgpt.com etc.) don't
+    // cost us the commission
     const amazonMatch = text.match(/https?:\/\/(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')\]]+/);
-    const amazon_url = amazonMatch ? amazonMatch[0].replace(/[)\].,]+$/, '').trim() : '';
+    let amazon_url = amazonMatch ? amazonMatch[0].replace(/[)\].,]+$/, '').trim() : '';
+    const asinMatch = amazon_url.match(/\/dp\/([A-Z0-9]{10})/);
+    if (asinMatch) amazon_url = 'https://www.amazon.com/dp/' + asinMatch[1] + '?tag=auragirlcreat-20';
 
     return { title, description, alt_text, board_name, hashtags: hashtags.trim(), amazon_url };
   }
