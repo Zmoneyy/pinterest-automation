@@ -25,6 +25,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE = os.path.join(ROOT, "templates", "bulk_upload.html")
 RUNON_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_runon_paste.txt")
 MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_full.txt")
+BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels.txt")
 
 
 def extract_parser_js() -> str:
@@ -46,6 +47,7 @@ def extract_parser_js() -> str:
 
 RUNON = open(RUNON_FIXTURE, encoding="utf-8").read().strip()
 MARKDOWN_FULL = open(MARKDOWN_FULL_FIXTURE, encoding="utf-8").read().strip()
+BOLD_LABELS = open(BOLD_LABELS_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -173,6 +175,28 @@ def main():
                 "board_name": {"equals": "Luxury Skincare Favorites"},
                 "hashtags": {"includes": ["#CharlotteTilbury", "#LuxurySkincare"]},
                 "amazon_url": {"equals": "https://www.amazon.com/dp/B0GFWLDP4W?tag=auragirlcreat-20"},
+            },
+        },
+        {
+            "name": "Standalone bold labels + hashtag block + scheme-less Amazon URL",
+            "text": BOLD_LABELS,
+            "expect": {
+                "title": {
+                    "equals": "TATCHA The Water Cream Moisturizer | Poreless Hydration for Glowing Skin"
+                },
+                "description": {
+                    "startsWith": "Upgrade your skincare routine with TATCHA",
+                    "includes": ["grab yours."],
+                    # Hashtag block and design/prompt text must not leak in
+                    "notIncludes": ["#TatchaWaterCream", "Visual Concept", "AI Image", "aspect ratio"],
+                },
+                "alt_text": {"startsWith": "Elegant Pinterest pin featuring TATCHA"},
+                "board_name": {
+                    "equals": "Luxury Skincare Essentials | Face Moisturizers & Glowing Skin"
+                },
+                "hashtags": {"includes": ["#TatchaWaterCream", "#LuxurySkincare"]},
+                # URL had no https:// and no affiliate tag — must be canonicalized
+                "amazon_url": {"equals": "https://www.amazon.com/dp/B0FNQD9666?tag=auragirlcreat-20"},
             },
         },
         {

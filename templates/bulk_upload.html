@@ -1252,13 +1252,22 @@ function updateCharCount(idx, field, max) {
     const HEADER_LIST = [
       'pin title', 'pinterest pin title', 'pinterest seo title', 'seo title', 'pinterest title',
       'optimized pin title', 'pin description', 'pinterest description', 'optimized pin description',
-      'description', 'board name', 'board ideas', 'pinterest board name', 'pinterest board',
-      'seo board name', 'alt text', 'pinterest alt text', 'keywords', 'supporting keywords',
-      'hashtags', 'pin text overlay', 'canva pin design', 'ai lifestyle mockup prompt',
-      'extra pin variations', 'primary keyword', 'suggested pinterest hashtags',
+      'pinterest pin description', 'description', 'board name', 'board ideas', 'pinterest board name',
+      'pinterest board', 'seo board name', 'alt text', 'pinterest alt text', 'keywords',
+      'supporting keywords', 'hashtags', 'pin text overlay', 'on pin text overlay', 'canva pin design',
+      'visual concept', 'ai image prompt', 'ai lifestyle mockup prompt', 'extra pin variations',
+      'primary keyword', 'suggested pinterest hashtags',
     ].sort((a, b) => b.length - a.length);
     const HEADER_REGEXES = HEADER_LIST.map(name =>
       [name, new RegExp('^' + name.replace(/ /g, '\\s+') + '\\b\\s*:?\\s*', 'i')]);
+    // Normalized header names for exact/substring matching of standalone labels.
+    const HEADER_NORMS = HEADER_LIST.map(n => n.replace(/\s+/g, ' ').trim());
+    // True if `key` names a known section (handles "pinterest pin description"
+    // matching "pin description", which the prefix-anchored regex misses).
+    function isHeaderLabel(key) {
+      const k = key.replace(/\s+/g, ' ').trim();
+      return HEADER_NORMS.some(h => h === k || k.includes(h) || h.includes(k));
+    }
 
     for (const rawLine of t.split('\n')) {
       const line = rawLine.trim();
@@ -1284,7 +1293,7 @@ function updateCharCount(idx, field, max) {
           // **Label:** value
           currentKey = key;
           sections[key] = [val];
-        } else if (HEADER_REGEXES.some(([, re]) => re.test(key))) {
+        } else if (isHeaderLabel(key)) {
           // Standalone bold that names a known section → it's a header
           currentKey = key;
           if (!sections[currentKey]) sections[currentKey] = [];
@@ -1328,18 +1337,22 @@ function updateCharCount(idx, field, max) {
       }
     }
 
-    // Lookup helper — tries multiple label variations
+    // Lookup helper — tries multiple label variations.
+    // Exact matches across ALL keys take priority over partial matches, so a
+    // broad key like "pinterest pin description" can't shadow an exact
+    // "pinterest description" section via substring matching.
     function getLines(...keys) {
-      for (const key of keys) {
-        const k = key.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
-        // Exact match first
-        if (sections[k] && sections[k].some(l => l.trim())) {
-          return sections[k].filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
-        }
-        // Partial match
+      const normKeys = keys.map(key => key.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim());
+      const clean = arr => arr.filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+      // Pass 1: exact key match, in priority order
+      for (const k of normKeys) {
+        if (sections[k] && sections[k].some(l => l.trim())) return clean(sections[k]);
+      }
+      // Pass 2: partial match, in priority order
+      for (const k of normKeys) {
         for (const sKey of Object.keys(sections)) {
           if ((sKey.includes(k) || k.includes(sKey)) && sections[sKey].some(l => l.trim())) {
-            return sections[sKey].filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+            return clean(sections[sKey]);
           }
         }
       }
@@ -1356,7 +1369,13 @@ function updateCharCount(idx, field, max) {
     const title       = getLine('pinterest seo title', 'seo title', 'pin title', 'optimized pin title', 'pinterest pin title');
     const alt_text    = getLine('alt text', 'pinterest alt text');
     const board_name  = getLine('seo board name', 'board name', 'board ideas', 'pinterest board name', 'pinterest board');
-    const description = get('pinterest description', 'pin description', 'optimized pin description', 'pinterest pin description');
+    // Description: join the section's lines, but drop any hashtag-only lines
+    // (some formats put the hashtag block right under the description) and the
+    // FTC disclosure (re-added on its own later).
+    const descLines = getLines('pinterest pin description', 'pinterest description', 'pin description', 'optimized pin description')
+      .filter(l => !/^#[A-Za-z]/.test(l.trim()))
+      .filter(l => !/amazon associate/i.test(l));
+    const description = descLines.join(' ').trim();
 
     // Hashtags: grab #tags already in text (must start with a letter — skips "Pin #2")
     const hashMatch = t.match(/#[A-Za-z]\w*/g);
@@ -1382,7 +1401,7 @@ function updateCharCount(idx, field, max) {
     // Amazon URL — canonicalize to /dp/ASIN with our affiliate tag so pastes
     // carrying foreign tracking params (utm_source=chatgpt.com etc.) don't
     // cost us the commission
-    const amazonMatch = text.match(/https?:\/\/(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')\]]+/);
+    const amazonMatch = text.match(/(?:https?:\/\/)?(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')\]]+/);
     let amazon_url = amazonMatch ? amazonMatch[0].replace(/[)\].,]+$/, '').trim() : '';
     const asinMatch = amazon_url.match(/\/dp\/([A-Z0-9]{10})/);
     if (asinMatch) amazon_url = 'https://www.amazon.com/dp/' + asinMatch[1] + '?tag=auragirlcreat-20';
