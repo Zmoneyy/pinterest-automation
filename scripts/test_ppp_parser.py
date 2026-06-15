@@ -26,6 +26,7 @@ TEMPLATE = os.path.join(ROOT, "templates", "bulk_upload.html")
 RUNON_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_runon_paste.txt")
 MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_full.txt")
 BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels.txt")
+RECOMMENDED_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_recommended_format.txt")
 
 
 def extract_parser_js() -> str:
@@ -48,6 +49,7 @@ def extract_parser_js() -> str:
 RUNON = open(RUNON_FIXTURE, encoding="utf-8").read().strip()
 MARKDOWN_FULL = open(MARKDOWN_FULL_FIXTURE, encoding="utf-8").read().strip()
 BOLD_LABELS = open(BOLD_LABELS_FIXTURE, encoding="utf-8").read().strip()
+RECOMMENDED = open(RECOMMENDED_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -175,6 +177,27 @@ def main():
                 "board_name": {"equals": "Luxury Skincare Favorites"},
                 "hashtags": {"includes": ["#CharlotteTilbury", "#LuxurySkincare"]},
                 "amazon_url": {"equals": "https://www.amazon.com/dp/B0GFWLDP4W?tag=auragirlcreat-20"},
+            },
+        },
+        {
+            # The exact format the in-app prompt now tells ChatGPT to produce.
+            # This MUST always parse — it is the format we recommend to the user.
+            "name": "Recommended in-app prompt format (**Label:** value)",
+            "text": RECOMMENDED,
+            "expect": {
+                "title": {
+                    "equals": "CeraVe Hydrating Facial Cleanser | Gentle Daily Face Wash for Dry Skin"
+                },
+                "description": {
+                    "startsWith": "Wash away dirt and makeup",
+                    "includes": ["grab yours."],
+                    # FTC disclosure stripped (app re-adds it); overlay text not leaked
+                    "notIncludes": ["Amazon Associate", "#CeraVe", "DERMATOLOGISTS"],
+                },
+                "alt_text": {"startsWith": "White bottle of CeraVe Hydrating Facial Cleanser"},
+                "board_name": {"equals": "Skincare Routine Essentials"},
+                "hashtags": {"includes": ["#CeraVe", "#FacialCleanser"]},
+                "amazon_url": {"equals": "https://www.amazon.com/dp/B01N1LL62W?tag=auragirlcreat-20"},
             },
         },
         {

@@ -725,7 +725,16 @@
           <!-- PPP prompt reminder -->
           <div style="background:#fff8f0;border:1px solid #f97316;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:12px;color:#92400e;line-height:1.5;">
             <strong>📌 Pin Perfect Pro prompt:</strong><br>
-            "Create a Pinterest pin for this product with a title and description written for buyer intent — someone ready to purchase right now. Keep the description under 300 characters and always end it with a CTA like 'Tap the link to grab yours'. Then add SEO keyword hashtags after (aim for 5-8 hashtags, total description + hashtags must stay under 500 characters). Make it SEO-optimized with keyword-rich, high-search-volume terms woven into the title, description, and the text overlay on the pin image itself. For the pin image, use the color palette of the product packaging to make it visually cohesive and appealing. Designed to go viral and drive maximum outbound clicks and sales. End with: <em>As an Amazon Associate, I may earn from qualifying purchases.</em>"
+            "Create a Pinterest pin for this product, written for buyer intent — someone ready to purchase right now. SEO-optimize it: weave keyword-rich, high-search-volume terms into the title, description, and the text overlay on the pin image. Keep the description under 300 characters ending with a CTA like 'Tap the link to grab yours', add 5–8 keyword hashtags, and keep description + hashtags under 500 characters total. For the pin image, use the product packaging's color palette for a cohesive, scroll-stopping look built to go viral and drive outbound clicks.<br><br>
+            Return your answer in <strong>EXACTLY this format</strong>, keeping each bold label and putting each field on its own line:<br>
+            <span style="display:block;background:#fff;border:1px dashed #f97316;border-radius:6px;padding:8px 10px;margin-top:6px;font-family:monospace;font-size:11px;color:#1f2937;white-space:pre-wrap;">**Pin Title:** your title
+**Pin Description:** your description ending with the CTA
+**Hashtags:** #tag1 #tag2 #tag3 #tag4 #tag5
+**Alt Text:** a vivid description of the pin image
+**Board Name:** the best-fit board
+**Amazon URL:** the product's amazon.com link
+**Image Overlay Text:** the headline + benefit text for the pin image</span>
+            End with: <em>As an Amazon Associate, I may earn from qualifying purchases.</em>"
           </div>
 
           <!-- PPP paste area — always visible -->
@@ -1369,13 +1378,15 @@ function updateCharCount(idx, field, max) {
     const title       = getLine('pinterest seo title', 'seo title', 'pin title', 'optimized pin title', 'pinterest pin title');
     const alt_text    = getLine('alt text', 'pinterest alt text');
     const board_name  = getLine('seo board name', 'board name', 'board ideas', 'pinterest board name', 'pinterest board');
-    // Description: join the section's lines, but drop any hashtag-only lines
-    // (some formats put the hashtag block right under the description) and the
-    // FTC disclosure (re-added on its own later).
-    const descLines = getLines('pinterest pin description', 'pinterest description', 'pin description', 'optimized pin description')
+    // Description: join the section's lines, drop any hashtag-only lines (some
+    // formats put the hashtag block right under the description), then strip the
+    // FTC disclosure phrase wherever it lands (parsePPP re-adds it consistently).
+    const description = getLines('pinterest pin description', 'pinterest description', 'pin description', 'optimized pin description')
       .filter(l => !/^#[A-Za-z]/.test(l.trim()))
-      .filter(l => !/amazon associate/i.test(l));
-    const description = descLines.join(' ').trim();
+      .join(' ')
+      .replace(/as an amazon associate[^.]*\.?/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
 
     // Hashtags: grab #tags already in text (must start with a letter — skips "Pin #2")
     const hashMatch = t.match(/#[A-Za-z]\w*/g);
