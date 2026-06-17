@@ -29,10 +29,10 @@ BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels
 RECOMMENDED_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_recommended_format.txt")
 
 
-def extract_parser_js() -> str:
-    """Pull the parsePPPText function out of the template by brace matching."""
+def extract_js_function(decl: str) -> str:
+    """Pull a named JS function out of the template by brace matching."""
     src = open(TEMPLATE, encoding="utf-8").read()
-    start = src.index("function parsePPPText(text)")
+    start = src.index(decl)
     depth = 0
     for i in range(start, len(src)):
         if src[i] == "{":
@@ -41,7 +41,16 @@ def extract_parser_js() -> str:
             depth -= 1
             if depth == 0:
                 return src[start : i + 1]
-    raise RuntimeError("Could not brace-match parsePPPText in bulk_upload.html")
+    raise RuntimeError(f"Could not brace-match {decl!r} in bulk_upload.html")
+
+
+def extract_parser_js() -> str:
+    """Both functions exercised by the suite: the parser and the description fitter."""
+    return (
+        extract_js_function("function fitDescriptionToLimit(desc, limit)")
+        + "\n"
+        + extract_js_function("function parsePPPText(text)")
+    )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
@@ -105,6 +114,7 @@ EXPECTED_TITLE = (
 
 HARNESS = """
 const CASES = __CASES__;
+const FIT_CASES = __FIT_CASES__;
 let failures = 0;
 
 function check(label, cond, got) {
@@ -123,6 +133,21 @@ for (const c of CASES) {
     for (const s of exp.notIncludes || []) check(field + " excludes '" + s + "'", !got.includes(s), got.slice(0, 80));
     if (exp.nonEmpty)                check(field + " non-empty", got.trim().length > 0, got);
   }
+}
+
+const FTC = "As an Amazon Associate, I may earn from qualifying purchases.";
+for (const c of FIT_CASES) {
+  console.log("\\n=== fit: " + c.name + " (input " + c.text.length + " chars) ===");
+  const out = fitDescriptionToLimit(c.text, 500);
+  console.log("  → " + out.length + " chars");
+  check("fits within 500", out.length <= 500, out.length);
+  check("ends with FTC disclosure", out.endsWith(FTC), out.slice(-30));
+  check("body is not empty", out.length > FTC.length + 5, out);
+  check("preserves the keyword opening", out.startsWith(c.text.slice(0, 18)), out.slice(0, 30));
+  if (c.mustInclude) for (const s of c.mustInclude) check("keeps '" + s + "'", out.includes(s), out);
+  // No mid-word truncation: the body before the disclosure ends cleanly
+  const body = out.slice(0, out.length - FTC.length).trim();
+  check("body ends cleanly (. ! ? or …)", /[.!?…]$/.test(body), body.slice(-25));
 }
 
 console.log(failures ? "\\n❌ " + failures + " check(s) FAILED" : "\\n✅ All PPP parser checks passed");
@@ -235,7 +260,44 @@ def main():
         },
     ]
 
-    js = extract_parser_js() + "\n" + HARNESS.replace("__CASES__", json.dumps(cases))
+    # Over-limit descriptions that must be smart-fitted to 500 chars on paste.
+    fit_cases = [
+        {
+            "name": "Multi-sentence, drops middle sentences, keeps CTA",
+            "text": (
+                "TATCHA The Water Cream is the lightweight gel moisturizer beauty editors keep "
+                "repurchasing for poreless-looking, glowing skin. Infused with Japanese botanicals, "
+                "it absorbs instantly to hydrate, smooth texture, and balance oily or combination "
+                "skin without any greasy residue. Wear it alone for a dewy finish or layer it under "
+                "makeup as the perfect primer for all-day radiance. Loved for visibly softer, "
+                "plumper, more luminous skin after just one use. This luxury Japanese skincare staple "
+                "belongs in every glow-focused routine. Tap the link to grab yours before it sells out."
+            ),
+            "mustInclude": ["TATCHA The Water Cream", "grab yours"],
+        },
+        {
+            "name": "One giant run-on sentence, no CTA, trims at word boundary",
+            "text": (
+                "The CeraVe Hydrating Facial Cleanser is a gentle non-foaming face wash formulated "
+                "with three essential ceramides and hyaluronic acid that cleanses and removes makeup "
+                "while helping restore the protective skin barrier and locking in lasting moisture "
+                "for normal to dry skin without stripping or leaving any tight uncomfortable feeling "
+                "behind which is exactly why dermatologists recommend it for sensitive skin types "
+                "every single day morning and night"
+            ),
+        },
+        {
+            "name": "Already short — left intact",
+            "text": "Short and sweet keyword-rich description. Tap the link to grab yours.",
+            "mustInclude": ["Short and sweet", "grab yours"],
+        },
+    ]
+
+    js = (
+        extract_parser_js()
+        + "\n"
+        + HARNESS.replace("__CASES__", json.dumps(cases)).replace("__FIT_CASES__", json.dumps(fit_cases))
+    )
     with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as f:
         f.write(js)
         path = f.name
