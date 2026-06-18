@@ -1445,7 +1445,7 @@ function updateCharCount(idx, field, max) {
       return lines.length ? lines[0].split(/\s{2,}|\n/)[0].trim() : '';
     }
 
-    const title       = getLine('pinterest seo title', 'seo title', 'pin title', 'optimized pin title', 'pinterest pin title');
+    const title       = getLine('pinterest seo title', 'seo title', 'pinterest pin title', 'pin title', 'optimized pin title', 'pinterest title');
     const alt_text    = getLine('alt text', 'pinterest alt text');
     const board_name  = getLine('seo board name', 'board name', 'board ideas', 'pinterest board name', 'pinterest board');
     // Description: join the section's lines, drop any hashtag-only lines (some
@@ -1458,25 +1458,27 @@ function updateCharCount(idx, field, max) {
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    // Hashtags: grab #tags already in text (must start with a letter — skips "Pin #2")
+    // Hashtags: grab #tags already in text (must start with a letter — skips "Pin #2").
+    // If the user supplied explicit hashtags, use them EXACTLY — verbatim, in
+    // order, with nothing added or removed. We only synthesize hashtags from
+    // keywords as a fallback when none were provided.
     const hashMatch = t.match(/#[A-Za-z]\w*/g);
-    let hashtags = hashMatch ? [...new Set(hashMatch)].slice(0, 20).join(' ') : '';
-
-    // Fall back to Supporting Keywords if no hashtags
-    if (!hashtags) {
+    let hashtags;
+    if (hashMatch && hashMatch.length) {
+      hashtags = [...new Set(hashMatch)].slice(0, 20).join(' ');
+    } else {
       const kwLines = getLines('supporting keywords', 'supporting seo keywords', 'primary pinterest keywords', 'keywords');
       hashtags = kwLines.flatMap(l => l.split(','))
         .map(k => k.trim())
         .filter(k => k && !k.startsWith('#') && k.length < 35 && /^[a-z]/i.test(k) && !/[.)]$/.test(k))
         .slice(0, 8)
         .map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
-    }
-
-    // Prepend primary keyword as hashtag
-    const primaryKw = getLine('primary keyword', 'primary pinterest keyword');
-    if (primaryKw) {
-      const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
-      if (!hashtags.includes(tag)) hashtags = (tag + ' ' + hashtags).trim();
+      // Only when synthesizing from keywords, lead with the primary keyword.
+      const primaryKw = getLine('primary keyword', 'primary pinterest keyword');
+      if (primaryKw) {
+        const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
+        if (!hashtags.includes(tag)) hashtags = (tag + ' ' + hashtags).trim();
+      }
     }
 
     // Amazon URL — canonicalize to /dp/ASIN with our affiliate tag so pastes

@@ -27,6 +27,7 @@ RUNON_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_runon_paste.txt")
 MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_full.txt")
 BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels.txt")
 RECOMMENDED_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_recommended_format.txt")
+EMOJI_H1_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_emoji_h1_parenthetical.txt")
 
 
 def extract_js_function(decl: str) -> str:
@@ -59,6 +60,7 @@ RUNON = open(RUNON_FIXTURE, encoding="utf-8").read().strip()
 MARKDOWN_FULL = open(MARKDOWN_FULL_FIXTURE, encoding="utf-8").read().strip()
 BOLD_LABELS = open(BOLD_LABELS_FIXTURE, encoding="utf-8").read().strip()
 RECOMMENDED = open(RECOMMENDED_FIXTURE, encoding="utf-8").read().strip()
+EMOJI_H1 = open(EMOJI_H1_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -251,6 +253,29 @@ def main():
                 "hashtags": {"includes": ["#TatchaWaterCream", "#LuxurySkincare"]},
                 # URL had no https:// and no affiliate tag — must be canonicalized
                 "amazon_url": {"equals": "https://www.amazon.com/dp/B0FNQD9666?tag=auragirlcreat-20"},
+            },
+        },
+        {
+            # '# 📍Pinterest Title (SEO + Buyer Intent)' — emoji H1 headers with
+            # parenthetical qualifiers, value as a standalone bold on the next
+            # line, plus an explicit hashtag block that must be used verbatim.
+            "name": "Emoji H1 headers with parenthetical qualifiers + verbatim hashtags",
+            "text": EMOJI_H1,
+            "expect": {
+                "title": {
+                    "equals": "ILIA Balmy Tint Lip Balm Review: The Clean Girl Lip Color You'll Wear Every Day"
+                },
+                "description": {
+                    "startsWith": "If you're looking for the perfect everyday lip product",
+                    # A/B titles, on-pin text and AI prompt must not leak in
+                    "notIncludes": ["A/B", "Main Headline", "aspect ratio", "Balmy Tint Lip Balm Review"],
+                },
+                "alt_text": {"startsWith": "ILIA Balmy Tint hydrating lip balm"},
+                "board_name": {"equals": "Clean Girl Makeup Must Haves"},
+                "hashtags": {
+                    # Exactly the user's tags — no synthesized "#iliabalmytintlipbalm" prepended
+                    "equals": "#ILIABeauty #TintedLipBalm #CleanGirlMakeup #EverydayMakeup #LipProducts #CleanBeauty #NaturalMakeup #BeautyFavorites #HydratingLipBalm #SephoraFinds",
+                },
             },
         },
         {
