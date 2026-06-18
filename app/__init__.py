@@ -54,6 +54,11 @@ def create_app(config_object=None):
         app_env = os.environ.get("APP_ENV", "prod")
         app.jinja_env.globals["APP_ENV"] = app_env
 
+        # Build stamp (set at container start ≈ deploy time) so the UI can show
+        # which version is loaded — makes "did my browser refresh?" verifiable.
+        from datetime import datetime, timezone
+        app.jinja_env.globals["BUILD_TIME"] = datetime.now(timezone.utc).strftime("%b %d, %H:%M UTC")
+
         # Markdown → HTML filter for AI Strategy Brief
         import re as _re
         from markupsafe import Markup
@@ -96,6 +101,18 @@ def create_app(config_object=None):
             return Markup(t)
 
         app.jinja_env.filters["md"] = md_to_html
+
+        # Never let the browser serve a stale HTML page. The pin parser lives in
+        # inline JS inside these pages, so a cached page = running old parser code
+        # even after a fresh deploy. no-store forces a fresh fetch every time.
+        @app.after_request
+        def _no_cache_html(resp):
+            ctype = resp.headers.get("Content-Type", "")
+            if ctype.startswith("text/html"):
+                resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+                resp.headers["Pragma"] = "no-cache"
+                resp.headers["Expires"] = "0"
+            return resp
 
         # Start the scheduler
         _start_scheduler(app)
