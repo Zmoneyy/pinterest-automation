@@ -28,6 +28,7 @@ MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_
 BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels.txt")
 RECOMMENDED_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_recommended_format.txt")
 EMOJI_H1_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_emoji_h1_parenthetical.txt")
+SEO_INFIX_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_seo_infix_headers.txt")
 
 
 def extract_js_function(decl: str) -> str:
@@ -61,6 +62,7 @@ MARKDOWN_FULL = open(MARKDOWN_FULL_FIXTURE, encoding="utf-8").read().strip()
 BOLD_LABELS = open(BOLD_LABELS_FIXTURE, encoding="utf-8").read().strip()
 RECOMMENDED = open(RECOMMENDED_FIXTURE, encoding="utf-8").read().strip()
 EMOJI_H1 = open(EMOJI_H1_FIXTURE, encoding="utf-8").read().strip()
+SEO_INFIX = open(SEO_INFIX_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -275,6 +277,28 @@ def main():
                 "hashtags": {
                     # Exactly the user's tags — no synthesized "#iliabalmytintlipbalm" prepended
                     "equals": "#ILIABeauty #TintedLipBalm #CleanGirlMakeup #EverydayMakeup #LipProducts #CleanBeauty #NaturalMakeup #BeautyFavorites #HydratingLipBalm #SephoraFinds",
+                },
+            },
+        },
+        {
+            # '# ✨ Pinterest SEO Description' — an "SEO" word inserted in the
+            # middle of the header broke substring matching; token-subset lookup
+            # fixes it. Also has a ([site][1]) citation that must be stripped.
+            "name": "SEO-infix headers (Pinterest SEO Description / Title)",
+            "text": SEO_INFIX,
+            "expect": {
+                "title": {
+                    "equals": "Best Volumizing Mascara Duo for Long, Dramatic Lashes That Last All Day"
+                },
+                "description": {
+                    "startsWith": "Searching for the best volumizing mascara?",
+                    "includes": ["transformation for yourself."],
+                    "notIncludes": ["globalhealingweb", "][1]", "Alt Text", "Board Name"],
+                },
+                "alt_text": {"startsWith": "Luxury beauty flat lay featuring two black"},
+                "board_name": {"equals": "Viral Makeup Finds | Best Mascaras & Beauty Must Haves"},
+                "hashtags": {
+                    "equals": "#BenefitCosmetics #BADgalBANG #VolumizingMascara #DramaticLashes #MakeupFinds"
                 },
             },
         },

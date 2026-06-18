@@ -1427,10 +1427,24 @@ function updateCharCount(idx, field, max) {
       for (const k of normKeys) {
         if (sections[k] && sections[k].some(l => l.trim())) return clean(sections[k]);
       }
-      // Pass 2: partial match, in priority order
+      // Pass 2: substring match either direction, in priority order
       for (const k of normKeys) {
         for (const sKey of Object.keys(sections)) {
           if ((sKey.includes(k) || k.includes(sKey)) && sections[sKey].some(l => l.trim())) {
+            return clean(sections[sKey]);
+          }
+        }
+      }
+      // Pass 3: token-subset — every word of the lookup key appears (in any
+      // order) in the section key. Handles inserted middle words, e.g.
+      // "pinterest description" matching "pinterest seo description", or
+      // "pinterest title" matching "pinterest title seo buyer intent".
+      for (const k of normKeys) {
+        const kw = k.split(' ').filter(Boolean);
+        if (!kw.length) continue;
+        for (const sKey of Object.keys(sections)) {
+          const sw = new Set(sKey.split(' '));
+          if (kw.every(w => sw.has(w)) && sections[sKey].some(l => l.trim())) {
             return clean(sections[sKey]);
           }
         }
