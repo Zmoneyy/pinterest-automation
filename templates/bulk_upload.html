@@ -1305,8 +1305,17 @@ function updateCharCount(idx, field, max) {
   }
 
   function parsePPPText(text) {
-    // Normalize: strip citation refs like ([Amazon][1]), then markdown links
-    let t = text
+    // Normalize whitespace FIRST. ChatGPT pastes are full of invisible
+    // characters — non-breaking spaces ( ), narrow/zero-width spaces, BOM —
+    // especially around emoji in headers. If left in, the header normalizer
+    // (/[^a-z0-9 ]/g) deletes them and glues words together
+    // ("pinterest seo description" -> "pinterestseodescription"), so no field
+    // matches. Strip zero-width chars and collapse every horizontal whitespace
+    // (incl. nbsp) to a plain space, preserving newlines.
+    let t = (text || '')
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')    // zero-width chars / BOM
+      .replace(/[^\S\n]+/g, ' ')                      // nbsp, tabs, narrow spaces -> ' '
+      // strip citation refs like ([Amazon][1]), then markdown links
       .replace(/\(\[[^\]]*\]\[[^\]]*\]\)/g, '')
       .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
       .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')

@@ -166,7 +166,34 @@ process.exit(failures ? 1 : 0);
 
 
 def main():
+    # ChatGPT pastes often carry invisible characters in headers: non-breaking
+    # spaces ( ), zero-width spaces (​), BOM (﻿). These must be
+    # normalized or the header matcher glues words together and matches nothing.
+    NBSP, ZWSP = " ", "​"
+    invisible_ws = (
+        f"# \U0001f4cc Pinterest{NBSP}SEO{NBSP}Title{NBSP}(84 Characters)\n\n"
+        f"**Best Volumizing Mascara Duo for Long, Dramatic Lashes**\n\n---\n\n"
+        f"# ✨{NBSP}Pinterest{ZWSP}{NBSP}SEO Description\n\n"
+        f"Searching for the best volumizing mascara? Discover why beauty lovers keep "
+        f"repurchasing this fan favorite. ([globalhealingweb.com][1])\n\n---\n\n"
+        f"# \U0001f4c2 SEO Board Name\n\n**Viral Makeup Finds**\n"
+    )
+
     cases = [
+        {
+            # Headers poisoned with non-breaking + zero-width spaces (real
+            # ChatGPT behavior). Must still parse despite the invisible chars.
+            "name": "Invisible whitespace in headers (nbsp / zero-width)",
+            "text": invisible_ws,
+            "expect": {
+                "title": {"equals": "Best Volumizing Mascara Duo for Long, Dramatic Lashes"},
+                "description": {
+                    "startsWith": "Searching for the best volumizing mascara?",
+                    "notIncludes": ["globalhealingweb", "][1]"],
+                },
+                "board_name": {"equals": "Viral Makeup Finds"},
+            },
+        },
         {
             "name": "Run-on single-line paste (line breaks lost)",
             "text": RUNON,
