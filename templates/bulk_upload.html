@@ -1167,7 +1167,9 @@ function updateCharCount(idx, field, max) {
       updateCharCount(idx, 'title', 100);
     }
     if (parsed.description) {
-      document.getElementById(`desc-${idx}`).value = fitDescriptionToLimit(parsed.description, 500);
+      // Hashtags live INSIDE the Pinterest description (no separate field on
+      // Pinterest). Append them verbatim at the end, trimming only the body.
+      document.getElementById(`desc-${idx}`).value = fitDescriptionToLimit(parsed.description, parsed.hashtags, 500);
       updateCharCount(idx, 'desc', 500);
     }
     if (parsed.hashtags) {
@@ -1229,23 +1231,34 @@ function updateCharCount(idx, field, max) {
     }
   }
 
-  // Trim a description to fit Pinterest's limit WITHOUT cutting mid-sentence.
-  // Keeps the keyword-rich opening and the click-driving CTA, drops less
-  // essential middle sentences, and always reserves room for the FTC disclosure
-  // so it can never be chopped. Returns a string guaranteed <= limit.
-  function fitDescriptionToLimit(desc, limit) {
+  // Build the final Pinterest description, fitting it within `limit` chars.
+  // Layout:  <description body>  +  FTC disclosure  +  hashtags (verbatim)
+  // Hashtags and the disclosure are appended EXACTLY as given and are never
+  // trimmed or modified — only the body is shortened (sentence-aware: keeps the
+  // keyword-rich opening and the click-driving CTA, drops middle sentences) so
+  // the whole thing stays under the limit without losing the essence.
+  function fitDescriptionToLimit(desc, hashtags, limit) {
+    // Back-compat: allow fitDescriptionToLimit(desc, limit) with no hashtags.
+    if (typeof hashtags === 'number') { limit = hashtags; hashtags = ''; }
     limit = limit || 500;
     const FTC = 'As an Amazon Associate, I may earn from qualifying purchases.';
-    // Drop any disclosure already in the text — we re-add it at the end.
+    hashtags = (hashtags || '').trim();
+
+    // Clean the body: drop any disclosure already in it, and strip stray
+    // hashtags (they are appended verbatim below and must not be duplicated).
     let body = (desc || '')
       .replace(/\s*as an amazon associate[^.]*\.?\s*/i, ' ')
+      .replace(/#[A-Za-z][\w]*/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
 
-    const withFTC = b => (b ? b + '\n' + FTC : FTC);
-    const budget  = limit - (FTC.length + 1);   // +1 for the separating newline
+    // Fixed tail that always rides along, verbatim. Body gets whatever's left.
+    const tail   = '\n\n' + FTC + (hashtags ? '\n\n' + hashtags : '');
+    const budget = limit - tail.length;
+    const assemble = b => (b ? b + tail : tail.trim());
 
-    if (body.length <= budget) return withFTC(body);
+    if (budget <= 0) return assemble('');           // hashtags+FTC already fill it
+    if (body.length <= budget) return assemble(body);
 
     // Split into sentences, keeping their end punctuation.
     const sentences = (body.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [body])
@@ -1273,20 +1286,20 @@ function updateCharCount(idx, field, max) {
     if (cta) kept.push(cta);
     let fitted = kept.join(' ').trim();
 
-    // If even the first sentence alone exceeds the budget, nothing was kept —
-    // fall back to the full body so the safety net below can trim it instead of
-    // returning an empty description.
+    // If even the first sentence alone exceeds the budget, fall back to the full
+    // body so the safety net below can trim it instead of returning nothing.
     if (!fitted) fitted = body;
 
     // Safety net: a single giant sentence can still overflow — trim at a word
     // boundary and finish with an ellipsis.
     if (fitted.length > budget) {
-      fitted = fitted.slice(0, budget - 1);
+      fitted = fitted.slice(0, Math.max(0, budget - 1));
       const sp = fitted.lastIndexOf(' ');
       if (sp > 40) fitted = fitted.slice(0, sp);
-      fitted = fitted.replace(/[\s,;:.!?]+$/, '') + '…';
+      fitted = fitted.replace(/[\s,;:.!?]+$/, '');
+      if (fitted) fitted += '…';
     }
-    return withFTC(fitted);
+    return assemble(fitted);
   }
 
   function parsePPPText(text) {

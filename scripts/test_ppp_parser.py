@@ -47,7 +47,7 @@ def extract_js_function(decl: str) -> str:
 def extract_parser_js() -> str:
     """Both functions exercised by the suite: the parser and the description fitter."""
     return (
-        extract_js_function("function fitDescriptionToLimit(desc, limit)")
+        extract_js_function("function fitDescriptionToLimit(desc, hashtags, limit)")
         + "\n"
         + extract_js_function("function parsePPPText(text)")
     )
@@ -137,17 +137,23 @@ for (const c of CASES) {
 
 const FTC = "As an Amazon Associate, I may earn from qualifying purchases.";
 for (const c of FIT_CASES) {
-  console.log("\\n=== fit: " + c.name + " (input " + c.text.length + " chars) ===");
-  const out = fitDescriptionToLimit(c.text, 500);
+  const tags = c.hashtags || "";
+  console.log("\\n=== fit: " + c.name + " (desc " + c.text.length + ", tags " + tags.length + ") ===");
+  const out = fitDescriptionToLimit(c.text, tags, 500);
   console.log("  → " + out.length + " chars");
   check("fits within 500", out.length <= 500, out.length);
-  check("ends with FTC disclosure", out.endsWith(FTC), out.slice(-30));
-  check("body is not empty", out.length > FTC.length + 5, out);
+  check("includes FTC disclosure", out.includes(FTC), out.slice(-40));
+  check("body is not empty", out.length > FTC.length + tags.length + 5, out);
   check("preserves the keyword opening", out.startsWith(c.text.slice(0, 18)), out.slice(0, 30));
   if (c.mustInclude) for (const s of c.mustInclude) check("keeps '" + s + "'", out.includes(s), out);
-  // No mid-word truncation: the body before the disclosure ends cleanly
-  const body = out.slice(0, out.length - FTC.length).trim();
-  check("body ends cleanly (. ! ? or …)", /[.!?…]$/.test(body), body.slice(-25));
+  if (tags) {
+    check("hashtags present VERBATIM (unmodified)", out.includes(tags), out.slice(-tags.length - 5));
+    check("hashtags at the very end", out.endsWith(tags), out.slice(-30));
+  } else {
+    check("ends with FTC disclosure", out.endsWith(FTC), out.slice(-30));
+    const body = out.slice(0, out.length - FTC.length).trim();
+    check("body ends cleanly (. ! ? or …)", /[.!?…]$/.test(body), body.slice(-25));
+  }
 }
 
 console.log(failures ? "\\n❌ " + failures + " check(s) FAILED" : "\\n✅ All PPP parser checks passed");
@@ -290,6 +296,31 @@ def main():
             "name": "Already short — left intact",
             "text": "Short and sweet keyword-rich description. Tap the link to grab yours.",
             "mustInclude": ["Short and sweet", "grab yours"],
+        },
+        {
+            # Over-limit description PLUS hashtags that must be appended verbatim.
+            # Only the body may shrink — hashtags and disclosure are never touched.
+            "name": "Long description + verbatim hashtags appended at end",
+            "text": (
+                "TATCHA The Water Cream is the lightweight gel moisturizer beauty editors keep "
+                "repurchasing for poreless-looking, glowing skin. Infused with Japanese botanicals, "
+                "it absorbs instantly to hydrate, smooth texture, and balance oily or combination "
+                "skin without greasy residue. Wear it alone for a dewy finish or layer it under "
+                "makeup as the perfect primer for all-day radiance. Loved for visibly softer, "
+                "plumper skin after one use. Tap the link to grab yours."
+            ),
+            "hashtags": (
+                "#TatchaWaterCream #FaceMoisturizer #LuxurySkincare #HydratingMoisturizer "
+                "#GlowingSkin #PorelessSkin #SkincareMustHaves #BeautyFavorites"
+            ),
+            "mustInclude": ["TATCHA The Water Cream", "grab yours"],
+        },
+        {
+            # Hashtags that contain a substring of the body must still be exact.
+            "name": "Short description + hashtags (no trimming needed)",
+            "text": "Glow-boosting vitamin C serum for brighter skin. Tap the link to grab yours.",
+            "hashtags": "#VitaminCSerum #GlowSkin #BeautyFinds",
+            "mustInclude": ["Glow-boosting vitamin C serum"],
         },
     ]
 

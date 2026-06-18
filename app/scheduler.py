@@ -391,7 +391,12 @@ def _post_pin_pinterest(pin, db, now):
         hashtag_str = raw_hashtags.strip()
 
     full_desc = pin.description or ""
-    if hashtag_str and hashtag_str not in full_desc:
+    # Bulk-upload pins already embed the hashtags inside the description; only
+    # auto-generated pins need them appended. Detect "already present" by the
+    # first hashtag so spacing/format differences don't cause a double-up.
+    first_tag = hashtag_str.split()[0] if hashtag_str else ""
+    tags_already_in_desc = bool(first_tag) and first_tag in full_desc
+    if hashtag_str and not tags_already_in_desc:
         full_desc = f"{full_desc}\n{hashtag_str}"
 
     # CTA
