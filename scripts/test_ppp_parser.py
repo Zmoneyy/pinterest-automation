@@ -22,7 +22,9 @@ import sys
 import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-TEMPLATE = os.path.join(ROOT, "templates", "bulk_upload.html")
+# The parser now lives in a shared partial included by both Bulk Schedule and
+# the Drafts editor. Test the single source of truth.
+TEMPLATE = os.path.join(ROOT, "templates", "_ppp_parser.html")
 RUNON_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_runon_paste.txt")
 MARKDOWN_FULL_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_markdown_full.txt")
 BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels.txt")

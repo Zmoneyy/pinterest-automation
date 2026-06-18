@@ -1,0 +1,310 @@
+{# Shared Pin Perfect Pro parser — included by Bulk Schedule and the Drafts editor.
+   Single source of truth: edit the parser HERE, both pages stay in sync.
+   Tested by scripts/test_ppp_parser.py (9 paste formats + fit cases). #}
+<script>
+  // ── Pin Perfect Pro parser (shared) ──────────────────────────────────────
+  function fitDescriptionToLimit(desc, hashtags, limit) {
+    // Back-compat: allow fitDescriptionToLimit(desc, limit) with no hashtags.
+    if (typeof hashtags === 'number') { limit = hashtags; hashtags = ''; }
+    limit = limit || 500;
+    const FTC = 'As an Amazon Associate, I may earn from qualifying purchases.';
+    hashtags = (hashtags || '').trim();
+
+    // Clean the body: drop any disclosure already in it, and strip stray
+    // hashtags (they are appended verbatim below and must not be duplicated).
+    let body = (desc || '')
+      .replace(/\s*as an amazon associate[^.]*\.?\s*/i, ' ')
+      .replace(/#[A-Za-z][\w]*/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // Fixed tail that always rides along, verbatim. Body gets whatever's left.
+    const tail   = '\n\n' + FTC + (hashtags ? '\n\n' + hashtags : '');
+    const budget = limit - tail.length;
+    const assemble = b => (b ? b + tail : tail.trim());
+
+    if (budget <= 0) return assemble('');           // hashtags+FTC already fill it
+    if (body.length <= budget) return assemble(body);
+
+    // Split into sentences, keeping their end punctuation.
+    const sentences = (body.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [body])
+      .map(s => s.trim()).filter(Boolean);
+
+    // Find the CTA sentence — prefer the last one that reads like a call to action.
+    const ctaRe = /\b(tap|click|shop|grab|save|snag|see|visit|order|get)\b/i;
+    let ctaIdx = -1;
+    for (let i = sentences.length - 1; i >= 0; i--) {
+      if (ctaRe.test(sentences[i])) { ctaIdx = i; break; }
+    }
+    const cta = ctaIdx >= 0 ? sentences[ctaIdx] : '';
+    const ctaCost = cta ? cta.length + 1 : 0;
+
+    // Greedily keep the leading (keyword-rich) sentences, reserving room for the
+    // CTA which is always appended last.
+    const kept = [];
+    let used = 0;
+    for (let i = 0; i < sentences.length; i++) {
+      if (i === ctaIdx) continue;
+      const cost = sentences[i].length + (kept.length ? 1 : 0);
+      if (used + cost + ctaCost <= budget) { kept.push(sentences[i]); used += cost; }
+      else break;
+    }
+    if (cta) kept.push(cta);
+    let fitted = kept.join(' ').trim();
+
+    // If even the first sentence alone exceeds the budget, fall back to the full
+    // body so the safety net below can trim it instead of returning nothing.
+    if (!fitted) fitted = body;
+
+    // Safety net: a single giant sentence can still overflow — trim at a word
+    // boundary and finish with an ellipsis.
+    if (fitted.length > budget) {
+      fitted = fitted.slice(0, Math.max(0, budget - 1));
+      const sp = fitted.lastIndexOf(' ');
+      if (sp > 40) fitted = fitted.slice(0, sp);
+      fitted = fitted.replace(/[\s,;:.!?]+$/, '');
+      if (fitted) fitted += '…';
+    }
+    return assemble(fitted);
+  }
+
+  function parsePPPText(text) {
+    // Normalize whitespace FIRST. ChatGPT pastes are full of invisible
+    // characters — non-breaking spaces ( ), narrow/zero-width spaces, BOM —
+    // especially around emoji in headers. If left in, the header normalizer
+    // (/[^a-z0-9 ]/g) deletes them and glues words together
+    // ("pinterest seo description" -> "pinterestseodescription"), so no field
+    // matches. Strip zero-width chars and collapse every horizontal whitespace
+    // (incl. nbsp) to a plain space, preserving newlines.
+    let t = (text || '')
+      .replace(/[\u200B-\u200D\u2060\uFEFF]/g, '')    // zero-width chars / BOM
+      .replace(/[^\S\n]+/g, ' ')                      // nbsp, tabs, narrow spaces -> ' '
+      // strip citation refs like ([Amazon][1]), then markdown links
+      .replace(/\(\[[^\]]*\]\[[^\]]*\]\)/g, '')
+      .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[⸻]+/g, '\n');
+
+    // Run-on pastes lose their line breaks when copied (e.g. from ChatGPT).
+    // Only then re-insert breaks before emoji section markers and bullets —
+    // doing this on well-formed markdown would split "# 📌 Heading" lines apart.
+    // Count lines of the ORIGINAL text (⸻ replacement above adds line breaks).
+    const nonEmptyLines = text.split('\n').filter(l => l.trim()).length;
+    if (nonEmptyLines <= 3 && t.length > 200) {
+      t = t
+        .replace(/(\p{Extended_Pictographic}️?)/gu, '\n$1')
+        .replace(/\s\*\s+/g, '\n* ');
+    }
+
+    // Build a section map by scanning line by line
+    const sections = {};
+    let currentKey = null;
+
+    // Headers that may appear with no colon, often emoji-prefixed, and possibly
+    // with their content on the same line ("📍Pinterest SEO Title Charlotte ...").
+    // Longest names first so "pinterest seo title" wins over "seo title".
+    const HEADER_LIST = [
+      'pin title', 'pinterest pin title', 'pinterest seo title', 'seo title', 'pinterest title',
+      'optimized pin title', 'pin description', 'pinterest description', 'optimized pin description',
+      'pinterest pin description', 'description', 'board name', 'board ideas', 'pinterest board name',
+      'pinterest board', 'seo board name', 'alt text', 'pinterest alt text', 'keywords',
+      'supporting keywords', 'hashtags', 'pin text overlay', 'on pin text overlay', 'canva pin design',
+      'visual concept', 'ai image prompt', 'ai lifestyle mockup prompt', 'extra pin variations',
+      'primary keyword', 'suggested pinterest hashtags',
+    ].sort((a, b) => b.length - a.length);
+    const HEADER_REGEXES = HEADER_LIST.map(name =>
+      [name, new RegExp('^' + name.replace(/ /g, '\\s+') + '\\b\\s*:?\\s*', 'i')]);
+    // Normalized header names for exact/substring matching of standalone labels.
+    const HEADER_NORMS = HEADER_LIST.map(n => n.replace(/\s+/g, ' ').trim());
+    // True if `key` names a known section (handles "pinterest pin description"
+    // matching "pin description", which the prefix-anchored regex misses).
+    function isHeaderLabel(key) {
+      const k = key.replace(/\s+/g, ' ').trim();
+      return HEADER_NORMS.some(h => h === k || k.includes(h) || h.includes(k));
+    }
+
+    for (const rawLine of t.split('\n')) {
+      const line = rawLine.trim();
+      // Same line with leading emoji / decorative symbols removed (📌 ✨ 📝 etc.)
+      const stripped = line.replace(/^[^\w#*]+/, '').trim();
+      if (!stripped) continue;  // blank lines and ⸻ separators
+
+      // # Heading line
+      const headingMatch = line.match(/^#{1,3}\s*(.+)/);
+      if (headingMatch) {
+        currentKey = headingMatch[1].replace(/\*\*/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (!sections[currentKey]) sections[currentKey] = [];
+        continue;
+      }
+
+      // **Bold label:** value  OR  **Bold label** (standalone)
+      const boldLabel = line.match(/^\*{1,2}([^*\n]{2,150}?)\*{1,2}:?\s*(.*)/);
+      if (boldLabel) {
+        const inner = boldLabel[1].trim();
+        const val   = boldLabel[2] ? boldLabel[2].replace(/\*\*/g, '').trim() : '';
+        const key   = inner.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        if (val) {
+          // **Label:** value
+          currentKey = key;
+          sections[key] = [val];
+        } else if (isHeaderLabel(key)) {
+          // Standalone bold that names a known section → it's a header
+          currentKey = key;
+          if (!sections[currentKey]) sections[currentKey] = [];
+        } else if (currentKey) {
+          // Standalone bold that is a VALUE under the current heading
+          // (e.g. the actual title bolded below "# 📌 Pinterest Pin Title")
+          if (!sections[currentKey]) sections[currentKey] = [];
+          sections[currentKey].push(inner);
+        }
+        continue;
+      }
+
+      // Known header at the start of the line — with or without a colon, and
+      // possibly followed by its content on the same line (run-on pastes)
+      let headerHit = null;
+      for (const [name, re] of HEADER_REGEXES) {
+        const m = stripped.match(re);
+        if (m) { headerHit = [name, stripped.slice(m[0].length).trim()]; break; }
+      }
+      if (headerHit) {
+        currentKey = headerHit[0];
+        if (!sections[currentKey]) sections[currentKey] = [];
+        if (headerHit[1]) sections[currentKey].push(headerHit[1].replace(/\*\*/g, ''));
+        continue;
+      }
+
+      // Label: value — also matches emoji-prefixed labels ("✨ Keywords:") and
+      // labels with the value on following lines ("Keywords:" alone on a line)
+      const labelMatch = stripped.match(/^([A-Za-z][A-Za-z &\/()]{1,40}?):(?:\s+(.*)|\s*$)/);
+      if (labelMatch) {
+        const key = labelMatch[1].toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+        currentKey = key;
+        sections[key] = labelMatch[2] ? [labelMatch[2].replace(/\*\*/g, '').trim()] : [];
+        continue;
+      }
+
+      // Content line — strip remaining ** and leading bullets
+      if (currentKey) {
+        if (!sections[currentKey]) sections[currentKey] = [];
+        sections[currentKey].push(stripped.replace(/\*\*/g, ''));
+      }
+    }
+
+    // Lookup helper — tries multiple label variations.
+    // Exact matches across ALL keys take priority over partial matches, so a
+    // broad key like "pinterest pin description" can't shadow an exact
+    // "pinterest description" section via substring matching.
+    function getLines(...keys) {
+      const normKeys = keys.map(key => key.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim());
+      const clean = arr => arr.filter(l => l.trim()).map(l => l.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+      // Pass 1: exact key match, in priority order
+      for (const k of normKeys) {
+        if (sections[k] && sections[k].some(l => l.trim())) return clean(sections[k]);
+      }
+      // Pass 2: substring match either direction, in priority order
+      for (const k of normKeys) {
+        for (const sKey of Object.keys(sections)) {
+          if ((sKey.includes(k) || k.includes(sKey)) && sections[sKey].some(l => l.trim())) {
+            return clean(sections[sKey]);
+          }
+        }
+      }
+      // Pass 3: token-subset — every word of the lookup key appears (in any
+      // order) in the section key. Handles inserted middle words, e.g.
+      // "pinterest description" matching "pinterest seo description", or
+      // "pinterest title" matching "pinterest title seo buyer intent".
+      for (const k of normKeys) {
+        const kw = k.split(' ').filter(Boolean);
+        if (!kw.length) continue;
+        for (const sKey of Object.keys(sections)) {
+          const sw = new Set(sKey.split(' '));
+          if (kw.every(w => sw.has(w)) && sections[sKey].some(l => l.trim())) {
+            return clean(sections[sKey]);
+          }
+        }
+      }
+      return [];
+    }
+
+    function get(...keys) { return getLines(...keys).join(' '); }
+
+    function getLine(...keys) {
+      const lines = getLines(...keys);
+      return lines.length ? lines[0].split(/\s{2,}|\n/)[0].trim() : '';
+    }
+
+    const title       = getLine('pinterest seo title', 'seo title', 'pinterest pin title', 'pin title', 'optimized pin title', 'pinterest title');
+    const alt_text    = getLine('alt text', 'pinterest alt text');
+    const board_name  = getLine('seo board name', 'board name', 'board ideas', 'pinterest board name', 'pinterest board');
+    // Description: join the section's lines, drop any hashtag-only lines (some
+    // formats put the hashtag block right under the description), then strip the
+    // FTC disclosure phrase wherever it lands (parsePPP re-adds it consistently).
+    const description = getLines('pinterest pin description', 'pinterest description', 'pin description', 'optimized pin description')
+      .filter(l => !/^#[A-Za-z]/.test(l.trim()))
+      .join(' ')
+      .replace(/as an amazon associate[^.]*\.?/i, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // Hashtags: grab #tags already in text (must start with a letter — skips "Pin #2").
+    // If the user supplied explicit hashtags, use them EXACTLY — verbatim, in
+    // order, with nothing added or removed. We only synthesize hashtags from
+    // keywords as a fallback when none were provided.
+    const hashMatch = t.match(/#[A-Za-z]\w*/g);
+    let hashtags;
+    if (hashMatch && hashMatch.length) {
+      hashtags = [...new Set(hashMatch)].slice(0, 20).join(' ');
+    } else {
+      const kwLines = getLines('supporting keywords', 'supporting seo keywords', 'primary pinterest keywords', 'keywords');
+      hashtags = kwLines.flatMap(l => l.split(','))
+        .map(k => k.trim())
+        .filter(k => k && !k.startsWith('#') && k.length < 35 && /^[a-z]/i.test(k) && !/[.)]$/.test(k))
+        .slice(0, 8)
+        .map(k => '#' + k.replace(/\s+/g, '').toLowerCase()).join(' ');
+      // Only when synthesizing from keywords, lead with the primary keyword.
+      const primaryKw = getLine('primary keyword', 'primary pinterest keyword');
+      if (primaryKw) {
+        const tag = '#' + primaryKw.replace(/\s+/g, '').toLowerCase();
+        if (!hashtags.includes(tag)) hashtags = (tag + ' ' + hashtags).trim();
+      }
+    }
+
+    // Amazon URL — canonicalize to /dp/ASIN with our affiliate tag so pastes
+    // carrying foreign tracking params (utm_source=chatgpt.com etc.) don't
+    // cost us the commission
+    const amazonMatch = text.match(/(?:https?:\/\/)?(?:www\.)?(?:amazon\.com|amzn\.to|a\.co)\/[^\s"')\]]+/);
+    let amazon_url = amazonMatch ? amazonMatch[0].replace(/[)\].,]+$/, '').trim() : '';
+    const asinMatch = amazon_url.match(/\/dp\/([A-Z0-9]{10})/);
+    if (asinMatch) amazon_url = 'https://www.amazon.com/dp/' + asinMatch[1] + '?tag=auragirlcreat-20';
+
+    return { title, description, alt_text, board_name, hashtags: hashtags.trim(), amazon_url };
+  }
+
+  // Board auto-routing: map pin content keywords -> a Pinterest board.
+  const PPP_BOARD_KEYWORDS = [
+      { board: 'Nail Inspo & Nail Art Ideas',            keys: ['nail','nails','nail art','nail inspo','manicure','gel nail','nail polish'] },
+      { board: 'Hair Care Essentials',                   keys: ['hair','haircare','shampoo','conditioner','scalp','hair growth','hair mask','dry hair','frizz'] },
+      { board: 'Makeup Finds Under $50',                 keys: ['makeup','mascara','foundation','concealer','blush','lipstick','lip gloss','eyeliner','eyeshadow','contour'] },
+      { board: 'Fitness Finds on Amazon',                keys: ['fitness','workout','gym','yoga','protein','supplement','resistance band','exercise','weight loss'] },
+      { board: 'Wellness & Self Care Essentials',        keys: ['self care','selfcare','wellness','vitamin','collagen','gut health','sleep','stress','mental health','bath'] },
+      { board: 'Garden & Plant Inspo',                   keys: ['garden','plant','planter','indoor plant','succulent','flower','gardening','pot','greenery'] },
+      { board: 'Mother\'s Day Gift Ideas',               keys: ['mother\'s day','mom gift','gift for mom','mothers day'] },
+      { board: 'Beauty Finds & Skincare',                keys: ['eye cream','serum','moisturizer','skincare','spf','sunscreen','retinol','vitamin c','face cream','skin care','anti aging','dark circle','wrinkle','glow','skin'] },
+      { board: 'Affordable Beauty Essentials',           keys: ['affordable beauty','drugstore','budget beauty','beauty under'] },
+      { board: 'Luxury Look for Less Home Decor',        keys: ['luxury look for less','look for less','home dupe'] },
+      { board: 'Amazon Home Finds',                      keys: ['amazon home','home find','home essential','kitchen','bedroom','bathroom','living room','home organization','storage'] },
+      { board: 'Aesthetic Home Decor for Cozy Spaces',   keys: ['cozy','aesthetic home','cozy home','hygge','warm home','cozy space','cozy decor'] },
+      { board: 'Aesthetic Home Finds',                   keys: ['home decor','decor find','home inspo','interior design'] },
+      { board: 'Glam Home Decor Ideas',                  keys: ['glam','candle','throw pillow','vase','wall art','rug'] },
+    ];
+
+  // Pick the best board from pasted content; returns a board name or null.
+  function pppMatchBoard(contentText) {
+    const t = (contentText || '').toLowerCase();
+    for (const { board, keys } of PPP_BOARD_KEYWORDS) {
+      if (keys.some(k => t.includes(k))) return board;
+    }
+    return null;
+  }
+</script>

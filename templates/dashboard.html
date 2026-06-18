@@ -623,6 +623,8 @@
 ═══════════════════════════════════════════════════════════════ #}
 {% elif active_tab == 'draft' %}
 
+  {% include '_ppp_parser.html' %}
+
   <style>
     .draft-pin-row { position: relative; }
     .draft-pin-row:hover .pin-preview-tooltip { display: block; }
@@ -673,6 +675,16 @@
         <div id="draft-edit-{{ pin.id }}" style="display:none;margin-top:10px;">
           <form method="POST" action="{{ url_for('main.edit_scheduled_pin', pin_id=pin.id) }}">
             <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="background:#fff8f0;border:1px solid #f97316;border-radius:8px;padding:8px 10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <label style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;margin:0;">📋 Paste Pin Perfect Pro output to re-fill fields</label>
+                  <button type="button" onclick="parseDraftPPP({{ pin.id }})"
+                    style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;border:1.5px solid #7c3aed;background:#f5f0ff;color:#7c3aed;cursor:pointer;white-space:nowrap;">↺ Parse</button>
+                </div>
+                <textarea id="draft-ppp-{{ pin.id }}" placeholder="Paste full Pin Perfect Pro output here — fields below auto-fill"
+                  onpaste="setTimeout(() => parseDraftPPP({{ pin.id }}), 50)"
+                  style="font-size:12px;font-family:monospace;border:1px solid #e5e7eb;border-radius:6px;padding:7px 10px;width:100%;box-sizing:border-box;min-height:70px;resize:vertical;"></textarea>
+              </div>
               <div>
                 <label style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;">Title</label>
                 <input type="text" name="title" value="{{ pin.title }}" maxlength="100"
@@ -761,6 +773,46 @@
       const ee = document.getElementById('draft-edit-' + id);
       ee.style.display = 'none';
       el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+    // Paste Pin Perfect Pro output onto a draft to re-fill its fields. Uses the
+    // exact same shared parser as the Bulk Schedule page (_ppp_parser.html).
+    function parseDraftPPP(id) {
+      const ta = document.getElementById('draft-ppp-' + id);
+      const text = ta ? ta.value : '';
+      if (!text.trim()) return;
+      const form = document.querySelector('#draft-edit-' + id + ' form');
+      if (!form) return;
+      const parsed = parsePPPText(text);
+      const set = (name, val) => { const f = form.querySelector('[name=' + name + ']'); if (f && val) f.value = val; };
+
+      if (parsed.title)       set('title', parsed.title.substring(0, 100));
+      if (parsed.description) set('description', fitDescriptionToLimit(parsed.description, parsed.hashtags, 500));
+      if (parsed.hashtags)    set('hashtags', parsed.hashtags);
+      if (parsed.alt_text)    set('alt_text', parsed.alt_text.substring(0, 500));
+      if (parsed.amazon_url)  set('amazon_url', parsed.amazon_url);
+
+      // Auto-route the board from content, falling back to the parsed board name.
+      const sel = form.querySelector('[name=board_name]');
+      if (sel) {
+        const contentText = [parsed.title, parsed.description, parsed.hashtags].join(' ');
+        let board = pppMatchBoard(contentText);
+        if (!board && parsed.board_name) {
+          const pWords = parsed.board_name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+          let best = null, bestScore = 0;
+          Array.from(sel.options).forEach(o => {
+            const score = pWords.filter(w => o.value.toLowerCase().includes(w)).length;
+            if (score > bestScore) { bestScore = score; best = o.value; }
+          });
+          board = best;
+        }
+        if (board) {
+          const match = Array.from(sel.options).find(o => o.value === board);
+          if (match) sel.value = board;
+        }
+      }
+      // Flash the form to confirm it worked.
+      form.style.transition = 'background 0.1s'; form.style.background = '#dcfce7';
+      setTimeout(() => { form.style.background = ''; }, 400);
     }
   </script>
 
