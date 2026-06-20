@@ -13,7 +13,7 @@
     // Clean the body: drop any disclosure already in it, and strip stray
     // hashtags (they are appended verbatim below and must not be duplicated).
     let body = (desc || '')
-      .replace(/\s*as an amazon associate[^.]*\.?\s*/i, ' ')
+      .replace(/\s*[^.!?]*\bamazon associate\b[^.!?]*[.!?]?\s*/i, ' ')
       .replace(/#[A-Za-z][\w]*/g, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -107,7 +107,7 @@
       'pin title', 'pinterest pin title', 'pinterest seo title', 'seo title', 'pinterest title',
       'optimized pin title', 'pin description', 'pinterest description', 'optimized pin description',
       'pinterest pin description', 'description', 'board name', 'board ideas', 'pinterest board name',
-      'pinterest board', 'seo board name', 'alt text', 'pinterest alt text', 'keywords',
+      'pinterest board', 'seo board name', 'seo board', 'board', 'alt text', 'pinterest alt text', 'keywords',
       'supporting keywords', 'hashtags', 'pin text overlay', 'on pin text overlay', 'canva pin design',
       'visual concept', 'ai image prompt', 'ai lifestyle mockup prompt', 'extra pin variations',
       'primary keyword', 'suggested pinterest hashtags',
@@ -165,7 +165,14 @@
       let headerHit = null;
       for (const [name, re] of HEADER_REGEXES) {
         const m = stripped.match(re);
-        if (m) { headerHit = [name, stripped.slice(m[0].length).trim()]; break; }
+        if (m) {
+          // Drop a trailing qualifier in parens right after the label, e.g.
+          // "Pin Title (97 Characters)" / "Pin Description (Under 300 Characters)"
+          // — otherwise the qualifier becomes the field value.
+          let rest = stripped.slice(m[0].length).trim().replace(/^\([^)]*\)\s*/, '').trim();
+          headerHit = [name, rest];
+          break;
+        }
       }
       if (headerHit) {
         currentKey = headerHit[0];
@@ -236,14 +243,14 @@
 
     const title       = getLine('pinterest seo title', 'seo title', 'pinterest pin title', 'pin title', 'optimized pin title', 'pinterest title');
     const alt_text    = getLine('alt text', 'pinterest alt text');
-    const board_name  = getLine('seo board name', 'board name', 'board ideas', 'pinterest board name', 'pinterest board');
+    const board_name  = getLine('seo board name', 'seo board', 'board name', 'board ideas', 'pinterest board name', 'pinterest board', 'board');
     // Description: join the section's lines, drop any hashtag-only lines (some
     // formats put the hashtag block right under the description), then strip the
     // FTC disclosure phrase wherever it lands (parsePPP re-adds it consistently).
     const description = getLines('pinterest pin description', 'pinterest description', 'pin description', 'optimized pin description')
       .filter(l => !/^#[A-Za-z]/.test(l.trim()))
       .join(' ')
-      .replace(/as an amazon associate[^.]*\.?/i, '')
+      .replace(/[^.!?]*\bamazon associate\b[^.!?]*[.!?]?/i, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
 

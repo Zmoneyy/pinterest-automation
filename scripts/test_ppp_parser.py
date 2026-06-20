@@ -31,6 +31,7 @@ BOLD_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_bold_labels
 RECOMMENDED_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_recommended_format.txt")
 EMOJI_H1_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_emoji_h1_parenthetical.txt")
 SEO_INFIX_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_seo_infix_headers.txt")
+EMOJI_LABELS_FIXTURE = os.path.join(ROOT, "scripts", "fixtures", "ppp_emoji_labels_charcount.txt")
 
 
 def extract_js_function(decl: str) -> str:
@@ -65,6 +66,7 @@ BOLD_LABELS = open(BOLD_LABELS_FIXTURE, encoding="utf-8").read().strip()
 RECOMMENDED = open(RECOMMENDED_FIXTURE, encoding="utf-8").read().strip()
 EMOJI_H1 = open(EMOJI_H1_FIXTURE, encoding="utf-8").read().strip()
 SEO_INFIX = open(SEO_INFIX_FIXTURE, encoding="utf-8").read().strip()
+EMOJI_LABELS = open(EMOJI_LABELS_FIXTURE, encoding="utf-8").read().strip()
 
 MULTILINE_EMOJI = """\
 📌 Pinterest Pin: Charlotte Tilbury Airbrush Flawless Setting Spray
@@ -329,6 +331,27 @@ def main():
                 "hashtags": {
                     "equals": "#BenefitCosmetics #BADgalBANG #VolumizingMascara #DramaticLashes #MakeupFinds"
                 },
+            },
+        },
+        {
+            # Emoji label lines, NO markdown/bold, with "(97 Characters)" /
+            # "(Under 300 Characters)" qualifiers and value on the next line.
+            # Also "SEO Board" header and an inline "...as an Amazon Associate..."
+            # disclosure mid-sentence.
+            "name": "Emoji label lines + char-count qualifiers (no markdown)",
+            "text": EMOJI_LABELS,
+            "expect": {
+                "title": {
+                    "equals": "Best Waterproof Liquid Eyeliner for Perfect Wings That Stay Put All Day"
+                },
+                "description": {
+                    "startsWith": "Perfect wings start here!",
+                    "notIncludes": ["Characters)", "Under 300", "Amazon Associate", "I may earn a commission"],
+                },
+                "board_name": {"equals": "Amazon Beauty Must Haves"},
+                "alt_text": {"startsWith": "Benefit Roller Liner waterproof liquid eyeliner"},
+                "hashtags": {"equals": "#WaterproofEyeliner #AmazonBeauty #MakeupMustHave"},
+                "amazon_url": {"equals": "https://www.amazon.com/dp/B07NPSLCK2?tag=auragirlcreat-20"},
             },
         },
         {
