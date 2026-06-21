@@ -29,6 +29,20 @@ logger = logging.getLogger(__name__)
 
 bp = Blueprint("main", __name__)
 
+
+def _is_valid_image_bytes(data: bytes) -> bool:
+    """True if `data` looks like a real image by magic bytes (JPEG/PNG/WEBP/GIF).
+    Guards against uploading expired-URL error pages / junk as a pin image —
+    Tailwind and Pinterest reject those with 'invalid media URL'."""
+    if not data or len(data) < 100:
+        return False
+    return (
+        data[:3] == b"\xff\xd8\xff"                       # JPEG
+        or data[:8] == b"\x89PNG\r\n\x1a\n"               # PNG
+        or (data[:4] == b"RIFF" and data[8:12] == b"WEBP")  # WEBP
+        or data[:6] in (b"GIF87a", b"GIF89a")             # GIF
+    )
+
 # Routes that are visible on the public domain (auragirlessentials.com)
 PUBLIC_PATHS = ("/shop", "/privacy", "/health", "/")
 
@@ -1207,6 +1221,16 @@ def send_pin_to_tailwind(pin_id):
     if not pin.image_url:
         return jsonify({"ok": False, "error": "Pin has no image — upload an image first."})
 
+    # Verify the stored image is actually a valid image before handing it to
+    # Tailwind (older pins may hold an expired-URL error saved as a .jpg).
+    try:
+        check = req.get(pin.image_url, timeout=20)
+        if not _is_valid_image_bytes(check.content):
+            return jsonify({"ok": False, "error": "This pin's image is corrupt or wasn't a real "
+                            "image (likely an expired link saved as a file). Re-upload the image, then resend."})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not load this pin's image — re-upload it and try again."})
+
     import re as _re
     from urllib.parse import urlparse, urlunparse, urlencode, parse_qs
 
@@ -2045,6 +2069,12 @@ def bulk_upload_submit():
                 if image_b64:
                     raw = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
                     img_bytes = base64.b64decode(raw)
+                    # Reject junk (e.g. an expired-URL error saved as a .jpg) so it
+                    # never reaches Tailwind/Pinterest as a broken media URL.
+                    if not _is_valid_image_bytes(img_bytes):
+                        errors.append(f"Pin {i+1}: the uploaded image isn't a valid image file "
+                                      f"({len(img_bytes)} bytes) — re-upload the actual picture.")
+                        continue
                     blob_name = f"bulk-upload/{_uuid.uuid4().hex}.jpg"
                     blob = bucket.blob(blob_name)
                     blob.upload_from_string(img_bytes, content_type="image/jpeg")
