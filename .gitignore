@@ -95,3 +95,4 @@ trend_archive/
 # Local helper scripts with hardcoded credentials — do not commit
 deploy-prod.sh
 scripts/fetch_screenshots.py
+scripts/list_boards.py
