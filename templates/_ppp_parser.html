@@ -290,6 +290,8 @@
 
   // Board auto-routing: map pin content keywords -> a Pinterest board.
   const PPP_BOARD_KEYWORDS = [
+      // Fragrance first so perfume pins don't fall into the generic beauty boards.
+      { board: 'Luxury Perfume & Fragrance Finds on Amazon', keys: ['perfume','fragrance','cologne','parfum','eau de parfum','eau de toilette','edp','edt','body mist','signature scent','perfume for women','designer perfume'] },
       { board: 'Nail Inspo & Nail Art Ideas',            keys: ['nail','nails','nail art','nail inspo','manicure','gel nail','nail polish'] },
       { board: 'Hair Care Essentials',                   keys: ['hair','haircare','shampoo','conditioner','scalp','hair growth','hair mask','dry hair','frizz'] },
       { board: 'Makeup Finds Under $50',                 keys: ['makeup','mascara','foundation','concealer','blush','lipstick','lip gloss','eyeliner','eyeshadow','contour'] },

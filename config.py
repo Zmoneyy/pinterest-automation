@@ -54,6 +54,7 @@ class Config:
         "Hair Care Essentials":                 os.environ.get("PINTEREST_BOARD_HAIR",             "1140044161863515412"),
         "Makeup Finds Under $50":               os.environ.get("PINTEREST_BOARD_MAKEUP",           "1140044161863515414"),
         "Mother's Day Gift Ideas":              os.environ.get("PINTEREST_BOARD_MOTHERS_DAY",      "1140044161863515413"),
+        "Luxury Perfume & Fragrance Finds on Amazon": os.environ.get("PINTEREST_BOARD_PERFUME",    "1140044161863675329"),
     }
     FAL_API_KEY       = os.environ.get("FAL_API_KEY", "")
 
