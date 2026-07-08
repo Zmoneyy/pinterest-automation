@@ -583,7 +583,7 @@ STRICT RULES:
   BEAUTY: Clean white or light beige background. Product hero centered, no people. Add texture swipe if it's a cream/liquid. Add water droplets if hydrating. Bold clean sans-serif headline. Describe the product's EXACT colors and packaging from the reference.
   HOME DECOR: Full lifestyle room scene — sofa, candles, plants, rugs, wall art. Product styled IN the room. Warm ambient tones (cream, beige, wood). Serif or mixed font headline. The room scene is essential — never plain white background for home decor.
   FITNESS: Fresh ingredients around the product (citrus, berries, greens) matching the product flavor/benefit. Or a woman using the product in a wellness setting. Bold heavy headline. Bright, clean, energizing.
-  ALWAYS: Match the pin's color palette to the product's actual packaging colors. Include "AURA GIRL ESSENTIALS" small text at very top. Headline at top, product in middle, 3 benefit lines below product, pill CTA at bottom.
+  ALWAYS: The pin MUST look high-end EDITORIAL — like a page from a Vogue or magazine spread. Elegant magazine-quality composition, refined negative space, considered typography, soft premium studio lighting, and a polished aspirational feel. Never cluttered, never clip-art, never generic stock. Match the pin's color palette to the product's actual packaging colors. Include "AURA GIRL ESSENTIALS" small text at very top. Headline at top, product in middle, 3 benefit lines below product, pill CTA at bottom.
 
 Respond ONLY with valid JSON:
 {{

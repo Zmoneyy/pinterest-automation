@@ -279,8 +279,29 @@ def edit_scheduled_pin(pin_id):
     sched_str = request.form.get("scheduled_for", "").strip()
     if sched_str:
         pin.scheduled_for = _cst_to_utc(sched_str)
+
+    # Optional image re-upload — lets the user fix a draft whose image is
+    # broken/corrupt without recreating the pin.
+    img_file = request.files.get("image")
+    dest = "draft" if was_draft else "scheduled"
+    if img_file and img_file.filename:
+        data = img_file.read()
+        if not _is_valid_image_bytes(data):
+            return redirect(url_for("main.dashboard", status=dest) + "?img_error=1")
+        try:
+            import uuid as _uuid
+            from google.cloud import storage as gcs
+            bucket = gcs.Client().bucket("pinterest-automation-images-814656203168")
+            blob_name = f"bulk-upload/{_uuid.uuid4().hex}.jpg"
+            blob = bucket.blob(blob_name)
+            blob.upload_from_string(data, content_type="image/jpeg")
+            pin.image_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
+        except Exception as e:
+            logger.error(f"Draft image re-upload failed for pin #{pin_id}: {e}")
+            return redirect(url_for("main.dashboard", status=dest) + "?img_error=2")
+
     db.session.commit()
-    return redirect(url_for("main.dashboard", status="draft" if was_draft else "scheduled"))
+    return redirect(url_for("main.dashboard", status=dest))
 
 
 @bp.route("/pin/<int:pin_id>/approve", methods=["POST"])
