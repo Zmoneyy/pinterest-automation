@@ -472,7 +472,7 @@ def generate_pin_perfect_pro(
       {
         "title": "...",
         "description": "...",
-        "hashtags": "tag1, tag2, ...",
+        "product_tags": "Brand Product, Brand Product, ...",  # suggested products to tag on the pin
         "alt_text": "...",
         "board_name": "...",
         "image_prompt": "...",   # ready for Ideogram
@@ -526,11 +526,12 @@ DESCRIPTION = 4 parts in order:
      Use: "Save this for later →" or "Tap to shop →" or "Get the full list →" then add: {shop_url}
   • Total: 150-250 characters. Conversational, not salesy.
 
-HASHTAGS = 10-15 tags, mix of:
-  • 1-2 broad discovery (#amazonfinds, #amazonskincare)
-  • 2-3 keyword-specific (based on the primary keyword)
-  • 2-3 niche/transformation (#glowup, #skincareRoutine, #clearskin)
-  • NO generic filler: #weeklyfinds #mostloved #productfaves
+PRODUCT TAGS = 3-6 specific products to tag on the pin (this is Pinterest's shoppable "tag products" feature — NOT hashtags).
+  • Each tag = a real, specific, buyable product: Brand + Product name (+ variant if it matters).
+  • Start with the exact products featured in this pin, then add 1-3 closely related items a shopper would also want.
+  • These are search terms you'd type into Pinterest's product picker — so make them precise and findable.
+  • Comma-separated. NO # symbol, NO generic keywords, NO categories — only nameable products.
+  • Example: "Paula's Choice 2% BHA Liquid Exfoliant, CeraVe Hydrating Cleanser, The Ordinary Niacinamide 10%"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EXAMPLES
@@ -542,7 +543,7 @@ Products: Paula's Choice BHA liquid exfoliant
 {{
   "title": "Best Chemical Exfoliant for Smooth Skin 2026 — This One Actually Works",
   "description": "Searching for a chemical exfoliant that clears texture and minimizes pores? Paula's Choice BHA is a cult favorite for a reason — one swipe and your skin looks visibly smoother. Save this for later → {shop_url}",
-  "hashtags": "amazonfinds, chemicalexfoliant, bhaserum, smoothskin, porescleaned, skincareAmazon, glowup, exfoliatingtoner, clearTexture, skincareroutine, affordableskincare, amazonskincare",
+  "product_tags": "Paula's Choice Skin Perfecting 2% BHA Liquid Exfoliant, CeraVe Hydrating Facial Cleanser, The Ordinary Niacinamide 10% + Zinc 1%",
   "alt_text": "Woman with glowing clear skin holding Paula's Choice BHA liquid exfoliant bottle",
   "board_name": "Skincare Finds & Glow Up Routines",
   "theme": "NEW SKIN",
@@ -557,7 +558,7 @@ Products: gold arc floor lamp, velvet ottoman
 {{
   "title": "Glam Home Decor on a Budget 2026 — Amazon Finds That Look Expensive",
   "description": "Love the glam aesthetic but don't want to overspend? These Amazon home decor finds — gold lamps, velvet ottomans — look designer without the price tag. Tap to shop → {shop_url}",
-  "hashtags": "amazonhome, glamhomedecor, budgethomedecor, affordabledecor, homedecor2026, goldhomedecor, amazonfinds, homeaesthetic, livingroominspo, homerefresh, interiordesign, velvetdecor",
+  "product_tags": "Gold Arc Floor Lamp, Black Velvet Ottoman with Gold Legs, Gold Geometric Wall Mirror",
   "alt_text": "Glam home decor collection with gold floor lamp and black velvet ottoman styled in an aspirational living room",
   "board_name": "Glam Home Decor Ideas",
   "theme": "ELEVATED",
@@ -589,7 +590,7 @@ Respond ONLY with valid JSON:
 {{
   "title": "...",
   "description": "...",
-  "hashtags": "tag1, tag2, ...",
+  "product_tags": "Brand Product Name, Brand Product Name, ...",
   "alt_text": "...",
   "board_name": "...",
   "theme": "...",
@@ -629,7 +630,10 @@ Respond ONLY with valid JSON:
         return {
             "title":        str(data.get("title", "")).strip()[:100],
             "description":  str(data.get("description", "")).strip()[:500],
-            "hashtags":     str(data.get("hashtags", "")).strip(),
+            # Model now returns product-tag suggestions. Keep the "hashtags" key
+            # for pipeline/DB/template compatibility; fall back to legacy "hashtags".
+            "product_tags": str(data.get("product_tags", data.get("hashtags", ""))).strip(),
+            "hashtags":     str(data.get("product_tags", data.get("hashtags", ""))).strip(),
             "alt_text":     str(data.get("alt_text", "")).strip()[:500],
             "board_name":   str(data.get("board_name", board_name)).strip(),
             "theme":        str(data.get("theme", "")).strip().upper()[:30],
