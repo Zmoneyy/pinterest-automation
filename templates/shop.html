@@ -342,10 +342,13 @@
             color: var(--ink);
             line-height: 1.35;
             margin-bottom: 0.625rem;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
+        }
+
+        .pin-card-desc {
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.6;
+            margin-bottom: 0.875rem;
         }
 
         .pin-card-cta {
@@ -479,6 +482,9 @@
                         </div>
                         <div class="pin-card-body">
                             <h3 class="pin-card-title">{{ pin.title }}</h3>
+                            {% if pin.description %}
+                            <p class="pin-card-desc">{{ pin.description | replace('(As an amazon associate I earn from qualifying purchases.)', '') | replace('(As an Amazon Associate I earn from qualifying purchases.)', '') | replace('As an Amazon Associate I earn from qualifying purchases.', '') | replace('\n\nAs an Amazon Associate I earn from qualifying purchases.', '') | trim }}</p>
+                            {% endif %}
                             <span class="pin-card-cta">Shop This →</span>
                         </div>
                     </a>
