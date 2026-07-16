@@ -3388,6 +3388,8 @@ def privacy():
 
 @bp.route("/shop")
 def shop():
+    if Setting.get("shop_maintenance", "true") == "true":
+        return render_template("shop_coming_soon.html")
     pins = (
         Pin.query.filter(
             Pin.status.in_([Pin.STATUS_POSTED, Pin.STATUS_APPROVED, Pin.STATUS_SCHEDULED]),
