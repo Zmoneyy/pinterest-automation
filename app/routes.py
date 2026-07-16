@@ -3394,6 +3394,7 @@ def shop():
         Pin.query.filter(
             Pin.status.in_([Pin.STATUS_POSTED, Pin.STATUS_APPROVED, Pin.STATUS_SCHEDULED]),
             Pin.image_url.isnot(None),
+            Pin.image_url.like("%tailwindapp.net%"),
         )
         .order_by(Pin.created_at.desc())
         .all()
