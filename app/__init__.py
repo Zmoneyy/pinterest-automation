@@ -194,30 +194,9 @@ def _start_scheduler(app):
     if _bg_scheduler.running:
         return
 
-    from app.scheduler import run_daily_pin_generation, schedule_approved_pins
-
-    # Daily pin generation at 9 AM UTC
-    _bg_scheduler.add_job(
-        func=lambda: _run_with_context(app, run_daily_pin_generation),
-        trigger=CronTrigger(hour=9, minute=0),
-        id="daily_pin_generation",
-        name="Daily Pin Generation",
-        replace_existing=True,
-        misfire_grace_time=3600,
-    )
-
-    # Check for scheduled pins every 15 minutes
-    _bg_scheduler.add_job(
-        func=lambda: _run_with_context(app, schedule_approved_pins),
-        trigger="interval",
-        minutes=15,
-        id="schedule_approved_pins",
-        name="Post Scheduled Pins",
-        replace_existing=True,
-    )
-
+    # Auto pin generation disabled — pins are now managed manually via Tailwind
     _bg_scheduler.start()
-    logger.info("APScheduler started.")
+    logger.info("APScheduler started (no jobs scheduled — auto-generation disabled).")
 
 
 def _run_with_context(app, func):
