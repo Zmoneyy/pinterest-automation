@@ -7,19 +7,22 @@
     <title>Aura Girl Essentials — Curated Finds</title>
     <meta name="description" content="Hand-picked Amazon beauty, home, and wellness finds curated just for you.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
         :root {
             --cream: #faf7f5;
+            --cream-dark: #f2ede9;
             --rose: #c9728a;
             --rose-dark: #b35c74;
             --gold: #b89a6a;
             --ink: #1a1a1a;
-            --muted: #6a6a6a;
-            --border: #ede8e5;
+            --ink-light: #3a3a3a;
+            --muted: #7a7a7a;
+            --border: #e8e2de;
             --white: #ffffff;
+            --card-w: 220px;
         }
 
         body {
@@ -35,246 +38,335 @@
         .header {
             position: sticky;
             top: 0;
-            z-index: 100;
-            background: rgba(250, 247, 245, 0.95);
-            backdrop-filter: blur(12px);
+            z-index: 200;
+            background: rgba(250, 247, 245, 0.96);
+            backdrop-filter: blur(14px);
             border-bottom: 1px solid var(--border);
-            padding: 1rem 1.5rem;
+        }
+
+        .header-top {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            padding: 1.125rem 1.5rem;
+            position: relative;
         }
 
         .brand {
             font-family: 'Cormorant Garamond', serif;
-            font-size: 1.5rem;
+            font-size: 1.625rem;
             font-weight: 600;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.01em;
             color: var(--ink);
         }
 
-        .brand em {
-            font-style: italic;
-            color: var(--rose);
-        }
+        .brand em { font-style: italic; color: var(--rose); }
 
-        .header-tag {
-            font-size: 0.75rem;
+        .header-tagline {
+            position: absolute;
+            right: 1.5rem;
+            font-size: 0.7rem;
             font-weight: 500;
             color: var(--muted);
-            letter-spacing: 0.08em;
+            letter-spacing: 0.1em;
             text-transform: uppercase;
+        }
+
+        /* Board nav */
+        .board-nav {
+            overflow-x: auto;
+            scrollbar-width: none;
+            border-top: 1px solid var(--border);
+        }
+
+        .board-nav::-webkit-scrollbar { display: none; }
+
+        .board-nav-inner {
+            display: flex;
+            align-items: center;
+            gap: 0;
+            padding: 0 1rem;
+            width: max-content;
+            min-width: 100%;
+        }
+
+        .board-nav-link {
+            font-size: 0.775rem;
+            font-weight: 500;
+            color: var(--muted);
+            padding: 0.75rem 1rem;
+            white-space: nowrap;
+            border-bottom: 2px solid transparent;
+            transition: color 0.2s, border-color 0.2s;
+            letter-spacing: 0.01em;
+        }
+
+        .board-nav-link:hover {
+            color: var(--rose);
+            border-bottom-color: var(--rose);
         }
 
         /* ── Hero ── */
-        .hero {
-            text-align: center;
-            padding: 4rem 1.5rem 2.5rem;
+        .hero-section {
+            padding: 3rem 1.5rem 0;
+            max-width: 1300px;
+            margin: 0 auto;
         }
 
-        .hero-eyebrow {
-            font-size: 0.75rem;
+        .hero-label {
+            font-size: 0.7rem;
             font-weight: 600;
-            letter-spacing: 0.12em;
+            letter-spacing: 0.14em;
             text-transform: uppercase;
             color: var(--rose);
-            margin-bottom: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .hero-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        @media (min-width: 700px) {
+            .hero-grid {
+                grid-template-columns: 2fr 1fr;
+                gap: 1.25rem;
+            }
+        }
+
+        @media (min-width: 1000px) {
+            .hero-grid {
+                grid-template-columns: 5fr 3fr;
+                gap: 1.5rem;
+            }
+        }
+
+        .hero-main {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            background: var(--cream-dark);
+            display: block;
+        }
+
+        .hero-main img {
+            width: 100%;
+            aspect-ratio: 3/4;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .hero-main:hover img { transform: scale(1.03); }
+
+        .hero-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 2rem 1.5rem 1.5rem;
+            background: linear-gradient(to top, rgba(15,10,8,0.72) 0%, transparent 100%);
+        }
+
+        .hero-board-tag {
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.75);
+            margin-bottom: 0.5rem;
         }
 
         .hero-title {
             font-family: 'Cormorant Garamond', serif;
-            font-size: clamp(2.25rem, 6vw, 3.5rem);
+            font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+            font-weight: 600;
+            color: #fff;
+            line-height: 1.25;
+            margin-bottom: 0.875rem;
+        }
+
+        .hero-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #fff;
+            background: var(--rose);
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            transition: background 0.2s;
+        }
+
+        .hero-cta:hover { background: var(--rose-dark); }
+
+        .hero-side {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .hero-side-card {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--cream-dark);
+            display: block;
+            flex: 1;
+        }
+
+        .hero-side-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: transform 0.5s ease;
+        }
+
+        .hero-side-card:hover img { transform: scale(1.04); }
+
+        .hero-side-card .hero-overlay {
+            padding: 1.25rem 1rem 1rem;
+        }
+
+        .hero-side-card .hero-title {
+            font-size: clamp(0.85rem, 1.8vw, 1.05rem);
+            -webkit-line-clamp: 2;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        /* ── Board Sections ── */
+        .sections-wrap {
+            padding: 3rem 0 5rem;
+        }
+
+        .board-section {
+            margin-bottom: 3.5rem;
+        }
+
+        .board-section-header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding: 0 1.5rem;
+            margin-bottom: 1.25rem;
+            max-width: 1300px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .board-section-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(1.375rem, 3vw, 1.75rem);
             font-weight: 500;
             color: var(--ink);
-            line-height: 1.15;
             letter-spacing: -0.02em;
-            margin-bottom: 1rem;
         }
 
-        .hero-title em {
-            font-style: italic;
+        .board-section-title em { font-style: italic; color: var(--rose); }
+
+        .board-see-all {
+            font-size: 0.775rem;
+            font-weight: 600;
             color: var(--rose);
-        }
-
-        .hero-sub {
-            font-size: 1rem;
-            color: var(--muted);
-            max-width: 460px;
-            margin: 0 auto;
-            line-height: 1.7;
-        }
-
-        .hero-divider {
-            width: 48px;
-            height: 2px;
-            background: linear-gradient(90deg, var(--rose), var(--gold));
-            border-radius: 2px;
-            margin: 2rem auto 0;
-        }
-
-        /* ── Board Filter Tabs ── */
-        .filter-bar {
-            padding: 1.75rem 1.5rem 0;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-        }
-
-        .filter-bar::-webkit-scrollbar { display: none; }
-
-        .filter-tabs {
             display: flex;
-            gap: 0.5rem;
-            width: max-content;
-            padding-bottom: 0.25rem;
-        }
-
-        .filter-tab {
-            font-size: 0.8125rem;
-            font-weight: 500;
-            color: var(--muted);
-            background: var(--white);
-            border: 1px solid var(--border);
-            border-radius: 999px;
-            padding: 0.5rem 1.125rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
+            align-items: center;
+            gap: 0.25rem;
+            transition: gap 0.2s;
             white-space: nowrap;
-            user-select: none;
         }
 
-        .filter-tab:hover {
-            color: var(--rose);
-            border-color: var(--rose);
+        .board-see-all:hover { gap: 0.5rem; }
+
+        /* Horizontal scroll row */
+        .pin-row {
+            overflow-x: auto;
+            scrollbar-width: none;
+            padding: 0.25rem 1.5rem 0.75rem;
+            cursor: grab;
         }
 
-        .filter-tab.active {
-            background: var(--rose);
-            border-color: var(--rose);
-            color: var(--white);
+        .pin-row:active { cursor: grabbing; }
+        .pin-row::-webkit-scrollbar { display: none; }
+
+        .pin-row-inner {
+            display: flex;
+            gap: 0.875rem;
+            width: max-content;
         }
 
-        /* ── Masonry Grid ── */
-        .gallery-wrap {
-            padding: 1.75rem 1rem 5rem;
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-
-        .masonry {
-            columns: 2;
-            column-gap: 0.75rem;
-        }
-
-        @media (min-width: 540px) { .masonry { columns: 3; } }
-        @media (min-width: 900px) { .masonry { columns: 4; } }
-        @media (min-width: 1200px) { .masonry { columns: 5; } }
-
-        /* ── Pin Card ── */
+        /* Pin card */
         .pin-card {
-            break-inside: avoid;
-            margin-bottom: 0.75rem;
-            border-radius: 16px;
+            width: var(--card-w);
+            flex-shrink: 0;
+            border-radius: 14px;
             overflow: hidden;
             background: var(--white);
             border: 1px solid var(--border);
-            cursor: pointer;
             transition: transform 0.25s ease, box-shadow 0.25s ease;
             display: block;
         }
 
         .pin-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 16px 48px rgba(0,0,0,0.10);
+            box-shadow: 0 14px 40px rgba(0,0,0,0.09);
         }
 
-        .pin-card[data-hidden="true"] {
-            display: none;
-        }
-
-        .pin-img-wrap {
+        .pin-card-img {
             width: 100%;
-            overflow: hidden;
-            background: #f2eeeb;
-            border-radius: 16px 16px 0 0;
-        }
-
-        .pin-img {
-            width: 100%;
+            aspect-ratio: 2/3;
+            object-fit: cover;
             display: block;
+            background: var(--cream-dark);
             transition: transform 0.4s ease;
         }
 
-        .pin-card:hover .pin-img {
-            transform: scale(1.03);
+        .pin-card:hover .pin-card-img { transform: scale(1.04); }
+
+        .pin-card-img-wrap {
+            overflow: hidden;
         }
 
-        .pin-body {
-            padding: 0.875rem 1rem 1rem;
+        .pin-card-body {
+            padding: 0.875rem 0.875rem 1rem;
         }
 
-        .pin-title {
+        .pin-card-title {
             font-family: 'Cormorant Garamond', serif;
-            font-size: 1rem;
+            font-size: 0.975rem;
             font-weight: 600;
             color: var(--ink);
             line-height: 1.35;
-            margin-bottom: 0.4rem;
+            margin-bottom: 0.625rem;
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
 
-        .pin-desc {
-            font-size: 0.8rem;
-            color: var(--muted);
-            line-height: 1.5;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            margin-bottom: 0.75rem;
-        }
-
-        .pin-cta {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.3rem;
-            font-size: 0.75rem;
+        .pin-card-cta {
+            font-size: 0.725rem;
             font-weight: 600;
             color: var(--rose);
-            letter-spacing: 0.01em;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            transition: gap 0.2s;
         }
 
-        .pin-cta svg {
-            width: 13px;
-            height: 13px;
-            transition: transform 0.2s ease;
-        }
+        .pin-card:hover .pin-card-cta { gap: 0.45rem; }
 
-        .pin-card:hover .pin-cta svg {
-            transform: translateX(3px);
-        }
-
-        /* ── Empty State ── */
-        .empty-state {
-            text-align: center;
-            padding: 5rem 2rem;
-            color: var(--muted);
-        }
-
-        .empty-icon {
-            font-size: 3.5rem;
-            margin-bottom: 1.25rem;
-            opacity: 0.5;
-        }
-
-        .empty-title {
-            font-family: 'Cormorant Garamond', serif;
-            font-size: 1.75rem;
-            color: var(--ink);
-            margin-bottom: 0.5rem;
+        /* ── Divider ── */
+        .section-divider {
+            width: 48px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--rose), var(--gold));
+            border-radius: 2px;
+            margin: 0 auto 0.5rem;
         }
 
         /* ── Footer ── */
@@ -295,109 +387,145 @@
 
         .footer-disclosure {
             font-size: 0.75rem;
-            color: #aaa;
+            color: #b0a8a4;
             max-width: 520px;
-            margin: 0.75rem auto 0;
+            margin: 0.625rem auto 0;
             line-height: 1.6;
         }
 
         @media (min-width: 900px) {
-            .header { padding: 1.125rem 3rem; }
-            .gallery-wrap { padding: 2rem 2rem 6rem; }
-            .masonry { column-gap: 1rem; }
-            .pin-card { margin-bottom: 1rem; }
-            .pin-body { padding: 1rem 1.125rem 1.125rem; }
-            .pin-title { font-size: 1.0625rem; }
+            :root { --card-w: 260px; }
+            .header-top { padding: 1.25rem 3rem; }
+            .header-tagline { right: 3rem; }
+            .board-nav-inner { padding: 0 2rem; }
+            .hero-section { padding: 3.5rem 3rem 0; }
+            .board-section-header { padding: 0 3rem; }
+            .pin-row { padding: 0.25rem 3rem 0.75rem; }
         }
     </style>
 </head>
 <body>
 
+    <!-- Header -->
     <header class="header">
-        <div class="brand">Aura <em>Girl</em> Essentials</div>
-        <span class="header-tag">Curated Finds</span>
+        <div class="header-top">
+            <div class="brand">Aura <em>Girl</em> Essentials</div>
+            <span class="header-tagline">Amazon Finds</span>
+        </div>
+        {% if boards %}
+        <nav class="board-nav">
+            <div class="board-nav-inner">
+                {% for board_name in boards.keys() %}
+                <a class="board-nav-link" href="#{{ board_name | replace(' ', '-') | lower }}">{{ board_name }}</a>
+                {% endfor %}
+            </div>
+        </nav>
+        {% endif %}
     </header>
 
-    <section class="hero">
-        <p class="hero-eyebrow">Amazon Finds · Curated for You</p>
-        <h1 class="hero-title">Your Next Favorite<br><em>Find</em> is Here</h1>
-        <p class="hero-sub">Hand-picked beauty, home, and wellness essentials — everything you see is something I actually love.</p>
-        <div class="hero-divider"></div>
-    </section>
-
     {% if pins %}
-    <div class="filter-bar">
-        <div class="filter-tabs">
-            <button class="filter-tab active" data-board="all">All Finds</button>
-            {% for board_name in boards.keys() %}
-            <button class="filter-tab" data-board="{{ board_name }}">{{ board_name }}</button>
-            {% endfor %}
-        </div>
-    </div>
 
-    <div class="gallery-wrap">
-        <div class="masonry" id="pinsGrid">
-            {% for pin in pins %}
-            <a href="/shop/pin/{{ pin.id }}" class="pin-card" data-board="{{ pin.board_name or 'Curated Finds' }}">
-                <div class="pin-img-wrap">
-                    <img
-                        src="{{ pin.image_url }}"
-                        alt="{{ pin.title }}"
-                        class="pin-img"
-                        loading="lazy"
-                    >
-                </div>
-                <div class="pin-body">
-                    <h3 class="pin-title">{{ pin.title }}</h3>
-                    {% if pin.description %}
-                    <p class="pin-desc">{{ pin.description | replace('Shop the list', '') | truncate(120, True, '…') }}</p>
+    <!-- Hero: 3 most recent pins -->
+    <section class="hero-section">
+        <p class="hero-label">Latest Finds</p>
+        <div class="hero-grid">
+            <!-- Main hero pin -->
+            <a href="/shop/pin/{{ pins[0].id }}" class="hero-main">
+                <img src="{{ pins[0].image_url }}" alt="{{ pins[0].title }}" loading="eager">
+                <div class="hero-overlay">
+                    {% if pins[0].board_name %}
+                    <p class="hero-board-tag">{{ pins[0].board_name }}</p>
                     {% endif %}
-                    <span class="pin-cta">
-                        Shop This
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                        </svg>
-                    </span>
+                    <h2 class="hero-title">{{ pins[0].title }}</h2>
+                    <span class="hero-cta">Shop This →</span>
                 </div>
             </a>
-            {% endfor %}
+            <!-- Side: pins 2 & 3 -->
+            <div class="hero-side">
+                {% for pin in pins[1:3] %}
+                <a href="/shop/pin/{{ pin.id }}" class="hero-side-card">
+                    <img src="{{ pin.image_url }}" alt="{{ pin.title }}" loading="eager">
+                    <div class="hero-overlay">
+                        <h3 class="hero-title">{{ pin.title }}</h3>
+                        <span class="hero-cta">Shop →</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
         </div>
+    </section>
+
+    <!-- Board sections -->
+    <div class="sections-wrap">
+        {% for board_name, board_pins in boards.items() %}
+        <section class="board-section" id="{{ board_name | replace(' ', '-') | lower }}">
+            <div class="board-section-header">
+                <h2 class="board-section-title">{{ board_name }}</h2>
+                {% if board_pins | length > 4 %}
+                <span class="board-see-all">See all →</span>
+                {% endif %}
+            </div>
+            <div class="pin-row" data-drag-scroll>
+                <div class="pin-row-inner">
+                    {% for pin in board_pins %}
+                    <a href="/shop/pin/{{ pin.id }}" class="pin-card">
+                        <div class="pin-card-img-wrap">
+                            <img
+                                src="{{ pin.image_url }}"
+                                alt="{{ pin.title }}"
+                                class="pin-card-img"
+                                loading="lazy"
+                            >
+                        </div>
+                        <div class="pin-card-body">
+                            <h3 class="pin-card-title">{{ pin.title }}</h3>
+                            <span class="pin-card-cta">Shop This →</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+        {% endfor %}
     </div>
 
     {% else %}
-    <div class="gallery-wrap">
-        <div class="empty-state">
-            <div class="empty-icon">✨</div>
-            <h2 class="empty-title">Finds Coming Soon</h2>
-            <p>We're curating the most beautiful picks. Check back shortly!</p>
-        </div>
+    <div style="text-align:center;padding:6rem 2rem;color:#999;">
+        <p style="font-family:'Cormorant Garamond',serif;font-size:2rem;margin-bottom:0.5rem;">Finds Coming Soon ✨</p>
+        <p>Check back shortly for curated picks.</p>
     </div>
     {% endif %}
 
     <footer class="footer">
         <div class="footer-brand">Aura <em>Girl</em> Essentials</div>
-        <p class="footer-disclosure">
-            As an Amazon Associate I earn from qualifying purchases. Prices and availability are subject to change.
-        </p>
+        <p class="footer-disclosure">As an Amazon Associate I earn from qualifying purchases. Prices and availability are subject to change.</p>
     </footer>
 
     <script>
-        const tabs = document.querySelectorAll('.filter-tab');
-        const cards = document.querySelectorAll('.pin-card');
+        // Drag-to-scroll on pin rows
+        document.querySelectorAll('[data-drag-scroll]').forEach(el => {
+            let down = false, startX, scrollLeft;
+            el.addEventListener('mousedown', e => {
+                down = true;
+                startX = e.pageX - el.offsetLeft;
+                scrollLeft = el.scrollLeft;
+            });
+            el.addEventListener('mouseleave', () => down = false);
+            el.addEventListener('mouseup', () => down = false);
+            el.addEventListener('mousemove', e => {
+                if (!down) return;
+                e.preventDefault();
+                const x = e.pageX - el.offsetLeft;
+                el.scrollLeft = scrollLeft - (x - startX) * 1.5;
+            });
+        });
 
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-
-                const selected = tab.dataset.board;
-                cards.forEach(card => {
-                    if (selected === 'all' || card.dataset.board === selected) {
-                        card.removeAttribute('data-hidden');
-                    } else {
-                        card.setAttribute('data-hidden', 'true');
-                    }
-                });
+        // Smooth anchor scroll for board nav
+        document.querySelectorAll('.board-nav-link').forEach(link => {
+            link.addEventListener('click', e => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         });
     </script>
