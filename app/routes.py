@@ -3388,16 +3388,20 @@ def privacy():
 
 @bp.route("/shop")
 def shop():
-    recent_pins = (
+    pins = (
         Pin.query.filter(
-            Pin.status.in_([Pin.STATUS_POSTED, Pin.STATUS_SCHEDULED, Pin.STATUS_DRAFT]),
+            Pin.status.in_([Pin.STATUS_POSTED, Pin.STATUS_APPROVED, Pin.STATUS_SCHEDULED]),
             Pin.image_url.isnot(None),
         )
         .order_by(Pin.created_at.desc())
-        .limit(6)
         .all()
     )
-    return render_template("shop.html", niches=SHOP_NICHES, recent_pins=recent_pins)
+    # Group pins by board name for the gallery sections
+    boards = {}
+    for pin in pins:
+        board = pin.board_name or "Curated Finds"
+        boards.setdefault(board, []).append(pin)
+    return render_template("shop.html", pins=pins, boards=boards)
 
 @bp.route("/shop/<niche>")
 def shop_niche(niche):

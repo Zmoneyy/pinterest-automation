@@ -3,62 +3,403 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Pinterest domain verification -->
     <meta name="p:domain_verify" content="f64f551a7a5cab819b81095bd1b6433a"/>
-    <title>Aura Girl Essentials — Coming Soon</title>
-    <meta name="description" content="Hand-picked Amazon beauty, home, and wellness finds — coming soon.">
+    <title>Aura Girl Essentials — Curated Finds</title>
+    <meta name="description" content="Hand-picked Amazon beauty, home, and wellness finds curated just for you.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --cream: #faf7f5;
+            --rose: #c9728a;
+            --rose-dark: #b35c74;
+            --gold: #b89a6a;
+            --ink: #1a1a1a;
+            --muted: #6a6a6a;
+            --border: #ede8e5;
+            --white: #ffffff;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background: #faf8f6;
-            min-height: 100vh;
+            font-family: 'DM Sans', sans-serif;
+            background: var(--cream);
+            color: var(--ink);
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a { text-decoration: none; color: inherit; }
+
+        /* ── Header ── */
+        .header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(250, 247, 245, 0.95);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            padding: 40px 20px;
+            justify-content: space-between;
+        }
+
+        .brand {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            color: var(--ink);
+        }
+
+        .brand em {
+            font-style: italic;
+            color: var(--rose);
+        }
+
+        .header-tag {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* ── Hero ── */
+        .hero {
+            text-align: center;
+            padding: 4rem 1.5rem 2.5rem;
+        }
+
+        .hero-eyebrow {
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--rose);
+            margin-bottom: 1rem;
+        }
+
+        .hero-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: clamp(2.25rem, 6vw, 3.5rem);
+            font-weight: 500;
+            color: var(--ink);
+            line-height: 1.15;
+            letter-spacing: -0.02em;
+            margin-bottom: 1rem;
+        }
+
+        .hero-title em {
+            font-style: italic;
+            color: var(--rose);
+        }
+
+        .hero-sub {
+            font-size: 1rem;
+            color: var(--muted);
+            max-width: 460px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        .hero-divider {
+            width: 48px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--rose), var(--gold));
+            border-radius: 2px;
+            margin: 2rem auto 0;
+        }
+
+        /* ── Board Filter Tabs ── */
+        .filter-bar {
+            padding: 1.75rem 1.5rem 0;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+        }
+
+        .filter-bar::-webkit-scrollbar { display: none; }
+
+        .filter-tabs {
+            display: flex;
+            gap: 0.5rem;
+            width: max-content;
+            padding-bottom: 0.25rem;
+        }
+
+        .filter-tab {
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--muted);
+            background: var(--white);
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.5rem 1.125rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .filter-tab:hover {
+            color: var(--rose);
+            border-color: var(--rose);
+        }
+
+        .filter-tab.active {
+            background: var(--rose);
+            border-color: var(--rose);
+            color: var(--white);
+        }
+
+        /* ── Masonry Grid ── */
+        .gallery-wrap {
+            padding: 1.75rem 1rem 5rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .masonry {
+            columns: 2;
+            column-gap: 0.75rem;
+        }
+
+        @media (min-width: 540px) { .masonry { columns: 3; } }
+        @media (min-width: 900px) { .masonry { columns: 4; } }
+        @media (min-width: 1200px) { .masonry { columns: 5; } }
+
+        /* ── Pin Card ── */
+        .pin-card {
+            break-inside: avoid;
+            margin-bottom: 0.75rem;
+            border-radius: 16px;
+            overflow: hidden;
+            background: var(--white);
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: transform 0.25s ease, box-shadow 0.25s ease;
+            display: block;
+        }
+
+        .pin-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0,0,0,0.10);
+        }
+
+        .pin-card[data-hidden="true"] {
+            display: none;
+        }
+
+        .pin-img-wrap {
+            width: 100%;
+            overflow: hidden;
+            background: #f2eeeb;
+            border-radius: 16px 16px 0 0;
+        }
+
+        .pin-img {
+            width: 100%;
+            display: block;
+            transition: transform 0.4s ease;
+        }
+
+        .pin-card:hover .pin-img {
+            transform: scale(1.03);
+        }
+
+        .pin-body {
+            padding: 0.875rem 1rem 1rem;
+        }
+
+        .pin-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1.35;
+            margin-bottom: 0.4rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .pin-desc {
+            font-size: 0.8rem;
+            color: var(--muted);
+            line-height: 1.5;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+        }
+
+        .pin-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--rose);
+            letter-spacing: 0.01em;
+        }
+
+        .pin-cta svg {
+            width: 13px;
+            height: 13px;
+            transition: transform 0.2s ease;
+        }
+
+        .pin-card:hover .pin-cta svg {
+            transform: translateX(3px);
+        }
+
+        /* ── Empty State ── */
+        .empty-state {
+            text-align: center;
+            padding: 5rem 2rem;
+            color: var(--muted);
+        }
+
+        .empty-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1.25rem;
+            opacity: 0.5;
+        }
+
+        .empty-title {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.75rem;
+            color: var(--ink);
+            margin-bottom: 0.5rem;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            border-top: 1px solid var(--border);
+            padding: 2.5rem 1.5rem;
             text-align: center;
         }
-        .logo {
-            font-family: 'Playfair Display', serif;
-            font-size: 28px;
-            color: #1a1a1a;
-            margin-bottom: 32px;
-        }
-        .icon { font-size: 52px; margin-bottom: 20px; }
-        h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: 32px;
-            color: #1a1a1a;
-            margin-bottom: 14px;
-        }
-        p {
-            font-size: 16px;
-            color: #888;
-            max-width: 380px;
-            line-height: 1.7;
-            margin-bottom: 32px;
-        }
-        .pill {
-            display: inline-block;
-            background: #f0e8e4;
-            color: #c9728a;
-            font-size: 13px;
+
+        .footer-brand {
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.25rem;
             font-weight: 600;
-            padding: 8px 20px;
-            border-radius: 999px;
-            letter-spacing: 0.04em;
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-brand em { font-style: italic; color: var(--rose); }
+
+        .footer-disclosure {
+            font-size: 0.75rem;
+            color: #aaa;
+            max-width: 520px;
+            margin: 0.75rem auto 0;
+            line-height: 1.6;
+        }
+
+        @media (min-width: 900px) {
+            .header { padding: 1.125rem 3rem; }
+            .gallery-wrap { padding: 2rem 2rem 6rem; }
+            .masonry { column-gap: 1rem; }
+            .pin-card { margin-bottom: 1rem; }
+            .pin-body { padding: 1rem 1.125rem 1.125rem; }
+            .pin-title { font-size: 1.0625rem; }
         }
     </style>
 </head>
 <body>
-    <div class="logo">Aura Girl Essentials 💕</div>
-    <div class="icon">🛍️</div>
-    <h1>Something Beautiful is Coming</h1>
-    <p>We're putting the finishing touches on our curated shop. Check back soon for hand-picked Amazon finds in beauty, home decor, and wellness.</p>
-    <span class="pill">Under Construction</span>
+
+    <header class="header">
+        <div class="brand">Aura <em>Girl</em> Essentials</div>
+        <span class="header-tag">Curated Finds</span>
+    </header>
+
+    <section class="hero">
+        <p class="hero-eyebrow">Amazon Finds · Curated for You</p>
+        <h1 class="hero-title">Your Next Favorite<br><em>Find</em> is Here</h1>
+        <p class="hero-sub">Hand-picked beauty, home, and wellness essentials — everything you see is something I actually love.</p>
+        <div class="hero-divider"></div>
+    </section>
+
+    {% if pins %}
+    <div class="filter-bar">
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-board="all">All Finds</button>
+            {% for board_name in boards.keys() %}
+            <button class="filter-tab" data-board="{{ board_name }}">{{ board_name }}</button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="gallery-wrap">
+        <div class="masonry" id="pinsGrid">
+            {% for pin in pins %}
+            <a href="/shop/pin/{{ pin.id }}" class="pin-card" data-board="{{ pin.board_name or 'Curated Finds' }}">
+                <div class="pin-img-wrap">
+                    <img
+                        src="{{ pin.image_url }}"
+                        alt="{{ pin.title }}"
+                        class="pin-img"
+                        loading="lazy"
+                    >
+                </div>
+                <div class="pin-body">
+                    <h3 class="pin-title">{{ pin.title }}</h3>
+                    {% if pin.description %}
+                    <p class="pin-desc">{{ pin.description | replace('Shop the list', '') | truncate(120, True, '…') }}</p>
+                    {% endif %}
+                    <span class="pin-cta">
+                        Shop This
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                    </span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% else %}
+    <div class="gallery-wrap">
+        <div class="empty-state">
+            <div class="empty-icon">✨</div>
+            <h2 class="empty-title">Finds Coming Soon</h2>
+            <p>We're curating the most beautiful picks. Check back shortly!</p>
+        </div>
+    </div>
+    {% endif %}
+
+    <footer class="footer">
+        <div class="footer-brand">Aura <em>Girl</em> Essentials</div>
+        <p class="footer-disclosure">
+            As an Amazon Associate I earn from qualifying purchases. Prices and availability are subject to change.
+        </p>
+    </footer>
+
+    <script>
+        const tabs = document.querySelectorAll('.filter-tab');
+        const cards = document.querySelectorAll('.pin-card');
+
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                const selected = tab.dataset.board;
+                cards.forEach(card => {
+                    if (selected === 'all' || card.dataset.board === selected) {
+                        card.removeAttribute('data-hidden');
+                    } else {
+                        card.setAttribute('data-hidden', 'true');
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>
