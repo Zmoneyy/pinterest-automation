@@ -3681,6 +3681,59 @@ def pin_folder(session_id):
     return render_template("pin_folder.html", sess=sess, products=products)
 
 
+@bp.route("/research/generate-blog-post", methods=["POST"])
+@login_required
+def generate_blog_post():
+    import anthropic, json as _json
+    data     = request.get_json()
+    title    = (data.get("title")    or "").strip()
+    keywords = (data.get("keywords") or "").strip()
+    products = data.get("products")  or []
+    if not title:
+        return jsonify({"ok": False, "error": "No pin title provided."})
+
+    prod_lines = "\n".join(
+        f"- {p['name']}: {p.get('amazon_url','')}"
+        for p in products
+    ) if products else "(no products provided)"
+
+    kw_line = f"\nSEO keywords to naturally weave in: {keywords}" if keywords else ""
+
+    prompt = f"""You are a lifestyle content writer for Aura Girl Essentials — a curated women's Amazon finds brand (beauty, fashion, home, wellness).
+
+Write a complete, publish-ready blog post based on this Pinterest pin:
+
+Pin title: "{title}"{kw_line}
+
+Products to feature:
+{prod_lines}
+
+Requirements:
+- Opening hook that pulls the reader in immediately
+- Naturally introduce each product with 1-2 sentences explaining WHY it's worth buying (not just what it is)
+- Each product gets its Amazon link formatted as: [Product Name](amazon_url)
+- Conversational, warm tone — like a trusted friend recommending finds
+- Use the pin title keywords naturally throughout for SEO
+- End with a CTA: save this post, follow on Pinterest, comment their fave
+- Include an affiliate disclosure at the very end
+- Format: use ## for section headings, **bold** for product names, natural paragraphs
+- Length: 400-600 words — enough to be useful, short enough to actually read
+
+Return ONLY the blog post text, no JSON wrapper, no extra commentary."""
+
+    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+    try:
+        msg = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return jsonify({"ok": True, "blog_post": msg.content[0].text})
+    except Exception as e:
+        logger.error(f"Blog post generation error: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
+
 @bp.route("/pin-library/bulk")
 @login_required
 def pin_library_bulk():
@@ -3724,6 +3777,7 @@ def pin_library_save():
     products     = data.get("products")      or []
     image_prompt = (data.get("image_prompt") or "").strip()
     ppp_prompt   = (data.get("ppp_prompt")   or "").strip()
+    blog_post    = (data.get("blog_post")    or "").strip()
 
     if not title:
         return jsonify({"ok": False, "error": "Title is required."})
@@ -3735,6 +3789,7 @@ def pin_library_save():
         products     = _json.dumps(products),
         image_prompt = image_prompt,
         ppp_prompt   = ppp_prompt,
+        blog_post    = blog_post or None,
     )
     db.session.add(sess)
     db.session.commit()

@@ -137,6 +137,8 @@ def _run_migrations():
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'medium'",
         # trend_entries — store original screenshots as base64 JSON for AI brief generation
         "ALTER TABLE trend_entries ADD COLUMN IF NOT EXISTS screenshots_b64 TEXT",
+        # pin_research — optional blog post for copying to website
+        "ALTER TABLE pin_research ADD COLUMN IF NOT EXISTS blog_post TEXT",
     ]
     for sql in migrations:
         try:

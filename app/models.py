@@ -229,6 +229,7 @@ class PinResearch(db.Model):
     products     = db.Column(db.Text, nullable=True)   # JSON array
     image_prompt = db.Column(db.Text, nullable=True)   # ChatGPT image generation prompt
     ppp_prompt   = db.Column(db.Text, nullable=True)   # Pin Perfect Pro GPT prompt
+    blog_post    = db.Column(db.Text, nullable=True)   # optional blog post for website
     created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def products_list(self):

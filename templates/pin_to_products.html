@@ -88,6 +88,24 @@
     </div>
   </div>
 
+  <!-- OPTIONAL BLOG POST -->
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div>
+          <h2 style="font-size:17px;font-weight:700;">📝 Blog Post <span style="font-size:12px;font-weight:400;color:var(--gray-400);">optional</span></h2>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Copy and paste onto your website — written from your products and pin title</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="blogCopyBtn" onclick="copySection('blogPostBox')" style="display:none;">Copy</button>
+      </div>
+      <div id="blogLoading" style="display:none;text-align:center;padding:20px;font-size:13px;color:var(--gray-400);">✍️ Writing your blog post…</div>
+      <textarea id="blogPostBox" rows="14" placeholder="Click "Generate Blog Post" to write a website post from this pin…" style="width:100%;font-size:13px;line-height:1.7;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);margin-top:10px;"></textarea>
+      <button class="btn btn-ghost btn-full" id="blogGenBtn" onclick="generateBlogPost()" style="margin-top:10px;">
+        📝 Generate Blog Post
+      </button>
+    </div>
+  </div>
+
   <!-- SAVE -->
   <div style="display:flex;gap:12px;align-items:center;margin-bottom:40px;">
     <button class="btn btn-red" id="saveBtn" onclick="saveToLibrary()" style="flex:1;">
@@ -226,6 +244,10 @@ async function runP2P() {
 
 function renderResult(data) {
   document.getElementById('p2pSummary').textContent = data.summary || '';
+  // Reset blog post section for new result
+  document.getElementById('blogPostBox').value = '';
+  document.getElementById('blogCopyBtn').style.display = 'none';
+  document.getElementById('blogGenBtn').style.display = 'block';
 
   const prods = data.products || [];
   let copyText = 'Products for Pin\n\n';
@@ -265,6 +287,36 @@ function copySection(elemId) {
   });
 }
 
+async function generateBlogPost() {
+  if (!lastResult) return;
+  const btn = document.getElementById('blogGenBtn');
+  const loading = document.getElementById('blogLoading');
+  btn.style.display = 'none';
+  loading.style.display = 'block';
+
+  try {
+    const res = await fetch('/research/generate-blog-post', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        title:    lastTitle,
+        keywords: lastKeywords,
+        products: lastResult.products || [],
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Generation failed.');
+
+    document.getElementById('blogPostBox').value = data.blog_post || '';
+    document.getElementById('blogCopyBtn').style.display = 'block';
+    lastResult.blog_post = data.blog_post;
+  } catch (e) {
+    alert('Blog post failed: ' + e.message);
+    btn.style.display = 'block';
+  }
+  loading.style.display = 'none';
+}
+
 async function saveToLibrary() {
   if (!lastResult) return;
   document.getElementById('saveBtn').disabled = true;
@@ -281,6 +333,7 @@ async function saveToLibrary() {
         products:     lastResult.products     || [],
         image_prompt: lastResult.image_prompt || '',
         ppp_prompt:   lastResult.ppp_prompt   || '',
+        blog_post:    lastResult.blog_post    || '',
       })
     });
     const data = await res.json();
