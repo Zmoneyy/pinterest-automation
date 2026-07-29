@@ -3699,27 +3699,34 @@ def generate_blog_post():
 
     kw_line = f"\nSEO keywords to naturally weave in: {keywords}" if keywords else ""
 
-    prompt = f"""You are a lifestyle content writer for Aura Girl Essentials — a curated women's Amazon finds brand (beauty, fashion, home, wellness).
-
-Write a complete, publish-ready blog post based on this Pinterest pin:
+    prompt = f"""You are writing a blog post for Aura Girl Essentials — a women's lifestyle brand that shares curated Amazon finds.
 
 Pin title: "{title}"{kw_line}
 
-Products to feature:
+Products:
 {prod_lines}
 
-Requirements:
-- Opening hook that pulls the reader in immediately
-- Naturally introduce each product with 1-2 sentences explaining WHY it's worth buying (not just what it is)
-- Each product gets its Amazon link formatted as: [Product Name](amazon_url)
-- Conversational, warm tone — like a trusted friend recommending finds
-- Use the pin title keywords naturally throughout for SEO
-- End with a CTA: save this post, follow on Pinterest, comment their fave
-- Include an affiliate disclosure at the very end
-- Format: use ## for section headings, **bold** for product names, natural paragraphs
-- Length: 400-600 words — enough to be useful, short enough to actually read
+Your goal: write a buyer-intent post that makes someone feel like they NEED these products — without ever sounding like an ad. Think of it as a trusted friend texting you "okay wait, I found the most perfect things." The reader should be reaching for their wallet before they even realize it.
 
-Return ONLY the blog post text, no JSON wrapper, no extra commentary."""
+Tone rules:
+- Warm, real, and a little excited — like you genuinely love this stuff
+- Lead with a relatable moment or feeling (a problem, a vibe, a season, a mood) before mentioning any product
+- For each product: one sentence on what it is, one sentence on WHY it hits — focus on the feeling, the transformation, the social proof ("thousands of reviews", "sold out twice already", "I've repurchased this 3 times")
+- Never say "I recommend" or "you should buy" — let the product sell itself through vivid description
+- Slip in urgency naturally: "these go fast", "summer is right around the corner", "everyone's been asking me about this one"
+- Keywords woven in naturally for SEO — never forced
+- End with something that feels like a conversation starter, not a sales pitch: ask them a question, tell them to pin it for later, or share which one is their fave
+
+Format:
+- ## for the post title (make it more SEO/click-worthy than the pin title — something someone would Google)
+- Short punchy intro paragraph (3-4 sentences max)
+- Each product as its own mini-section: **Product Name** bolded, link formatted as [Product Name](amazon_url), 2-3 sentences
+- Closing paragraph that feels human
+- Affiliate disclosure last, one line, small
+
+Length: 450-600 words. Not a word more — tight writing converts better than long writing.
+
+Return ONLY the blog post. No JSON. No commentary."""
 
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
     try:
