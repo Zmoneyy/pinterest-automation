@@ -3615,6 +3615,38 @@ def pin_folder(session_id):
     return render_template("pin_folder.html", sess=sess, products=products)
 
 
+@bp.route("/pin-library/bulk")
+@login_required
+def pin_library_bulk():
+    import json as _json
+    pins = (
+        Pin.query
+        .filter(Pin.image_url.like("%tailwindapp.net%"))
+        .order_by(Pin.posted_at.desc())
+        .all()
+    )
+    researched_titles = {
+        r.title for r in
+        PinResearch.query.with_entities(PinResearch.title).all()
+    }
+    pin_data = [
+        {
+            "id": p.id,
+            "title": p.title,
+            "board": p.board_name or "",
+            "researched": p.title in researched_titles,
+        }
+        for p in pins
+    ]
+    total_done = sum(1 for p in pin_data if p["researched"])
+    return render_template(
+        "pin_bulk.html",
+        pins=pin_data,
+        total=len(pin_data),
+        total_done=total_done,
+    )
+
+
 @bp.route("/pin-library/save", methods=["POST"])
 @login_required
 def pin_library_save():

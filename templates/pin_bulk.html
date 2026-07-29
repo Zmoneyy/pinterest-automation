@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% block title %}Bulk Generate — Pin Library{% endblock %}
+
+{% block content %}
+
+<div style="margin-bottom:24px;">
+  <a href="/pin-library" style="font-size:13px;color:var(--gray-400);text-decoration:none;">← Pin Library</a>
+  <h1 style="font-size:20px;font-weight:800;color:var(--gray-900);margin-top:8px;">
+    Bulk Generate — All {{ total }} Pins
+  </h1>
+  <div style="font-size:13px;color:var(--gray-400);margin-top:4px;">
+    {{ total_done }} already done · {{ total - total_done }} pending
+  </div>
+</div>
+
+<!-- Progress bar (hidden until started) -->
+<div id="progressWrap" style="display:none;margin-bottom:24px;">
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;margin-bottom:8px;">
+        <span id="progressLabel">Starting…</span>
+        <span id="progressCount" style="color:var(--red);"></span>
+      </div>
+      <div style="background:var(--gray-100);border-radius:99px;height:10px;overflow:hidden;">
+        <div id="progressBar" style="height:100%;background:var(--red);border-radius:99px;width:0%;transition:width 0.4s;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Action buttons -->
+<div id="actionWrap" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;">
+  {% if total - total_done > 0 %}
+  <button class="btn btn-red" id="generateAllBtn" onclick="startBulk(false)">
+    Generate {{ total - total_done }} Pending Pins
+  </button>
+  {% endif %}
+  <button class="btn btn-ghost" id="regenAllBtn" onclick="startBulk(true)">
+    Regenerate All {{ total }} Pins
+  </button>
+  <a href="/pin-library" class="btn btn-gray">View Library →</a>
+</div>
+
+<div id="doneMsg" style="display:none;" class="alert alert-success" style="margin-bottom:16px;"></div>
+<div id="errorMsg" style="display:none;" class="alert alert-error" style="margin-bottom:16px;"></div>
+
+<!-- Pin list -->
+<div style="display:flex;flex-direction:column;gap:8px;" id="pinList">
+  {% for pin in pins %}
+  <div id="pin-row-{{ loop.index0 }}" class="card" style="padding:0;">
+    <div class="card-body" style="display:flex;align-items:center;gap:12px;padding:12px 16px;">
+      <div id="pin-status-{{ loop.index0 }}" style="flex-shrink:0;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;
+           {% if pin.researched %}background:#dcfce7;{% else %}background:var(--gray-100);{% endif %}">
+        {% if pin.researched %}✅{% else %}⏳{% endif %}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;color:var(--gray-900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          {{ pin.title }}
+        </div>
+        {% if pin.board %}
+        <div style="font-size:11px;color:var(--gray-400);">{{ pin.board }}</div>
+        {% endif %}
+      </div>
+      <div id="pin-action-{{ loop.index0 }}" style="flex-shrink:0;font-size:12px;color:var(--gray-400);">
+        {% if pin.researched %}Done{% else %}Pending{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ALL_PINS = {{ pins | tojson }};
+let running = false;
+
+async function startBulk(regenAll) {
+  if (running) return;
+  running = true;
+
+  const pending = ALL_PINS.filter(p => regenAll || !p.researched);
+  if (pending.length === 0) {
+    alert('All pins are already generated!');
+    running = false;
+    return;
+  }
+
+  document.getElementById('actionWrap').style.display = 'none';
+  document.getElementById('progressWrap').style.display = 'block';
+  document.getElementById('doneMsg').style.display = 'none';
+  document.getElementById('errorMsg').style.display = 'none';
+
+  const total = pending.length;
+  let done = 0;
+  let errors = 0;
+
+  // Map title → index in ALL_PINS for row updates
+  const titleToIdx = {};
+  ALL_PINS.forEach((p, i) => titleToIdx[p.title] = i);
+
+  for (const pin of pending) {
+    const rowIdx = titleToIdx[pin.title];
+    const label  = document.getElementById('progressLabel');
+    const count  = document.getElementById('progressCount');
+    const bar    = document.getElementById('progressBar');
+    const status = document.getElementById(`pin-status-${rowIdx}`);
+    const action = document.getElementById(`pin-action-${rowIdx}`);
+
+    label.textContent = `Generating: ${pin.title.slice(0, 60)}…`;
+    count.textContent = `${done}/${total}`;
+    bar.style.width   = `${Math.round(done/total*100)}%`;
+    if (status) status.textContent = '⏳';
+    if (action) action.textContent = 'Working…';
+
+    try {
+      // Step 1: generate
+      const genRes = await fetch('/research/pin-to-products', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title: pin.title, keywords: ''})
+      });
+      const genData = await genRes.json();
+      if (!genData.ok) throw new Error(genData.error || 'Generate failed');
+
+      // Step 2: save
+      const saveRes = await fetch('/pin-library/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          title:        pin.title,
+          keywords:     '',
+          summary:      genData.summary      || '',
+          products:     genData.products     || [],
+          image_prompt: genData.image_prompt || '',
+          ppp_prompt:   genData.ppp_prompt   || '',
+        })
+      });
+      const saveData = await saveRes.json();
+      if (!saveData.ok) throw new Error(saveData.error || 'Save failed');
+
+      done++;
+      if (status) { status.textContent = '✅'; status.style.background = '#dcfce7'; }
+      if (action) { action.innerHTML = `<a href="/pin-library/${saveData.id}" style="color:var(--red);text-decoration:none;font-size:12px;">Open →</a>`; }
+
+    } catch (e) {
+      errors++;
+      if (status) { status.textContent = '❌'; status.style.background = '#fee2e2'; }
+      if (action) action.textContent = 'Error';
+      console.error(`Failed for "${pin.title}":`, e.message);
+    }
+
+    bar.style.width   = `${Math.round(done/total*100)}%`;
+    count.textContent = `${done}/${total}`;
+
+    // Brief pause so we don't hammer the API
+    await new Promise(r => setTimeout(r, 800));
+  }
+
+  label.textContent = done === total ? `All done! ${done} pins generated.` : `Finished with ${errors} error(s).`;
+  bar.style.width   = '100%';
+  count.textContent = `${done}/${total}`;
+
+  const msg = document.getElementById('doneMsg');
+  msg.innerHTML = `✅ Generated ${done} of ${total} pins. <a href="/pin-library" style="color:var(--red);font-weight:700;">View Pin Library →</a>`;
+  msg.style.display = 'block';
+
+  document.getElementById('actionWrap').style.display = 'flex';
+  running = false;
+}
+</script>
+{% endblock %}
