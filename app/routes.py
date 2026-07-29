@@ -147,7 +147,7 @@ def login_required(f):
 def index():
     host = request.host.split(":")[0]
     if host == PUBLIC_DOMAIN:
-        return redirect(url_for("main.shop"))
+        return shop()
     return redirect(url_for("main.dashboard"))
 
 
