@@ -354,6 +354,18 @@
 ═══════════════════════════════════════════════════════════════ #}
 {% if active_tab == 'pending' %}
 
+  {# Output actual product data for each pin so JS can use real products #}
+  <script>
+  const CARD_PRODS = {};
+  {% for pin in pending_pins %}
+  CARD_PRODS[{{ pin.id }}] = [
+    {% for p in pin.products %}
+    {"name": {{ p.name | tojson }}, "amazon_url": {{ (p.amazon_url or '') | tojson }}, "image_url": {{ (p.image_url or '') | tojson }}}{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+  {% endfor %}
+  </script>
+
   {% if pending_pins %}
   <div class="pin-grid">
     {% for pin in pending_pins %}
@@ -490,7 +502,7 @@
             {% endif %}
           {% else %}
             <button class="btn btn-ghost btn-sm btn-full"
-                    onclick="inlineGenerateCard({{ pin.id }}, {{ pin.title | tojson }})">
+                    onclick="inlineGenerateCard({{ pin.id }}, {{ pin.title | tojson }}, this)">
               ⚡ Generate Amazon + AI Prompts
             </button>
           {% endif %}
@@ -1442,16 +1454,18 @@ function cpTA(id, btn) {
   });
 }
 
-async function inlineGenerateCard(pinId, title) {
-  const btn = event.target;
+async function inlineGenerateCard(pinId, title, btn) {
   btn.textContent = 'Generating…';
   btn.disabled = true;
+
+  // Use the real products already stored in the DB for this pin
+  const existingProds = (window.CARD_PRODS && CARD_PRODS[pinId]) || [];
 
   try {
     const genRes = await fetch('/research/pin-to-products', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({title, keywords: ''})
+      body: JSON.stringify({title, keywords: '', existing_products: existingProds})
     });
     const d = await genRes.json();
     if (!d.ok) throw new Error(d.error);

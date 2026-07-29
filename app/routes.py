@@ -3528,14 +3528,77 @@ Only return valid JSON, no other text."""
 def pin_to_products_api():
     import anthropic, urllib.parse, json as _json
     data = request.get_json()
-    title    = (data.get("title")    or "").strip()
-    keywords = (data.get("keywords") or "").strip()
+    title             = (data.get("title")    or "").strip()
+    keywords          = (data.get("keywords") or "").strip()
+    existing_products = data.get("existing_products") or []  # real products from DB
     if not title:
         return jsonify({"ok": False, "error": "No pin title provided."})
 
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
     kw_line = f"\nKeywords to use: {keywords}" if keywords else ""
 
+    # ── When real products are already known, skip guessing and only generate prompts ──
+    if existing_products:
+        prod_lines = "\n".join(
+            f"- {p['name']}" + (f" ({p['amazon_url']})" if p.get("amazon_url") else "")
+            for p in existing_products
+        )
+        prompt = f"""You are a Pinterest content expert for Aura Girl Essentials — a curated women's lifestyle brand.
+
+Pinterest pin title: "{title}"{kw_line}
+
+These are the EXACT products already featured in this pin (do NOT change or add to them):
+{prod_lines}
+
+Using those exact products, generate two things and return as JSON:
+
+─── 1. AI IMAGE PROMPT ───
+A detailed image-generation prompt for ChatGPT/DALL-E. Must:
+- Be based on the products listed above
+- Describe exact aesthetic, mood, color palette, composition
+- Feel like a high-end lifestyle editorial / magazine spread
+- Make the viewer immediately want to buy
+- Optimized for Pinterest vertical format (2:3 ratio)
+
+─── 2. PIN PERFECT PRO PROMPT ───
+A complete, ready-to-paste GPT prompt for Pin Perfect Pro (ChatGPT tool for Pinterest copy). Must include:
+- Brand context: Aura Girl Essentials
+- The pin title
+- All products with their Amazon links
+{"- Keywords to incorporate: " + keywords if keywords else ""}
+- Instructions: (a) keyword-first title max 100 chars, (b) 3-part description: hook/keyword → transformation → CTA, (c) 15-20 hashtags
+- Money Making Pin Formula: lead with keyword, include year, transformation-focused, natural CTA
+
+Return ONLY valid JSON:
+{{
+  "summary": "2 sentences on the vibe and shopping intent",
+  "image_prompt": "full AI image generation prompt ready to paste into ChatGPT",
+  "ppp_prompt": "full Pin Perfect Pro GPT prompt ready to paste"
+}}"""
+        try:
+            msg = client.messages.create(
+                model="claude-opus-4-5",
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            result = _json.loads(msg.content[0].text)
+            # Attach the real products (with amazon_url from DB) directly
+            for p in existing_products:
+                if p.get("amazon_url") and "tag=" not in p["amazon_url"]:
+                    q = urllib.parse.quote_plus(p["name"])
+                    p["amazon_url"] = f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
+                elif not p.get("amazon_url"):
+                    q = urllib.parse.quote_plus(p["name"])
+                    p["amazon_url"] = f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
+                p.setdefault("why", "Featured in this pin")
+            result["products"] = existing_products
+            result["ok"] = True
+            return jsonify(result)
+        except Exception as e:
+            logger.error(f"Pin to Products (existing) error: {e}")
+            return jsonify({"ok": False, "error": str(e)})
+
+    # ── No existing products — generate everything from scratch ──
     prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds).
 
 Pinterest pin title: "{title}"{kw_line}
