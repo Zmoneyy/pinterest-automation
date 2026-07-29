@@ -442,6 +442,61 @@
         </form>
       </div>
 
+      {# ── Amazon + AI Prompts accordion ── #}
+      {% set rs = research_by_title.get(pin.title) %}
+      <div style="border-top:1px solid var(--gray-100);">
+        <button onclick="toggleCardRs({{ pin.id }})"
+          style="width:100%;text-align:left;background:none;border:none;padding:10px 14px;font-size:12px;font-weight:700;color:var(--gray-500);cursor:pointer;display:flex;justify-content:space-between;align-items:center;letter-spacing:0.03em;">
+          <span>🛍️ Amazon + AI Prompts</span>
+          <span id="cchev-{{ pin.id }}" style="font-size:11px;">▸</span>
+        </button>
+        <div id="crs-{{ pin.id }}" style="display:none;padding:0 14px 14px;">
+          {% if rs %}
+            {% set prods = rs.products_list() %}
+            {% if prods %}
+              {% for p in prods %}
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 0;{% if not loop.first %}border-top:1px solid var(--gray-50);{% endif %}">
+                {% if p.image_url %}
+                <img src="{{ p.image_url }}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;"
+                     onerror="this.style.display='none'">
+                {% endif %}
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:12px;font-weight:600;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.name }}</div>
+                  <a href="{{ p.amazon_url }}" target="_blank" rel="noopener"
+                     style="font-size:11px;color:var(--red);text-decoration:none;">Amazon →</a>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
+            {% if rs.image_prompt %}
+            <div style="margin-top:10px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">🎨 ChatGPT Image Prompt</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;"
+                        onclick="cpTA('cimg-{{ pin.id }}',this)">Copy</button>
+              </div>
+              <textarea id="cimg-{{ pin.id }}" rows="3" style="width:100%;font-size:11px;line-height:1.5;border:1px solid var(--gray-200);border-radius:6px;padding:8px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">{{ rs.image_prompt }}</textarea>
+            </div>
+            {% endif %}
+            {% if rs.ppp_prompt %}
+            <div style="margin-top:8px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">✍️ Pin Perfect Pro Prompt</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;"
+                        onclick="cpTA('cppp-{{ pin.id }}',this)">Copy</button>
+              </div>
+              <textarea id="cppp-{{ pin.id }}" rows="5" style="width:100%;font-size:11px;line-height:1.5;border:1px solid var(--gray-200);border-radius:6px;padding:8px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">{{ rs.ppp_prompt }}</textarea>
+            </div>
+            {% endif %}
+          {% else %}
+            <button class="btn btn-ghost btn-sm btn-full"
+                    onclick="inlineGenerateCard({{ pin.id }}, {{ pin.title | tojson }})">
+              ⚡ Generate Amazon + AI Prompts
+            </button>
+          {% endif %}
+        </div>
+      </div>
+
     </div>
     {% endfor %}
   </div>
@@ -1368,5 +1423,93 @@ async function sendToTailwind(pinId, btn) {
       setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 2500);
     }
   });
+
+/* ── Pin-card research accordion ─────────────────────────────── */
+function toggleCardRs(id) {
+  const panel = document.getElementById('crs-' + id);
+  const chev  = document.getElementById('cchev-' + id);
+  const open  = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  chev.textContent    = open ? '▾' : '▸';
+}
+
+function cpTA(id, btn) {
+  const el = document.getElementById(id);
+  navigator.clipboard.writeText(el ? el.value : '').then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+async function inlineGenerateCard(pinId, title) {
+  const btn = event.target;
+  btn.textContent = 'Generating…';
+  btn.disabled = true;
+
+  try {
+    const genRes = await fetch('/research/pin-to-products', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, keywords: ''})
+    });
+    const d = await genRes.json();
+    if (!d.ok) throw new Error(d.error);
+
+    await fetch('/pin-library/save', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, keywords:'', summary:d.summary||'',
+        products:d.products||[], image_prompt:d.image_prompt||'', ppp_prompt:d.ppp_prompt||''})
+    });
+
+    // Render inline
+    const wrap = document.getElementById('crs-' + pinId);
+    const prods = d.products || [];
+    let html = '';
+
+    if (prods.length) {
+      prods.forEach((p, i) => {
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;${i>0?'border-top:1px solid var(--gray-50);':''}">
+          ${p.image_url ? `<img src="${p.image_url}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">` : ''}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:var(--gray-800);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+            <a href="${p.amazon_url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--red);text-decoration:none;">Amazon →</a>
+          </div></div>`;
+      });
+    }
+
+    const escape = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const uid = 'dyn' + pinId;
+
+    if (d.image_prompt) {
+      html += `<div style="margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">🎨 ChatGPT Image Prompt</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;"
+            onclick="navigator.clipboard.writeText(document.getElementById('cimg${uid}').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+        </div>
+        <textarea id="cimg${uid}" rows="3" style="width:100%;font-size:11px;line-height:1.5;border:1px solid var(--gray-200);border-radius:6px;padding:8px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">${escape(d.image_prompt)}</textarea>
+      </div>`;
+    }
+
+    if (d.ppp_prompt) {
+      html += `<div style="margin-top:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <span style="font-size:10px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">✍️ Pin Perfect Pro Prompt</span>
+          <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 8px;"
+            onclick="navigator.clipboard.writeText(document.getElementById('cppp${uid}').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+        </div>
+        <textarea id="cppp${uid}" rows="5" style="width:100%;font-size:11px;line-height:1.5;border:1px solid var(--gray-200);border-radius:6px;padding:8px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">${escape(d.ppp_prompt)}</textarea>
+      </div>`;
+    }
+
+    wrap.innerHTML = html;
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = '⚡ Generate Amazon + AI Prompts';
+    alert('Failed: ' + e.message);
+  }
+}
 </script>
 {% endblock %}
