@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Trend Scout — PinBot{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🔍 Trend Scout</h1>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body">
+    <p style="color:var(--gray-600);font-size:14px;margin-bottom:16px;">
+      Enter a trend, season, or theme — Claude will research what's hot and give you a curated product list with Amazon links ready to use for your pins.
+    </p>
+    <div class="form-group">
+      <label>Trend / Theme</label>
+      <input type="text" id="trendInput" placeholder="e.g. fall 2026 outfits, cozy home decor, winter skincare routine…" />
+    </div>
+    <button class="btn btn-red btn-full" id="scoutBtn" onclick="runScout()">
+      Research Trend
+    </button>
+  </div>
+</div>
+
+<div id="scoutResult" style="display:none;">
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 id="scoutHeading" style="font-size:17px;font-weight:700;"></h2>
+        <button class="btn btn-ghost btn-sm" onclick="copyList()">Copy List</button>
+      </div>
+      <div id="scoutSummary" style="font-size:14px;color:var(--gray-600);margin-bottom:20px;line-height:1.6;"></div>
+      <div id="productList"></div>
+      <div id="pinTitleSuggestion" style="margin-top:20px;padding:14px;background:var(--red-light);border-radius:10px;display:none;">
+        <div style="font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Suggested Pin Title</div>
+        <div id="pinTitleText" style="font-size:15px;font-weight:600;color:var(--gray-800);"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="scoutLoading" style="display:none;text-align:center;padding:40px;">
+  <div style="font-size:32px;margin-bottom:12px;">🔍</div>
+  <div style="font-weight:600;margin-bottom:6px;">Researching trend…</div>
+  <div style="font-size:13px;color:var(--gray-400);">Claude is finding what's hot right now</div>
+</div>
+
+<div id="scoutError" style="display:none;" class="alert alert-error"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lastProducts = [];
+
+async function runScout() {
+  const theme = document.getElementById('trendInput').value.trim();
+  if (!theme) return alert('Enter a trend or theme first.');
+
+  document.getElementById('scoutResult').style.display = 'none';
+  document.getElementById('scoutError').style.display = 'none';
+  document.getElementById('scoutLoading').style.display = 'block';
+  document.getElementById('scoutBtn').disabled = true;
+
+  try {
+    const res = await fetch('/research/trend-scout', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({theme})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Something went wrong.');
+
+    document.getElementById('scoutHeading').textContent = data.heading || theme;
+    document.getElementById('scoutSummary').textContent = data.summary || '';
+
+    lastProducts = data.products || [];
+    const list = document.getElementById('productList');
+    list.innerHTML = '';
+    lastProducts.forEach((p, i) => {
+      const imgSrc = p.image_url || '';
+      list.innerHTML += `
+        <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--gray-100);">
+          <div style="flex-shrink:0;width:80px;height:80px;border-radius:10px;overflow:hidden;background:var(--gray-100);display:flex;align-items:center;justify-content:center;">
+            ${imgSrc
+              ? `<img src="${imgSrc}" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.innerHTML='<span style=font-size:24px>🛍️</span>'">`
+              : `<span style="font-size:24px;">🛍️</span>`}
+          </div>
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:15px;margin-bottom:3px;">${p.name}</div>
+            <div style="font-size:13px;color:var(--gray-500);margin-bottom:8px;line-height:1.5;">${p.why}</div>
+            <a href="${p.amazon_url}" target="_blank" rel="noopener" class="btn btn-gray btn-sm">
+              Search on Amazon →
+            </a>
+          </div>
+        </div>`;
+    });
+
+    if (data.pin_title) {
+      document.getElementById('pinTitleText').textContent = data.pin_title;
+      document.getElementById('pinTitleSuggestion').style.display = 'block';
+    }
+
+    document.getElementById('scoutLoading').style.display = 'none';
+    document.getElementById('scoutResult').style.display = 'block';
+  } catch (e) {
+    document.getElementById('scoutLoading').style.display = 'none';
+    document.getElementById('scoutError').textContent = e.message;
+    document.getElementById('scoutError').style.display = 'block';
+  }
+  document.getElementById('scoutBtn').disabled = false;
+}
+
+function copyList() {
+  const heading = document.getElementById('scoutHeading').textContent;
+  const pinTitle = document.getElementById('pinTitleText').textContent;
+  let text = heading + '\n\n';
+  lastProducts.forEach((p, i) => {
+    text += `${i+1}. ${p.name}\n   ${p.why}\n   ${p.amazon_url}\n\n`;
+  });
+  if (pinTitle) text += `Pin Title: ${pinTitle}`;
+  navigator.clipboard.writeText(text.trim()).then(() => alert('Copied to clipboard!'));
+}
+
+document.getElementById('trendInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') runScout();
+});
+</script>
+{% endblock %}

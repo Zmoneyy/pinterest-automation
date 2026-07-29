@@ -362,8 +362,16 @@
         Bulk Schedule
       </a>
       <a href="{{ url_for('main.trends') }}"
-         class="nav-link {% if request.endpoint and 'trend' in request.endpoint %}active{% endif %}">
+         class="nav-link {% if request.endpoint and 'trend' in request.endpoint and request.endpoint != 'main.trend_scout' %}active{% endif %}">
         Trends
+      </a>
+      <a href="{{ url_for('main.trend_scout') }}"
+         class="nav-link {% if request.endpoint == 'main.trend_scout' %}active{% endif %}">
+        Trend Scout
+      </a>
+      <a href="{{ url_for('main.pin_to_products') }}"
+         class="nav-link {% if request.endpoint == 'main.pin_to_products' %}active{% endif %}">
+        Pin → Products
       </a>
       <a href="{{ url_for('main.setup') }}"
          class="nav-link {% if request.endpoint == 'main.setup' %}active{% endif %}">

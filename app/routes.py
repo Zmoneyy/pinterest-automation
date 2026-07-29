@@ -3441,6 +3441,146 @@ def shop_pin(pin_id):
     return render_template("shop_pin.html", pin=pin, products=products)
 
 
+# ── Research tools ────────────────────────────────────────────────────────
+
+@bp.route("/research/trend-scout")
+@login_required
+def trend_scout():
+    return render_template("trend_scout.html")
+
+
+@bp.route("/research/pin-to-products")
+@login_required
+def pin_to_products():
+    return render_template("pin_to_products.html")
+
+
+@bp.route("/research/trend-scout", methods=["POST"])
+@login_required
+def trend_scout_api():
+    import anthropic, urllib.parse
+    data = request.get_json()
+    theme = (data.get("theme") or "").strip()
+    if not theme:
+        return jsonify({"ok": False, "error": "No theme provided."})
+
+    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+    prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a women's lifestyle brand focused on beauty, fashion, home decor, and wellness Amazon finds.
+
+The user wants to create a Pinterest pin about: "{theme}"
+
+Research what is trending right now for this theme and return a curated product list of 5-7 specific products that:
+- Are trending and will sell well
+- Are proven best sellers or highly rated (4+ stars, 1000+ reviews) on Amazon
+- Are currently in stock on Amazon (popular mainstream products, not obscure items)
+- Are visually appealing for Pinterest collages
+- Fit the Aura Girl Essentials brand (elevated, aesthetic, women's lifestyle)
+
+Return your response as JSON with this exact structure:
+{{
+  "heading": "short catchy heading for this trend (e.g. 'Fall 2026 Chocolate Brown Edit')",
+  "summary": "2-3 sentence explanation of why these products are trending and will sell well",
+  "pin_title": "a Pinterest pin title following the format: keyword-first, includes year, transformation-focused, max 100 chars",
+  "products": [
+    {{
+      "name": "specific product name (brand + product, e.g. 'Levi's 94 Baggy Barrel Jeans')",
+      "why": "one sentence: why this is trending and why it will convert",
+      "search_query": "exact Amazon search query to find this product",
+      "asin": "Amazon ASIN if you know it confidently, otherwise empty string"
+    }}
+  ]
+}}
+
+Only return valid JSON, no other text."""
+
+    try:
+        msg = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=1500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        import json as _json
+        result = _json.loads(msg.content[0].text)
+        for p in result.get("products", []):
+            q = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
+            asin = p.get("asin", "").strip()
+            p["amazon_url"] = (
+                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+                if asin else
+                f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
+            )
+            p["image_url"] = (
+                f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+                if asin else ""
+            )
+        result["ok"] = True
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Trend Scout error: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
+
+@bp.route("/research/pin-to-products", methods=["POST"])
+@login_required
+def pin_to_products_api():
+    import anthropic, urllib.parse
+    data = request.get_json()
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"ok": False, "error": "No pin title provided."})
+
+    client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
+    prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a women's lifestyle brand selling Amazon finds.
+
+The user has this Pinterest pin title: "{title}"
+
+Break this pin title down into 4-7 specific Amazon products that would be perfect for this pin. Think about:
+- What specific items make up this look/theme/concept?
+- What would someone need to buy to recreate this?
+- Only recommend proven Amazon best sellers or highly rated products (4+ stars, 1000+ reviews) that are definitely in stock
+
+Return your response as JSON with this exact structure:
+{{
+  "summary": "1-2 sentences describing the vibe/theme of this pin and the shopping intent",
+  "products": [
+    {{
+      "name": "specific product name (brand + product if possible, e.g. 'Steve Madden Siren Ankle Boot in Tan')",
+      "why": "one sentence: why this product fits this pin perfectly",
+      "search_query": "exact Amazon search query to find this product",
+      "asin": "Amazon ASIN if you know it confidently, otherwise empty string"
+    }}
+  ]
+}}
+
+Only return valid JSON, no other text."""
+
+    try:
+        msg = client.messages.create(
+            model="claude-opus-4-5",
+            max_tokens=1200,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        import json as _json
+        result = _json.loads(msg.content[0].text)
+        for p in result.get("products", []):
+            q = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
+            asin = p.get("asin", "").strip()
+            p["amazon_url"] = (
+                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+                if asin else
+                f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
+            )
+            p["image_url"] = (
+                f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+                if asin else ""
+            )
+        result["ok"] = True
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Pin to Products error: {e}")
+        return jsonify({"ok": False, "error": str(e)})
+
+
 # ── Health check ──────────────────────────────────────────────────────────
 
 @bp.route("/health")
