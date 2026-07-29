@@ -16,8 +16,19 @@
     </div>
 
     <div class="form-group">
-      <label>Keywords <span style="font-weight:400;color:var(--gray-400);font-size:12px;">(optional — comma-separated; gets baked into your PPP prompt)</span></label>
-      <input type="text" id="keywordsInput" placeholder="e.g. fall outfits amazon, chocolate brown aesthetic, cozy fall fashion 2026" />
+      <label>Keywords <span style="font-weight:400;color:var(--gray-400);font-size:12px;">— type one, press Enter or comma to add</span></label>
+      <!-- Tag chip input -->
+      <div id="kwBox" onclick="document.getElementById('kwTyper').focus()" style="
+        display:flex;flex-wrap:wrap;gap:6px;align-items:center;
+        border:1px solid var(--gray-200);border-radius:10px;
+        padding:8px 10px;min-height:44px;cursor:text;
+        background:#fff;transition:border-color 0.15s;">
+        <!-- chips render here -->
+        <input id="kwTyper" type="text" placeholder="e.g. best self tanner"
+          style="border:none;outline:none;flex:1;min-width:140px;font-size:14px;background:transparent;padding:2px 0;color:var(--gray-800);"
+          onkeydown="kwKey(event)" oninput="kwGrow(this)" />
+      </div>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Press Enter or comma after each keyword</div>
     </div>
 
     <button class="btn btn-red btn-full" id="p2pBtn" onclick="runP2P()">
@@ -91,13 +102,92 @@
 
 {% block scripts %}
 <script>
+/* ── Keyword chip logic ─────────────────────────── */
+let chips = [];
+
+function kwKey(e) {
+  const typer = e.target;
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    addChip(typer.value);
+    typer.value = '';
+  } else if (e.key === 'Backspace' && typer.value === '' && chips.length) {
+    removeChip(chips.length - 1);
+  }
+}
+
+function kwGrow(input) {
+  // If user pasted a comma-separated list, split it out
+  if (input.value.includes(',')) {
+    const parts = input.value.split(',');
+    parts.forEach((p, i) => {
+      if (i < parts.length - 1) addChip(p);
+    });
+    input.value = parts[parts.length - 1];
+  }
+}
+
+function addChip(raw) {
+  const text = raw.trim().replace(/,+$/, '');
+  if (!text || chips.includes(text)) return;
+  chips.push(text);
+  renderChips();
+}
+
+function removeChip(idx) {
+  chips.splice(idx, 1);
+  renderChips();
+}
+
+function renderChips() {
+  const box   = document.getElementById('kwBox');
+  const typer = document.getElementById('kwTyper');
+  // Remove old chips (everything except the input)
+  Array.from(box.children).forEach(el => { if (el !== typer) el.remove(); });
+  chips.forEach((text, i) => {
+    const chip = document.createElement('span');
+    chip.style.cssText = `
+      display:inline-flex;align-items:center;gap:5px;
+      background:var(--red-light);color:var(--red);
+      border-radius:20px;padding:3px 10px 3px 12px;
+      font-size:13px;font-weight:600;white-space:nowrap;
+      flex-shrink:0;`;
+    chip.innerHTML = `${text}<button onclick="removeChip(${i})" style="
+      background:none;border:none;cursor:pointer;padding:0;line-height:1;
+      color:var(--red);font-size:15px;margin-left:2px;">×</button>`;
+    box.insertBefore(chip, typer);
+  });
+  // Focus border
+  document.getElementById('kwBox').style.borderColor = chips.length ? 'var(--red)' : 'var(--gray-200)';
+}
+
+function getKeywordsString() {
+  // Also grab anything typed but not yet committed
+  const pending = document.getElementById('kwTyper').value.trim().replace(/,+$/, '');
+  const all = pending ? [...chips, pending] : [...chips];
+  return all.join(', ');
+}
+
+/* ── Focus/blur border state ────────────────────── */
+document.addEventListener('DOMContentLoaded', () => {
+  const typer = document.getElementById('kwTyper');
+  const box   = document.getElementById('kwBox');
+  typer.addEventListener('focus', () => box.style.borderColor = 'var(--red)');
+  typer.addEventListener('blur',  () => {
+    // commit pending text on blur
+    if (typer.value.trim()) { addChip(typer.value); typer.value = ''; }
+    if (!chips.length) box.style.borderColor = 'var(--gray-200)';
+  });
+});
+
+/* ── Main logic ─────────────────────────────────── */
 let lastResult = null;
 let lastTitle = '';
 let lastKeywords = '';
 
 async function runP2P() {
   const title    = document.getElementById('pinInput').value.trim();
-  const keywords = document.getElementById('keywordsInput').value.trim();
+  const keywords = getKeywordsString();
   if (!title) return alert('Paste a pin title first.');
 
   lastTitle    = title;
