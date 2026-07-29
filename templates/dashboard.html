@@ -599,6 +599,57 @@
           {% else %}—{% endif %}
         </div>
       </div>
+
+      {# ── Research section ─────────────────────────────────────────── #}
+      {% set rs = research_by_title.get(pin.title) %}
+      <div id="rs-wrap-{{ pin.id }}" style="margin-top:16px;border-top:2px solid var(--gray-100);padding-top:14px;">
+        {% if rs %}
+          {% set prods = rs.products_list() %}
+          {% if prods %}
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">🛍️ Amazon Products</div>
+          {% for p in prods %}
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;{% if not loop.first %}border-top:1px solid var(--gray-50);{% endif %}">
+            {% if p.image_url %}
+            <img src="{{ p.image_url }}" style="width:44px;height:44px;border-radius:7px;object-fit:cover;flex-shrink:0;"
+                 onerror="this.style.display='none'">
+            {% endif %}
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:var(--gray-800);">{{ p.name }}</div>
+              <a href="{{ p.amazon_url }}" target="_blank" rel="noopener"
+                 style="font-size:11px;color:var(--red);text-decoration:none;">Amazon →</a>
+            </div>
+          </div>
+          {% endfor %}
+          {% endif %}
+
+          {% if rs.image_prompt %}
+          <div style="margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">🎨 ChatGPT Image Prompt</span>
+              <button class="btn btn-ghost btn-sm" onclick="copyTA('img-{{ pin.id }}')">Copy</button>
+            </div>
+            <textarea id="img-{{ pin.id }}" rows="4" style="width:100%;font-size:12px;line-height:1.5;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">{{ rs.image_prompt }}</textarea>
+          </div>
+          {% endif %}
+
+          {% if rs.ppp_prompt %}
+          <div style="margin-top:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">✍️ Pin Perfect Pro Prompt</span>
+              <button class="btn btn-ghost btn-sm" onclick="copyTA('ppp-{{ pin.id }}')">Copy</button>
+            </div>
+            <textarea id="ppp-{{ pin.id }}" rows="7" style="width:100%;font-size:12px;line-height:1.5;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">{{ rs.ppp_prompt }}</textarea>
+          </div>
+          {% endif %}
+
+        {% else %}
+          <button class="btn btn-ghost btn-sm"
+                  onclick="inlineGenerate({{ pin.id }}, {{ pin.title | tojson }})">
+            ⚡ Generate Amazon Products + AI Prompts
+          </button>
+        {% endif %}
+      </div>
+
     </div>
   </div>
   {% endfor %}
@@ -608,6 +659,92 @@
       const chev = document.getElementById('posted-chevron-' + id);
       const open = body.classList.toggle('open');
       chev.textContent = open ? '▾' : '▸';
+    }
+
+    function copyTA(id) {
+      const el = document.getElementById(id);
+      navigator.clipboard.writeText(el.value).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 1500);
+      });
+    }
+
+    async function inlineGenerate(pinId, title) {
+      const btn = event.target;
+      btn.textContent = 'Generating…';
+      btn.disabled = true;
+
+      try {
+        const genRes = await fetch('/research/pin-to-products', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({title, keywords: ''})
+        });
+        const genData = await genRes.json();
+        if (!genData.ok) throw new Error(genData.error);
+
+        await fetch('/pin-library/save', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            title,
+            keywords:     '',
+            summary:      genData.summary      || '',
+            products:     genData.products     || [],
+            image_prompt: genData.image_prompt || '',
+            ppp_prompt:   genData.ppp_prompt   || '',
+          })
+        });
+
+        // Render inline without page reload
+        const wrap = document.getElementById('rs-wrap-' + pinId);
+        const prods = genData.products || [];
+        let html = '';
+
+        if (prods.length) {
+          html += `<div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">🛍️ Amazon Products</div>`;
+          prods.forEach((p, i) => {
+            html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;${i>0?'border-top:1px solid var(--gray-50);':''}">
+              ${p.image_url ? `<img src="${p.image_url}" style="width:44px;height:44px;border-radius:7px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">` : ''}
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:13px;font-weight:600;color:var(--gray-800);">${p.name}</div>
+                <a href="${p.amazon_url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--red);text-decoration:none;">Amazon →</a>
+              </div>
+            </div>`;
+          });
+        }
+
+        if (genData.image_prompt) {
+          const uid = 'img-dyn-' + pinId;
+          html += `<div style="margin-top:14px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">🎨 ChatGPT Image Prompt</span>
+              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('${uid}').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+            </div>
+            <textarea id="${uid}" rows="4" style="width:100%;font-size:12px;line-height:1.5;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">${genData.image_prompt.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+          </div>`;
+        }
+
+        if (genData.ppp_prompt) {
+          const uid = 'ppp-dyn-' + pinId;
+          html += `<div style="margin-top:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:0.06em;">✍️ Pin Perfect Pro Prompt</span>
+              <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('${uid}').value).then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})">Copy</button>
+            </div>
+            <textarea id="${uid}" rows="7" style="width:100%;font-size:12px;line-height:1.5;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;color:var(--gray-700);background:var(--gray-50);">${genData.ppp_prompt.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+          </div>`;
+        }
+
+        wrap.innerHTML = `<div style="border-top:2px solid var(--gray-100);padding-top:14px;">${html}</div>`;
+
+      } catch (e) {
+        btn.textContent = '⚡ Generate Amazon Products + AI Prompts';
+        btn.disabled = false;
+        alert('Generation failed: ' + e.message);
+      }
     }
   </script>
   {% else %}

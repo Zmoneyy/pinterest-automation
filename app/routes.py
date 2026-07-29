@@ -213,6 +213,8 @@ def dashboard():
     from config import Config
     # Check Pinterest connection status for the warning banner
     pinterest_connected = bool(Config.is_configured().get("pinterest_token"))
+    # Load any saved research sessions so dashboard can show them inline
+    research_by_title = {r.title: r for r in PinResearch.query.all()}
     return render_template(
         "dashboard.html",
         pending_pins=pending_pins,
@@ -225,6 +227,7 @@ def dashboard():
         active_tab=status_filter,
         now=datetime.now(timezone.utc),
         pinterest_connected=pinterest_connected,
+        research_by_title=research_by_title,
     )
 
 
