@@ -373,6 +373,10 @@
          class="nav-link {% if request.endpoint == 'main.pin_to_products' %}active{% endif %}">
         Pin → Products
       </a>
+      <a href="{{ url_for('main.pin_library') }}"
+         class="nav-link {% if request.endpoint in ('main.pin_library','main.pin_folder') %}active{% endif %}">
+        📁 Pin Library
+      </a>
       <a href="{{ url_for('main.setup') }}"
          class="nav-link {% if request.endpoint == 'main.setup' %}active{% endif %}">
         Setup

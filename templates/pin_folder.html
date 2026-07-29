@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{{ sess.title }} — Pin Library{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="margin-bottom:24px;">
+  <a href="/pin-library" style="font-size:13px;color:var(--gray-400);text-decoration:none;">← Pin Library</a>
+  <h1 style="font-size:20px;font-weight:800;color:var(--gray-900);margin-top:8px;line-height:1.3;">
+    {{ sess.title }}
+  </h1>
+  <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">
+    Saved {{ sess.created_at.strftime('%B %d, %Y at %I:%M %p') if sess.created_at else '' }}
+  </div>
+  {% if sess.keywords %}
+  <div style="margin-top:10px;">
+    {% for kw in sess.keywords.split(',') %}
+      {% if kw.strip() %}
+      <span style="display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;margin:3px 4px 3px 0;font-weight:600;">
+        {{ kw.strip() }}
+      </span>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% if sess.summary %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body">
+    <div style="font-size:13px;color:var(--gray-600);line-height:1.7;">{{ sess.summary }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Products -->
+{% set products = sess.products_list() %}
+{% if products %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+      <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
+      <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
+    </div>
+    {% for p in products %}
+    <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--gray-100);">
+      <div style="flex-shrink:0;width:80px;height:80px;border-radius:10px;overflow:hidden;background:var(--gray-100);display:flex;align-items:center;justify-content:center;">
+        {% if p.image_url %}
+        <img src="{{ p.image_url }}" style="width:100%;height:100%;object-fit:cover;"
+             onerror="this.parentElement.innerHTML='<span style=font-size:24px>🛍️</span>'">
+        {% else %}
+        <span style="font-size:24px;">🛍️</span>
+        {% endif %}
+      </div>
+      <div style="flex:1;">
+        <div style="font-weight:700;font-size:15px;margin-bottom:3px;">{{ p.name }}</div>
+        <div style="font-size:13px;color:var(--gray-500);margin-bottom:8px;line-height:1.5;">{{ p.why }}</div>
+        <a href="{{ p.amazon_url }}" target="_blank" rel="noopener" class="btn btn-gray btn-sm">
+          Search on Amazon →
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- AI Image Prompt -->
+{% if sess.image_prompt %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div>
+        <h2 style="font-size:17px;font-weight:700;">🎨 AI Image Prompt</h2>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Paste into ChatGPT image generation</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('imagePromptBox').value)">Copy</button>
+    </div>
+    <textarea id="imagePromptBox" rows="6" style="width:100%;font-size:13px;line-height:1.6;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);">{{ sess.image_prompt }}</textarea>
+  </div>
+</div>
+{% endif %}
+
+<!-- PPP Prompt -->
+{% if sess.ppp_prompt %}
+<div class="card" style="margin-bottom:32px;">
+  <div class="card-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div>
+        <h2 style="font-size:17px;font-weight:700;">✍️ Pin Perfect Pro Prompt</h2>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Paste into Pin Perfect Pro GPT</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('pppBox').value)">Copy</button>
+    </div>
+    <textarea id="pppBox" rows="10" style="width:100%;font-size:13px;line-height:1.6;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);">{{ sess.ppp_prompt }}</textarea>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function buildProductText() {
+  const products = {{ products | tojson }};
+  let text = 'Products\n\n';
+  products.forEach((p, i) => {
+    text += `${i+1}. ${p.name}\n   ${p.why}\n   ${p.amazon_url}\n\n`;
+  });
+  return text.trim();
+}
+</script>
+{% endblock %}

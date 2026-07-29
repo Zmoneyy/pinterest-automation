@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Pin Library — PinBot{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;">
+  <h1 class="page-title" style="margin:0;">📁 Pin Library</h1>
+  <a href="/research/pin-to-products" class="btn btn-red btn-sm">+ New Research</a>
+</div>
+
+{% if sessions %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;">
+  {% for s in sessions %}
+  <a href="/pin-library/{{ s.id }}" style="text-decoration:none;">
+    <div class="card" style="height:100%;transition:box-shadow 0.15s;cursor:pointer;" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'" onmouseout="this.style.boxShadow=''">
+      <div class="card-body">
+        <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px;">
+          {{ s.created_at.strftime('%b %d, %Y') if s.created_at else '' }}
+        </div>
+        <div style="font-size:15px;font-weight:700;color:var(--gray-900);line-height:1.4;margin-bottom:10px;">
+          {{ s.title }}
+        </div>
+        {% if s.keywords %}
+        <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px;">
+          🏷️ {{ s.keywords }}
+        </div>
+        {% endif %}
+        {% if s.summary %}
+        <div style="font-size:13px;color:var(--gray-500);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+          {{ s.summary }}
+        </div>
+        {% endif %}
+        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          {% set plist = s.products_list() %}
+          {% if plist %}
+          <span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);border-radius:20px;padding:3px 10px;">
+            🛍️ {{ plist|length }} products
+          </span>
+          {% endif %}
+          {% if s.image_prompt %}
+          <span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);border-radius:20px;padding:3px 10px;">🎨 Image prompt</span>
+          {% endif %}
+          {% if s.ppp_prompt %}
+          <span style="font-size:11px;background:var(--gray-100);color:var(--gray-600);border-radius:20px;padding:3px 10px;">✍️ PPP prompt</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+{% else %}
+<div style="text-align:center;padding:60px 20px;color:var(--gray-400);">
+  <div style="font-size:48px;margin-bottom:16px;">📁</div>
+  <div style="font-size:18px;font-weight:600;margin-bottom:8px;">No saved pins yet</div>
+  <div style="font-size:14px;margin-bottom:24px;">Run a research session and click "Save to Pin Library" to build your folders.</div>
+  <a href="/research/pin-to-products" class="btn btn-red">Start Researching →</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -218,6 +218,30 @@ class ProductCandidate(db.Model):
         return f"<ProductCandidate {self.id}: {self.name} [{self.status}]>"
 
 
+class PinResearch(db.Model):
+    """Saved Pin → Products research sessions (the 'folders' the user builds)."""
+    __tablename__ = "pin_research"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    title        = db.Column(db.String(500), nullable=False)
+    keywords     = db.Column(db.Text, nullable=True)   # comma-separated
+    summary      = db.Column(db.Text, nullable=True)
+    products     = db.Column(db.Text, nullable=True)   # JSON array
+    image_prompt = db.Column(db.Text, nullable=True)   # ChatGPT image generation prompt
+    ppp_prompt   = db.Column(db.Text, nullable=True)   # Pin Perfect Pro GPT prompt
+    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def products_list(self):
+        import json
+        try:
+            return json.loads(self.products or "[]")
+        except Exception:
+            return []
+
+    def __repr__(self):
+        return f"<PinResearch {self.id}: {self.title[:40]}>"
+
+
 class Setting(db.Model):
     """Key-value settings table for persisting OAuth tokens and config."""
 

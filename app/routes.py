@@ -23,7 +23,7 @@ from flask import (
 )
 
 from app import db
-from app.models import Pin, Product, ProductCandidate, Setting, TrendCache
+from app.models import Pin, PinResearch, Product, ProductCandidate, Setting, TrendCache
 
 logger = logging.getLogger(__name__)
 
@@ -3523,44 +3523,63 @@ Only return valid JSON, no other text."""
 @bp.route("/research/pin-to-products", methods=["POST"])
 @login_required
 def pin_to_products_api():
-    import anthropic, urllib.parse
+    import anthropic, urllib.parse, json as _json
     data = request.get_json()
-    title = (data.get("title") or "").strip()
+    title    = (data.get("title")    or "").strip()
+    keywords = (data.get("keywords") or "").strip()
     if not title:
         return jsonify({"ok": False, "error": "No pin title provided."})
 
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
-    prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a women's lifestyle brand selling Amazon finds.
+    kw_line = f"\nKeywords to use: {keywords}" if keywords else ""
 
-The user has this Pinterest pin title: "{title}"
+    prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds).
 
-Break this pin title down into 4-7 specific Amazon products that would be perfect for this pin. Think about:
-- What specific items make up this look/theme/concept?
-- What would someone need to buy to recreate this?
-- Only recommend proven Amazon best sellers or highly rated products (4+ stars, 1000+ reviews) that are definitely in stock
+Pinterest pin title: "{title}"{kw_line}
 
-Return your response as JSON with this exact structure:
+Do three things and return everything as a single JSON object.
+
+─── 1. PRODUCTS ───
+List 5-7 specific Amazon products that a shopper would need to buy to recreate this pin's look/theme. Only include proven bestsellers (4+ stars, 1000+ reviews, definitely in stock).
+
+─── 2. AI IMAGE PROMPT ───
+Write a detailed image-generation prompt for ChatGPT/DALL-E to create a buyer-intent editorial Pinterest pin image. The prompt must:
+- Describe the exact aesthetic, mood, color palette, and composition
+- Feel like a high-end lifestyle editorial / magazine spread, not a product dump
+- Make the viewer feel they NEED this in their life immediately
+- Be optimized for Pinterest vertical format (2:3 ratio)
+- Be ready to paste directly into ChatGPT image generation
+
+─── 3. PIN PERFECT PRO PROMPT ───
+Write a complete, ready-to-paste GPT prompt the user can drop into Pin Perfect Pro (a ChatGPT tool for Pinterest copy). It must include:
+- Context about Aura Girl Essentials brand
+- The pin title
+- All the products with their Amazon links
+{"- Instructions to use these specific keywords: " + keywords if keywords else ""}
+- Instructions to write: (a) keyword-first pin title max 100 chars, (b) 3-part description: hook/keyword, transformation, CTA, (c) 15-20 hashtags
+- Follow the Money Making Pin Formula: lead with keyword, include year for recency, focus on transformation (before → after), natural CTA
+
+Return ONLY valid JSON — no markdown, no extra text:
 {{
-  "summary": "1-2 sentences describing the vibe/theme of this pin and the shopping intent",
+  "summary": "2 sentences on the vibe and shopping intent of this pin",
   "products": [
     {{
-      "name": "specific product name (brand + product if possible, e.g. 'Steve Madden Siren Ankle Boot in Tan')",
-      "why": "one sentence: why this product fits this pin perfectly",
-      "search_query": "exact Amazon search query to find this product",
-      "asin": "Amazon ASIN if you know it confidently, otherwise empty string"
+      "name": "Brand + Product Name",
+      "why": "one sentence on why it fits this pin",
+      "search_query": "exact Amazon search query",
+      "asin": "ASIN if known with confidence, else empty string"
     }}
-  ]
-}}
-
-Only return valid JSON, no other text."""
+  ],
+  "image_prompt": "the full AI image generation prompt ready to paste into ChatGPT",
+  "ppp_prompt": "the full Pin Perfect Pro GPT prompt ready to paste"
+}}"""
 
     try:
         msg = client.messages.create(
             model="claude-opus-4-5",
-            max_tokens=1200,
+            max_tokens=2500,
             messages=[{"role": "user", "content": prompt}]
         )
-        import json as _json
         result = _json.loads(msg.content[0].text)
         for p in result.get("products", []):
             q = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
@@ -3579,6 +3598,49 @@ Only return valid JSON, no other text."""
     except Exception as e:
         logger.error(f"Pin to Products error: {e}")
         return jsonify({"ok": False, "error": str(e)})
+
+
+@bp.route("/pin-library")
+@login_required
+def pin_library():
+    sessions = PinResearch.query.order_by(PinResearch.created_at.desc()).all()
+    return render_template("pin_library.html", sessions=sessions)
+
+
+@bp.route("/pin-library/<int:session_id>")
+@login_required
+def pin_folder(session_id):
+    sess = PinResearch.query.get_or_404(session_id)
+    products = sess.products_list()
+    return render_template("pin_folder.html", sess=sess, products=products)
+
+
+@bp.route("/pin-library/save", methods=["POST"])
+@login_required
+def pin_library_save():
+    import json as _json
+    data = request.get_json()
+    title        = (data.get("title")        or "").strip()
+    keywords     = (data.get("keywords")     or "").strip()
+    summary      = (data.get("summary")      or "").strip()
+    products     = data.get("products")      or []
+    image_prompt = (data.get("image_prompt") or "").strip()
+    ppp_prompt   = (data.get("ppp_prompt")   or "").strip()
+
+    if not title:
+        return jsonify({"ok": False, "error": "Title is required."})
+
+    sess = PinResearch(
+        title        = title,
+        keywords     = keywords,
+        summary      = summary,
+        products     = _json.dumps(products),
+        image_prompt = image_prompt,
+        ppp_prompt   = ppp_prompt,
+    )
+    db.session.add(sess)
+    db.session.commit()
+    return jsonify({"ok": True, "id": sess.id})
 
 
 # ── Health check ──────────────────────────────────────────────────────────
