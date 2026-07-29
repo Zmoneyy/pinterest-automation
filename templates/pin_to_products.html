@@ -186,7 +186,10 @@ let lastTitle = '';
 let lastKeywords = '';
 
 async function runP2P() {
-  const title    = document.getElementById('pinInput').value.trim();
+  const title  = document.getElementById('pinInput').value.trim();
+  // Commit any keyword still sitting in the typer before reading
+  const typer = document.getElementById('kwTyper');
+  if (typer.value.trim()) { addChip(typer.value); typer.value = ''; }
   const keywords = getKeywordsString();
   if (!title) return alert('Paste a pin title first.');
 
