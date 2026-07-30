@@ -3498,7 +3498,7 @@ Only return valid JSON, no other text."""
 
     try:
         msg = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-5",
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -3632,7 +3632,7 @@ Return ONLY valid JSON:
 }}"""
         try:
             msg = client.messages.create(
-                model="claude-opus-4-5",
+                model="claude-sonnet-5",
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -3695,7 +3695,7 @@ Return ONLY valid JSON:
 
         try:
             msg = client.messages.create(
-                model="claude-opus-4-5",
+                model="claude-sonnet-5",
                 max_tokens=2500,
                 messages=[{"role": "user", "content": prompt}]
             )
@@ -3742,7 +3742,7 @@ Return ONLY valid JSON:
 
     try:
         msg = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-5",
             max_tokens=2500,
             messages=[{"role": "user", "content": prompt}]
         )
@@ -3832,7 +3832,7 @@ Return ONLY the blog post. No JSON. No commentary."""
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
     try:
         msg = client.messages.create(
-            model="claude-opus-4-5",
+            model="claude-sonnet-5",
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
