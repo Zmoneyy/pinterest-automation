@@ -3523,6 +3523,60 @@ Only return valid JSON, no other text."""
         return jsonify({"ok": False, "error": str(e)})
 
 
+def _search_amazon_real(query: str, api_key: str) -> list:
+    """Hit SerpAPI Amazon Search and return filtered, ranked product list."""
+    import requests as _req, urllib.parse as _up
+    try:
+        resp = _req.get(
+            "https://serpapi.com/search.json",
+            params={
+                "engine": "amazon",
+                "amazon_domain": "amazon.com",
+                "k": query,
+                "api_key": api_key,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("organic_results", [])
+    except Exception as e:
+        logger.warning(f"SerpAPI Amazon search failed: {e}")
+        return []
+
+    results = []
+    for item in items:
+        rating  = float(item.get("rating")  or 0)
+        reviews = int(  item.get("reviews") or 0)
+        asin    = (item.get("asin") or "").strip()
+        name    = (item.get("title") or "").strip()
+        if not name or rating < 4.0 or reviews < 500:
+            continue
+        badge = (item.get("badge") or "").lower()
+        results.append({
+            "name":             name,
+            "asin":             asin,
+            "rating":           rating,
+            "reviews":          reviews,
+            "price":            item.get("price") or "",
+            "image_url":        item.get("thumbnail") or "",
+            "is_best_seller":   item.get("is_best_seller") or "best seller" in badge,
+            "is_amazons_choice":item.get("is_amazons_choice") or "amazon's choice" in badge,
+            "amazon_url": (
+                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+                if asin else
+                f"https://www.amazon.com/s?k={_up.quote_plus(name)}&tag=auragirlcreat-20"
+            ),
+        })
+
+    # Best first: bestseller > amazon's choice > review count
+    results.sort(key=lambda x: (
+        not x["is_best_seller"],
+        not x["is_amazons_choice"],
+        -x["reviews"],
+    ))
+    return results[:20]
+
+
 @bp.route("/research/pin-to-products", methods=["POST"])
 @login_required
 def pin_to_products_api():
@@ -3598,34 +3652,74 @@ Return ONLY valid JSON:
             logger.error(f"Pin to Products (existing) error: {e}")
             return jsonify({"ok": False, "error": str(e)})
 
-    # ── No existing products — generate everything from scratch ──
+    # ── Search Amazon for real products via SerpAPI ──
+    amazon_hits = []
+    if Config.SERPAPI_KEY:
+        amazon_hits = _search_amazon_real(title, Config.SERPAPI_KEY)
+
+    if amazon_hits:
+        # Build a readable list for the Claude prompt
+        hits_lines = []
+        for i, p in enumerate(amazon_hits):
+            badge = ""
+            if p["is_best_seller"]:   badge += " 🏆 BESTSELLER"
+            if p["is_amazons_choice"]: badge += " ✅ AMAZON'S CHOICE"
+            hits_lines.append(
+                f"{i+1}. {p['name']} — ⭐{p['rating']} ({p['reviews']:,} reviews){badge} | {p['price']} | {p['amazon_url']}"
+            )
+        hits_text = "\n".join(hits_lines)
+        prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness).
+
+Pinterest pin title: "{title}"{kw_line}
+
+These are REAL Amazon search results for this pin — all have 4+ stars and 500+ reviews, sorted by bestseller status:
+
+{hits_text}
+
+From this list, pick the 5-7 products that best fit this pin's theme, vibe, and aesthetic. Prioritise bestsellers and Amazon's Choice items. Then do two more things.
+
+Return ONLY valid JSON:
+{{
+  "summary": "2 sentences on the vibe and shopping intent of this pin",
+  "selected_indices": [0-based indices of the products you picked from the list above],
+  "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
+  "image_prompt": "detailed ChatGPT/DALL-E image generation prompt — editorial, buyer-intent, Pinterest vertical 2:3 format, make viewer need it immediately",
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro GPT prompt with: brand context (Aura Girl Essentials), pin title, all selected products + Amazon links{', keywords: ' + keywords if keywords else ''}, instructions for keyword-first title max 100 chars + 3-part description (hook → transformation → CTA) + 15-20 hashtags using Money Making Pin Formula"
+}}"""
+
+        try:
+            msg = client.messages.create(
+                model="claude-opus-4-5",
+                max_tokens=2500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            raw = _json.loads(msg.content[0].text)
+            indices = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
+            whys    = raw.get("product_whys") or []
+            products_out = []
+            for rank, idx in enumerate(indices):
+                if idx >= len(amazon_hits):
+                    continue
+                p = dict(amazon_hits[idx])
+                p["why"] = whys[rank] if rank < len(whys) else "Top-rated Amazon bestseller"
+                products_out.append(p)
+            return jsonify({
+                "ok":           True,
+                "summary":      raw.get("summary", ""),
+                "products":     products_out,
+                "image_prompt": raw.get("image_prompt", ""),
+                "ppp_prompt":   raw.get("ppp_prompt", ""),
+            })
+        except Exception as e:
+            logger.error(f"Pin to Products (SerpAPI path) error: {e}")
+            return jsonify({"ok": False, "error": str(e)})
+
+    # ── Fallback: no SerpAPI key or search returned nothing — Claude guesses ──
     prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds).
 
 Pinterest pin title: "{title}"{kw_line}
 
-Do three things and return everything as a single JSON object.
-
-─── 1. PRODUCTS ───
-List 5-7 specific Amazon products that a shopper would need to buy to recreate this pin's look/theme. Only include proven bestsellers (4+ stars, 1000+ reviews, definitely in stock).
-
-─── 2. AI IMAGE PROMPT ───
-Write a detailed image-generation prompt for ChatGPT/DALL-E to create a buyer-intent editorial Pinterest pin image. The prompt must:
-- Describe the exact aesthetic, mood, color palette, and composition
-- Feel like a high-end lifestyle editorial / magazine spread, not a product dump
-- Make the viewer feel they NEED this in their life immediately
-- Be optimized for Pinterest vertical format (2:3 ratio)
-- Be ready to paste directly into ChatGPT image generation
-
-─── 3. PIN PERFECT PRO PROMPT ───
-Write a complete, ready-to-paste GPT prompt the user can drop into Pin Perfect Pro (a ChatGPT tool for Pinterest copy). It must include:
-- Context about Aura Girl Essentials brand
-- The pin title
-- All the products with their Amazon links
-{"- Instructions to use these specific keywords: " + keywords if keywords else ""}
-- Instructions to write: (a) keyword-first pin title max 100 chars, (b) 3-part description: hook/keyword, transformation, CTA, (c) 15-20 hashtags
-- Follow the Money Making Pin Formula: lead with keyword, include year for recency, focus on transformation (before → after), natural CTA
-
-Return ONLY valid JSON — no markdown, no extra text:
+Return ONLY valid JSON:
 {{
   "summary": "2 sentences on the vibe and shopping intent of this pin",
   "products": [
@@ -3636,8 +3730,8 @@ Return ONLY valid JSON — no markdown, no extra text:
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "image_prompt": "the full AI image generation prompt ready to paste into ChatGPT",
-  "ppp_prompt": "the full Pin Perfect Pro GPT prompt ready to paste"
+  "image_prompt": "detailed ChatGPT/DALL-E image prompt — editorial, buyer-intent, Pinterest vertical",
+  "ppp_prompt": "complete Pin Perfect Pro GPT prompt"
 }}"""
 
     try:
@@ -3648,7 +3742,7 @@ Return ONLY valid JSON — no markdown, no extra text:
         )
         result = _json.loads(msg.content[0].text)
         for p in result.get("products", []):
-            q = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
+            q    = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
             asin = p.get("asin", "").strip()
             p["amazon_url"] = (
                 f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
@@ -3662,7 +3756,7 @@ Return ONLY valid JSON — no markdown, no extra text:
         result["ok"] = True
         return jsonify(result)
     except Exception as e:
-        logger.error(f"Pin to Products error: {e}")
+        logger.error(f"Pin to Products (fallback) error: {e}")
         return jsonify({"ok": False, "error": str(e)})
 
 
