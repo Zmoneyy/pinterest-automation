@@ -3698,7 +3698,7 @@ Return ONLY valid JSON:
         try:
             msg = client.messages.create(
                 model="claude-sonnet-5",
-                max_tokens=2000,
+                max_tokens=8192,
                 messages=[{"role": "user", "content": prompt}]
             )
             result = _parse_claude_json(msg)
@@ -3763,7 +3763,7 @@ Return ONLY valid JSON:
         try:
             msg = client.messages.create(
                 model="claude-sonnet-5",
-                max_tokens=2500,
+                max_tokens=8192,
                 messages=[{"role": "user", "content": prompt}]
             )
             raw = _parse_claude_json(msg)
@@ -3811,7 +3811,7 @@ Return ONLY valid JSON:
     try:
         msg = client.messages.create(
             model="claude-sonnet-5",
-            max_tokens=2500,
+            max_tokens=8192,
             messages=[{"role": "user", "content": prompt}]
         )
         result = _parse_claude_json(msg)
