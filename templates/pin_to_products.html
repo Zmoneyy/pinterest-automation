@@ -180,9 +180,10 @@ function renderChips() {
 }
 
 function getKeywordsString() {
-  // Also grab anything typed but not yet committed
-  const pending = document.getElementById('kwTyper').value.trim().replace(/,+$/, '');
-  const all = pending ? [...chips, pending] : [...chips];
+  // Always include whatever is still typed, whether or not it became a chip
+  const typed = document.getElementById('kwTyper').value.trim().replace(/,+$/, '');
+  const all = [...chips];
+  if (typed && !all.includes(typed)) all.push(typed);
   return all.join(', ');
 }
 
