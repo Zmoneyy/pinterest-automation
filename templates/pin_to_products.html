@@ -40,7 +40,11 @@
 <div id="p2pLoading" style="display:none;text-align:center;padding:40px;">
   <div style="font-size:32px;margin-bottom:12px;">📌</div>
   <div style="font-weight:600;margin-bottom:6px;">Generating your full pin kit…</div>
-  <div style="font-size:13px;color:var(--gray-400);">Claude is finding products, writing your image prompt, and building your PPP prompt</div>
+  <div style="font-size:13px;color:var(--gray-400);margin-bottom:10px;">Searching Amazon + writing your prompts</div>
+  <div style="display:inline-flex;align-items:center;gap:8px;background:var(--gray-100);border-radius:99px;padding:6px 16px;">
+    <span style="font-size:12px;color:var(--gray-500);">Elapsed</span>
+    <span id="p2pTimer" style="font-size:15px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums;">0:00</span>
+  </div>
 </div>
 
 <div id="p2pError" style="display:none;" class="alert alert-error"></div>
@@ -221,6 +225,15 @@ async function runP2P() {
   document.getElementById('p2pBtn').disabled = true;
   document.getElementById('saveMsg').style.display = 'none';
 
+  // Start elapsed timer
+  let secs = 0;
+  const timerEl = document.getElementById('p2pTimer');
+  timerEl.textContent = '0:00';
+  const timerInterval = setInterval(() => {
+    secs++;
+    timerEl.textContent = `${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+  }, 1000);
+
   try {
     const res = await fetch('/research/pin-to-products', {
       method: 'POST',
@@ -233,9 +246,11 @@ async function runP2P() {
     lastResult = data;
     renderResult(data);
 
+    clearInterval(timerInterval);
     document.getElementById('p2pLoading').style.display = 'none';
     document.getElementById('p2pResult').style.display  = 'block';
   } catch (e) {
+    clearInterval(timerInterval);
     document.getElementById('p2pLoading').style.display = 'none';
     document.getElementById('p2pError').textContent = e.message;
     document.getElementById('p2pError').style.display = 'block';

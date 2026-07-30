@@ -3523,6 +3523,15 @@ Only return valid JSON, no other text."""
         return jsonify({"ok": False, "error": str(e)})
 
 
+def _extract_text(msg) -> str:
+    """Return the first text block from an Anthropic response.
+    Sonnet 5 may prepend a ThinkingBlock before the TextBlock."""
+    for block in msg.content:
+        if hasattr(block, "text"):
+            return block.text
+    raise ValueError("No text block in Anthropic response")
+
+
 def _search_amazon_real(query: str, api_key: str) -> list:
     """Hit SerpAPI Amazon Search and return filtered, ranked product list."""
     import requests as _req, urllib.parse as _up  # noqa: F401 (requests already in requirements)
@@ -3636,7 +3645,7 @@ Return ONLY valid JSON:
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            result = _json.loads(msg.content[0].text)
+            result = _json.loads(_extract_text(msg))
             # Attach the real products (with amazon_url from DB) directly
             for p in existing_products:
                 if p.get("amazon_url") and "tag=" not in p["amazon_url"]:
@@ -3699,7 +3708,7 @@ Return ONLY valid JSON:
                 max_tokens=2500,
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw = _json.loads(msg.content[0].text)
+            raw = _json.loads(_extract_text(msg))
             indices = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
             whys    = raw.get("product_whys") or []
             products_out = []
@@ -3746,7 +3755,7 @@ Return ONLY valid JSON:
             max_tokens=2500,
             messages=[{"role": "user", "content": prompt}]
         )
-        result = _json.loads(msg.content[0].text)
+        result = _json.loads(_extract_text(msg))
         for p in result.get("products", []):
             q    = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
             asin = p.get("asin", "").strip()
@@ -3836,7 +3845,7 @@ Return ONLY the blog post. No JSON. No commentary."""
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
-        return jsonify({"ok": True, "blog_post": msg.content[0].text})
+        return jsonify({"ok": True, "blog_post": _extract_text(msg)})
     except Exception as e:
         logger.error(f"Blog post generation error: {e}")
         return jsonify({"ok": False, "error": str(e)})
