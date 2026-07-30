@@ -3642,30 +3642,35 @@ Pinterest pin title: "{title}"{kw_line}
 These are the EXACT products already featured in this pin (do NOT change or add to them):
 {prod_lines}
 
-Using those exact products, generate two things and return as JSON:
+Generate ONE comprehensive Pin Perfect Pro prompt I can paste directly into ChatGPT. The prompt must contain ALL of the following sections:
 
-─── 1. AI IMAGE PROMPT ───
-A detailed image-generation prompt for ChatGPT/DALL-E. Must:
-- Be based on the products listed above
-- Describe exact aesthetic, mood, color palette, composition
-- Feel like a high-end lifestyle editorial / magazine spread
-- Make the viewer immediately want to buy
-- Optimized for Pinterest vertical format (2:3 ratio)
+SECTION 1 — BRAND CONTEXT
+Brand: Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds)
 
-─── 2. PIN PERFECT PRO PROMPT ───
-A complete, ready-to-paste GPT prompt for Pin Perfect Pro (ChatGPT tool for Pinterest copy). Must include:
-- Brand context: Aura Girl Essentials
-- The pin title
-- All products with their Amazon links
-{"- Keywords to incorporate: " + keywords if keywords else ""}
-- Instructions: (a) keyword-first title max 100 chars, (b) 3-part description: hook/keyword → transformation → CTA, (c) 15-20 hashtags
-- Money Making Pin Formula: lead with keyword, include year, transformation-focused, natural CTA
+SECTION 2 — PIN TITLE & KEYWORDS
+The pin title and any keywords to use throughout the copy.
+
+SECTION 3 — PRODUCTS WITH AMAZON LINKS
+List every product name with its full Amazon affiliate link exactly as provided above.
+
+SECTION 4 — IMAGE GENERATION INSTRUCTIONS (tell ChatGPT to generate this image)
+Generate a Pinterest vertical pin image (2:3 ratio) that is:
+- Aesthetic and editorial — high-end lifestyle magazine spread feel
+- Buyer-intent: makes the viewer IMMEDIATELY want to purchase
+- Scroll-stopping and aspirational — visually hooks the viewer in an instant
+- Shows the products in a lifestyle/flat-lay context that makes people need them
+- Has "auragirlessentials.com" as a small, subtle text watermark on the pin (not distracting, just branded)
+
+SECTION 5 — COPY INSTRUCTIONS using Money Making Pin Formula
+(a) Keyword-first title, max 100 chars, include year
+(b) 3-part description: hook/keyword → transformation → CTA
+(c) 15-20 hashtags
+{"(d) Keywords to weave in throughout: " + keywords if keywords else ""}
 
 Return ONLY valid JSON:
 {{
   "summary": "2 sentences on the vibe and shopping intent",
-  "image_prompt": "full AI image generation prompt ready to paste into ChatGPT",
-  "ppp_prompt": "full Pin Perfect Pro GPT prompt ready to paste"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing all 5 sections above"
 }}"""
         try:
             msg = client.messages.create(
@@ -3727,8 +3732,7 @@ Return ONLY valid JSON:
   "summary": "2 sentences on the vibe and shopping intent of this pin",
   "selected_indices": [0-based indices of the products you picked from the list above],
   "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
-  "image_prompt": "detailed ChatGPT/DALL-E image generation prompt — editorial, buyer-intent, Pinterest vertical 2:3 format, make viewer need it immediately",
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro GPT prompt with: brand context (Aura Girl Essentials), pin title, all selected products + Amazon links{', keywords: ' + keywords if keywords else ''}, instructions for keyword-first title max 100 chars + 3-part description (hook → transformation → CTA) + 15-20 hashtags using Money Making Pin Formula"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: list every selected product name with its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay product context, with 'auragirlessentials.com' as a small subtle watermark\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
 }}"""
 
         try:
@@ -3774,8 +3778,7 @@ Return ONLY valid JSON:
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "image_prompt": "detailed ChatGPT/DALL-E image prompt — editorial, buyer-intent, Pinterest vertical",
-  "ppp_prompt": "complete Pin Perfect Pro GPT prompt"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 all products with their Amazon search links (https://www.amazon.com/s?k=QUERY&tag=auragirlcreat-20), SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent makes viewer want to buy immediately, scroll-stopping aspirational lifestyle context, subtle auragirlessentials.com watermark on pin), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
 }}"""
 
     try:

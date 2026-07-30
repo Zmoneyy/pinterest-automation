@@ -7,7 +7,7 @@
 <div class="card" style="margin-bottom:20px;">
   <div class="card-body">
     <p style="color:var(--gray-600);font-size:14px;margin-bottom:16px;">
-      Paste a Pinterest pin title and Claude will find matching Amazon products, generate an AI image prompt, and write your Pin Perfect Pro GPT prompt — all in one shot.
+      Paste a Pinterest pin title and Claude will find matching Amazon products and write your Pin Perfect Pro GPT prompt — including image generation instructions with your watermark.
     </p>
 
     <div class="form-group">
@@ -64,27 +64,13 @@
     </div>
   </div>
 
-  <!-- AI IMAGE PROMPT -->
-  <div class="card" style="margin-bottom:16px;">
-    <div class="card-body">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div>
-          <h2 style="font-size:17px;font-weight:700;">🎨 AI Image Prompt</h2>
-          <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Paste into ChatGPT image generation</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="copySection('imagePromptBox')">Copy</button>
-      </div>
-      <textarea id="imagePromptBox" rows="6" style="width:100%;font-size:13px;line-height:1.6;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);"></textarea>
-    </div>
-  </div>
-
   <!-- PIN PERFECT PRO PROMPT -->
   <div class="card" style="margin-bottom:16px;">
     <div class="card-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div>
           <h2 style="font-size:17px;font-weight:700;">✍️ Pin Perfect Pro Prompt</h2>
-          <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Paste into Pin Perfect Pro GPT → get your title, description &amp; hashtags</div>
+          <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Paste into Pin Perfect Pro GPT → generates your image + title, description &amp; hashtags</div>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="copySection('pppPromptBox')">Copy</button>
       </div>
@@ -293,8 +279,7 @@ function renderResult(data) {
   });
   document.getElementById('productsCopy').value = copyText.trim();
 
-  document.getElementById('imagePromptBox').value = data.image_prompt || '';
-  document.getElementById('pppPromptBox').value   = data.ppp_prompt   || '';
+  document.getElementById('pppPromptBox').value = data.ppp_prompt || '';
 }
 
 function copySection(elemId) {
@@ -352,7 +337,6 @@ async function saveToLibrary() {
         keywords:     lastKeywords,
         summary:      lastResult.summary      || '',
         products:     lastResult.products     || [],
-        image_prompt: lastResult.image_prompt || '',
         ppp_prompt:   lastResult.ppp_prompt   || '',
         blog_post:    lastResult.blog_post    || '',
       })
