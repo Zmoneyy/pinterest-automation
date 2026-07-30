@@ -3682,7 +3682,7 @@ Generate a Pinterest vertical pin image (2:3 ratio) that is:
 - Buyer-intent: makes the viewer IMMEDIATELY want to purchase
 - Scroll-stopping and aspirational — visually hooks the viewer in an instant
 - Shows the products in a lifestyle/flat-lay context that makes people need them
-- Has "auragirlessentials.com" as a small, subtle text watermark on the pin (not distracting, just branded)
+- Has "auragirlessentials.com" as small, clean text placed at the very bottom of the pin — subtle, not a watermark, just enough to be seen without drawing attention away from the products
 
 SECTION 5 — COPY INSTRUCTIONS using Money Making Pin Formula
 (a) Keyword-first title, max 100 chars, include year
@@ -3757,7 +3757,7 @@ Return ONLY valid JSON:
   "summary": "2 sentences on the vibe and shopping intent of this pin",
   "selected_indices": [0-based indices of the products you picked from the list above],
   "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: list every selected product name with its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay product context, with 'auragirlessentials.com' as a small subtle watermark\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: list every selected product name with its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay product context, with 'auragirlessentials.com' as small clean text at the very bottom of the pin (subtle, not a watermark — visible but never distracting)\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
 }}"""
 
         try:
@@ -3805,7 +3805,7 @@ Return ONLY valid JSON:
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 all products with their Amazon search links (https://www.amazon.com/s?k=QUERY&tag=auragirlcreat-20), SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent makes viewer want to buy immediately, scroll-stopping aspirational lifestyle context, subtle auragirlessentials.com watermark on pin), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 all products with their Amazon search links (https://www.amazon.com/s?k=QUERY&tag=auragirlcreat-20), SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent makes viewer want to buy immediately, scroll-stopping aspirational lifestyle context, 'auragirlessentials.com' as small clean text at the very bottom of the pin — subtle, never a watermark, just visibly branded), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
 }}"""
 
     try:
