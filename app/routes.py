@@ -3676,7 +3676,12 @@ These are REAL Amazon search results for this pin — all have 4+ stars and 500+
 
 {hits_text}
 
-From this list, pick the 5-7 products that best fit this pin's theme, vibe, and aesthetic. Prioritise bestsellers and Amazon's Choice items. Then do two more things.
+IMPORTANT — read the pin title carefully:
+- If it says a specific number (e.g. "10 Best...", "5 Amazon Finds", "3 Products..."), pick EXACTLY that many products.
+- If it implies a complete look or outfit (e.g. "The Perfect Fall Outfit"), pick enough products to complete that look — no more, no less.
+- If it's open-ended, use your judgment for what feels complete (typically 4-8).
+
+From this list, pick the right number of products that best fit this pin's theme, vibe, and aesthetic. Prioritise bestsellers and Amazon's Choice items. Then do two more things.
 
 Return ONLY valid JSON:
 {{
