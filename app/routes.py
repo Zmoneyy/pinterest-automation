@@ -3525,7 +3525,7 @@ Only return valid JSON, no other text."""
 
 def _search_amazon_real(query: str, api_key: str) -> list:
     """Hit SerpAPI Amazon Search and return filtered, ranked product list."""
-    import requests as _req, urllib.parse as _up
+    import requests as _req, urllib.parse as _up  # noqa: F401 (requests already in requirements)
     try:
         resp = _req.get(
             "https://serpapi.com/search.json",
@@ -3581,6 +3581,7 @@ def _search_amazon_real(query: str, api_key: str) -> list:
 @login_required
 def pin_to_products_api():
     import anthropic, urllib.parse, json as _json
+    from config import Config
     data = request.get_json()
     title             = (data.get("title")    or "").strip()
     keywords          = (data.get("keywords") or "").strip()
@@ -3784,6 +3785,7 @@ def pin_folder(session_id):
 @login_required
 def generate_blog_post():
     import anthropic, json as _json
+    from config import Config
     data     = request.get_json()
     title    = (data.get("title")    or "").strip()
     keywords = (data.get("keywords") or "").strip()
