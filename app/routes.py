@@ -3502,8 +3502,8 @@ Only return valid JSON, no other text."""
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
-        import json as _json
-        result = _json.loads(msg.content[0].text)
+        import json as _json  # noqa
+        result = _parse_claude_json(msg)
         for p in result.get("products", []):
             q = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
             asin = p.get("asin", "").strip()
@@ -3524,12 +3524,28 @@ Only return valid JSON, no other text."""
 
 
 def _extract_text(msg) -> str:
-    """Return the first text block from an Anthropic response.
+    """Return the first non-empty text block from an Anthropic response.
     Sonnet 5 may prepend a ThinkingBlock before the TextBlock."""
     for block in msg.content:
-        if hasattr(block, "text"):
-            return block.text
+        if hasattr(block, "text") and block.text.strip():
+            return block.text.strip()
     raise ValueError("No text block in Anthropic response")
+
+
+def _parse_claude_json(msg) -> dict:
+    """Extract text from Claude response and parse as JSON.
+    Strips markdown code fences (```json ... ```) that Sonnet 5 sometimes adds."""
+    import json as _j, re as _re
+    raw = _extract_text(msg)
+    # Strip ```json ... ``` or ``` ... ``` wrappers
+    cleaned = _re.sub(r'^```(?:json)?\s*', '', raw.strip())
+    cleaned = _re.sub(r'\s*```$', '', cleaned).strip()
+    if not cleaned:
+        raise ValueError(f"Empty JSON from Claude. Raw: {raw[:200]!r}")
+    try:
+        return _j.loads(cleaned)
+    except _j.JSONDecodeError as e:
+        raise ValueError(f"JSON parse error: {e}. Raw (first 300 chars): {cleaned[:300]!r}")
 
 
 def _search_amazon_real(query: str, api_key: str) -> list:
@@ -3645,7 +3661,7 @@ Return ONLY valid JSON:
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            result = _json.loads(_extract_text(msg))
+            result = _parse_claude_json(msg)
             # Attach the real products (with amazon_url from DB) directly
             for p in existing_products:
                 if p.get("amazon_url") and "tag=" not in p["amazon_url"]:
@@ -3708,7 +3724,7 @@ Return ONLY valid JSON:
                 max_tokens=2500,
                 messages=[{"role": "user", "content": prompt}]
             )
-            raw = _json.loads(_extract_text(msg))
+            raw = _parse_claude_json(msg)
             indices = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
             whys    = raw.get("product_whys") or []
             products_out = []
@@ -3755,7 +3771,7 @@ Return ONLY valid JSON:
             max_tokens=2500,
             messages=[{"role": "user", "content": prompt}]
         )
-        result = _json.loads(_extract_text(msg))
+        result = _parse_claude_json(msg)
         for p in result.get("products", []):
             q    = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
             asin = p.get("asin", "").strip()

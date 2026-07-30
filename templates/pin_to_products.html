@@ -225,13 +225,18 @@ async function runP2P() {
   document.getElementById('p2pBtn').disabled = true;
   document.getElementById('saveMsg').style.display = 'none';
 
-  // Start elapsed timer
-  let secs = 0;
+  // Countdown timer (estimate ~40s for SerpAPI + Claude)
+  const ESTIMATE = 40;
+  let remaining = ESTIMATE;
   const timerEl = document.getElementById('p2pTimer');
-  timerEl.textContent = '0:00';
+  timerEl.textContent = `~${remaining}s`;
   const timerInterval = setInterval(() => {
-    secs++;
-    timerEl.textContent = `${Math.floor(secs/60)}:${String(secs%60).padStart(2,'0')}`;
+    remaining--;
+    if (remaining > 0) {
+      timerEl.textContent = `~${remaining}s`;
+    } else {
+      timerEl.textContent = 'Almost done…';
+    }
   }, 1000);
 
   try {
