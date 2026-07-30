@@ -3532,6 +3532,18 @@ def _extract_text(msg) -> str:
     raise ValueError("No text block in Anthropic response")
 
 
+def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
+    """Guarantee the user's keywords are literally present in the PPP prompt."""
+    if not keywords or not ppp_prompt:
+        return ppp_prompt
+    kw_block = f"\n\nKeywords to use in the pin title, description, and hashtags:\n{keywords}"
+    # Only append if the first keyword isn't already in the prompt
+    first_kw = keywords.split(",")[0].strip().lower()
+    if first_kw not in ppp_prompt.lower():
+        return ppp_prompt + kw_block
+    return ppp_prompt
+
+
 def _parse_claude_json(msg) -> dict:
     """Extract text from Claude response and parse as JSON.
     Strips markdown code fences (```json ... ```) that Sonnet 5 sometimes adds."""
@@ -3672,6 +3684,7 @@ Return ONLY valid JSON:
                     p["amazon_url"] = f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
                 p.setdefault("why", "Featured in this pin")
             result["products"] = existing_products
+            result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
             result["ok"] = True
             return jsonify(result)
         except Exception as e:
@@ -3739,7 +3752,7 @@ Return ONLY valid JSON:
                 "summary":      raw.get("summary", ""),
                 "products":     products_out,
                 "image_prompt": raw.get("image_prompt", ""),
-                "ppp_prompt":   raw.get("ppp_prompt", ""),
+                "ppp_prompt":   _inject_keywords(raw.get("ppp_prompt", ""), keywords),
             })
         except Exception as e:
             logger.error(f"Pin to Products (SerpAPI path) error: {e}")
@@ -3784,6 +3797,7 @@ Return ONLY valid JSON:
                 f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
                 if asin else ""
             )
+        result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
         result["ok"] = True
         return jsonify(result)
     except Exception as e:
