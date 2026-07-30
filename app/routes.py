@@ -3455,7 +3455,8 @@ def trend_scout():
 @bp.route("/research/pin-to-products")
 @login_required
 def pin_to_products():
-    return render_template("pin_to_products.html")
+    sessions = PinResearch.query.order_by(PinResearch.created_at.desc()).all()
+    return render_template("pin_to_products.html", sessions=sessions)
 
 
 @bp.route("/research/trend-scout", methods=["POST"])
@@ -3542,6 +3543,28 @@ def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
     if first_kw not in ppp_prompt.lower():
         return ppp_prompt + kw_block
     return ppp_prompt
+
+
+def _autosave_pin_research(title, keywords, summary, products, ppp_prompt):
+    """Upsert a PinResearch record — create if new title, update if seen before."""
+    import json as _j
+    try:
+        existing = PinResearch.query.filter_by(title=title).order_by(PinResearch.created_at.desc()).first()
+        if existing:
+            sess = existing
+        else:
+            sess = PinResearch(title=title)
+            db.session.add(sess)
+        sess.keywords    = keywords or sess.keywords
+        sess.summary     = summary  or sess.summary
+        sess.products    = _j.dumps(products)  if products    else sess.products
+        sess.ppp_prompt  = ppp_prompt           if ppp_prompt  else sess.ppp_prompt
+        db.session.commit()
+        return sess.id
+    except Exception as e:
+        logger.error(f"Autosave pin research failed: {e}")
+        db.session.rollback()
+        return None
 
 
 def _parse_claude_json(msg) -> dict:
@@ -3690,7 +3713,9 @@ Return ONLY valid JSON:
                 p.setdefault("why", "Featured in this pin")
             result["products"] = existing_products
             result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
+            session_id = _autosave_pin_research(title, keywords, result.get("summary",""), existing_products, result["ppp_prompt"])
             result["ok"] = True
+            result["session_id"] = session_id
             return jsonify(result)
         except Exception as e:
             logger.error(f"Pin to Products (existing) error: {e}")
@@ -3751,12 +3776,14 @@ Return ONLY valid JSON:
                 p = dict(amazon_hits[idx])
                 p["why"] = whys[rank] if rank < len(whys) else "Top-rated Amazon bestseller"
                 products_out.append(p)
+            ppp = _inject_keywords(raw.get("ppp_prompt", ""), keywords)
+            session_id = _autosave_pin_research(title, keywords, raw.get("summary",""), products_out, ppp)
             return jsonify({
-                "ok":           True,
-                "summary":      raw.get("summary", ""),
-                "products":     products_out,
-                "image_prompt": raw.get("image_prompt", ""),
-                "ppp_prompt":   _inject_keywords(raw.get("ppp_prompt", ""), keywords),
+                "ok":         True,
+                "summary":    raw.get("summary", ""),
+                "products":   products_out,
+                "ppp_prompt": ppp,
+                "session_id": session_id,
             })
         except Exception as e:
             logger.error(f"Pin to Products (SerpAPI path) error: {e}")
@@ -3801,7 +3828,9 @@ Return ONLY valid JSON:
                 if asin else ""
             )
         result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
+        session_id = _autosave_pin_research(title, keywords, result.get("summary",""), result.get("products",[]), result["ppp_prompt"])
         result["ok"] = True
+        result["session_id"] = session_id
         return jsonify(result)
     except Exception as e:
         logger.error(f"Pin to Products (fallback) error: {e}")
@@ -3828,10 +3857,11 @@ def pin_folder(session_id):
 def generate_blog_post():
     import anthropic, json as _json
     from config import Config
-    data     = request.get_json()
-    title    = (data.get("title")    or "").strip()
-    keywords = (data.get("keywords") or "").strip()
-    products = data.get("products")  or []
+    data       = request.get_json()
+    title      = (data.get("title")    or "").strip()
+    keywords   = (data.get("keywords") or "").strip()
+    products   = data.get("products")  or []
+    session_id = data.get("session_id")
     if not title:
         return jsonify({"ok": False, "error": "No pin title provided."})
 
@@ -3878,7 +3908,18 @@ Return ONLY the blog post. No JSON. No commentary."""
             max_tokens=1500,
             messages=[{"role": "user", "content": prompt}]
         )
-        return jsonify({"ok": True, "blog_post": _extract_text(msg)})
+        blog_text = _extract_text(msg)
+        # Save blog post back to the session record
+        if session_id:
+            try:
+                sess = PinResearch.query.get(session_id)
+                if sess:
+                    sess.blog_post = blog_text
+                    db.session.commit()
+            except Exception as save_err:
+                logger.warning(f"Could not save blog post to session: {save_err}")
+                db.session.rollback()
+        return jsonify({"ok": True, "blog_post": blog_text})
     except Exception as e:
         logger.error(f"Blog post generation error: {e}")
         return jsonify({"ok": False, "error": str(e)})
