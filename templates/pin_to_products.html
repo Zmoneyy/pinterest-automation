@@ -26,7 +26,7 @@
         <!-- chips render here -->
         <input id="kwTyper" type="text" placeholder="e.g. best self tanner"
           style="border:none;outline:none;flex:1;min-width:140px;font-size:14px;background:transparent;padding:2px 0;color:var(--gray-800);"
-          onkeydown="kwKey(event)" oninput="kwGrow(this)" />
+          onkeydown="kwKey(event)" oninput="kwGrow(this)" onpaste="kwPaste(event)" />
       </div>
       <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Press Enter or comma after each keyword</div>
     </div>
@@ -152,13 +152,24 @@ function kwKey(e) {
 }
 
 function kwGrow(input) {
-  // If user pasted a comma-separated list, split it out
-  if (input.value.includes(',')) {
-    const parts = input.value.split(',');
+  // Split on commas or newlines
+  if (input.value.includes(',') || input.value.includes('\n')) {
+    const parts = input.value.split(/[,\n]/);
     parts.forEach((p, i) => {
       if (i < parts.length - 1) addChip(p);
     });
     input.value = parts[parts.length - 1];
+  }
+}
+
+function kwPaste(e) {
+  // Intercept paste and split on newlines and commas all at once
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (text.includes('\n') || text.includes(',')) {
+    e.preventDefault();
+    const parts = text.split(/[\n,]+/);
+    parts.forEach(p => addChip(p));
+    e.target.value = '';
   }
 }
 
