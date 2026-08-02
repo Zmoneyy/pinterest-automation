@@ -3588,39 +3588,43 @@ def _amazon_search_queries(title: str) -> list:
     Amazon works best with short product-category terms, not lifestyle sentences."""
     import re as _re
 
-    # Words that mean nothing to Amazon's search engine
-    FILLER = r'\b(that|delivers?|the same|you need|i found|amazon finds?|routine|perfect|ultimate|only|every|girl|girls?|women|aesthetic|vibe|inspired|inspired by|style|era|moment|season|trend|trending|viral|hack|hacks?|steal|steals?|glazed donut|clean girl|glass skin|glow up|glow|glazed|donut)\b'
-    PRICE  = r'\bunder\s+\$?\d+\b|\$\d+\b'
-    COUNTS = r'^\d+\s+'  # leading number like "7 "
+    # Phrases and words that mean nothing to Amazon search
+    PHRASES = r'(glazed donut|clean girl|glass skin|glow up|sun.kissed|amazon finds?|look super expensive|look expensive|actually work[s]?)'
+    FILLER  = r'\b(that|deliver[s]?|the same|you need|you|i found|give[s]?|look[s]?|work[s]?|actually|super|perfect|only|every|all|the|girl[s]?|women|woman|aesthetic|vibe|inspired|style|era|moment|season|trend[ing]?|viral|hack[s]?|steal[s]?|glow|glazed|donut|tiktok|pinterest|instagram)\b'
+    PRICE   = r'\bunder\s+\$?\d+\b|\$\d+\b|\bover\s+\$?\d+\b'
+    COUNTS  = r'^\d+\s+'
+    PUNCT   = r'[—–\-,]'
 
     def strip(text, extras=''):
-        t = _re.sub(COUNTS, '', text, flags=_re.I)
-        t = _re.sub(PRICE,  '', t,    flags=_re.I)
-        t = _re.sub(FILLER, '', t,    flags=_re.I)
+        t = _re.sub(COUNTS,   '', text, flags=_re.I)
+        t = _re.sub(PRICE,    '', t,    flags=_re.I)
+        t = _re.sub(PHRASES,  '', t,    flags=_re.I)
+        t = _re.sub(FILLER,   '', t,    flags=_re.I)
         if extras:
             t = _re.sub(extras, '', t, flags=_re.I)
-        return ' '.join(t.split()).strip(' -–—,')
+        t = _re.sub(PUNCT, ' ', t)
+        return ' '.join(t.split()).strip()
 
     seen = set()
     queries = []
     def add(q):
         q = q.strip()
-        if q and q.lower() not in seen:
+        if q and len(q) > 2 and q.lower() not in seen:
             seen.add(q.lower())
             queries.append(q)
 
     # Q1: strip filler but keep product descriptors (dupe, affordable, serum, etc.)
     add(strip(title))
 
-    # Q2: also strip lifestyle/trend descriptors — pure product category left
-    lifestyle = r'\b(dupe[s]?|affordable|budget|cheap|best|top)\b'
-    add(strip(title, lifestyle))
+    # Q2: also strip product modifiers — bare product category only
+    modifiers = r'\b(dupe[s]?|affordable|budget|cheap|best|top|routine|perfect|ultimate)\b'
+    add(strip(title, modifiers))
 
-    # Q3: first 4 meaningful words (skip articles, numbers, price symbols)
-    skip = {'the','a','an','and','or','for','with','of','to','in','on','by','from','at','that','this'}
-    words = [w for w in _re.sub(r'[^\w\s]','',title).split()
-             if w.lower() not in skip and not w.isdigit() and len(w) > 2][:4]
-    add(' '.join(words))
+    # Q3: first 4 non-trivial words from Q1 (already cleaned)
+    q1_words = strip(title).split()
+    skip = {'the','a','an','and','or','for','with','of','to','in','on','by','you'}
+    clean_words = [w for w in q1_words if w.lower() not in skip and len(w) > 2][:4]
+    add(' '.join(clean_words))
 
     # Q4: original title — absolute last resort
     add(title)
