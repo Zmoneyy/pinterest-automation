@@ -3605,6 +3605,7 @@ def _search_amazon_real(query: str, api_key: str) -> list:
 
     results = []
     for item in items:
+        import re as _re
         rating  = float(item.get("rating")  or 0)
         reviews = int(  item.get("reviews") or 0)
         asin    = (item.get("asin") or "").strip()
@@ -3612,6 +3613,17 @@ def _search_amazon_real(query: str, api_key: str) -> list:
         if not name or rating < 4.0 or reviews < 500:
             continue
         badge = (item.get("badge") or "").lower()
+        # Prefer ASIN field; fall back to extracting it from the product link
+        if not asin:
+            link = item.get("link") or item.get("url") or ""
+            m = _re.search(r'/dp/([A-Z0-9]{10})', link)
+            if m:
+                asin = m.group(1)
+        amazon_url = (
+            f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+            if asin else
+            f"https://www.amazon.com/s?k={_up.quote_plus(name)}&tag=auragirlcreat-20"
+        )
         results.append({
             "name":             name,
             "asin":             asin,
@@ -3621,11 +3633,7 @@ def _search_amazon_real(query: str, api_key: str) -> list:
             "image_url":        item.get("thumbnail") or "",
             "is_best_seller":   item.get("is_best_seller") or "best seller" in badge,
             "is_amazons_choice":item.get("is_amazons_choice") or "amazon's choice" in badge,
-            "amazon_url": (
-                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
-                if asin else
-                f"https://www.amazon.com/s?k={_up.quote_plus(name)}&tag=auragirlcreat-20"
-            ),
+            "amazon_url":       amazon_url,
         })
 
     # Best first: bestseller > amazon's choice > review count
@@ -3673,15 +3681,15 @@ Brand: Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashi
 SECTION 2 — PIN TITLE & KEYWORDS
 The pin title and any keywords to use throughout the copy.
 
-SECTION 3 — PRODUCTS WITH AMAZON LINKS
-List every product name with its full Amazon affiliate link exactly as provided above.
+SECTION 3 — PRODUCTS WITH VISUAL CONTEXT
+For each product, include: name, a one-sentence visual description (color, texture, finish, shape, packaging), why it fits this pin, and its full Amazon affiliate link exactly as provided above.
 
 SECTION 4 — IMAGE GENERATION INSTRUCTIONS (tell ChatGPT to generate this image)
 Generate a Pinterest vertical pin image (2:3 ratio) that is:
 - Aesthetic and editorial — high-end lifestyle magazine spread feel
 - Buyer-intent: makes the viewer IMMEDIATELY want to purchase
 - Scroll-stopping and aspirational — visually hooks the viewer in an instant
-- Shows the products in a lifestyle/flat-lay context that makes people need them
+- Shows the products in a lifestyle/flat-lay context — use the visual descriptions above so each product looks accurate (right color, finish, shape)
 - Has "auragirlessentials.com" as small, clean text placed at the very bottom of the pin — subtle, not a watermark, just enough to be seen without drawing attention away from the products
 
 SECTION 5 — COPY INSTRUCTIONS using Money Making Pin Formula
@@ -3757,7 +3765,8 @@ Return ONLY valid JSON:
   "summary": "2 sentences on the vibe and shopping intent of this pin",
   "selected_indices": [0-based indices of the products you picked from the list above],
   "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: list every selected product name with its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay product context, with 'auragirlessentials.com' as small clean text at the very bottom of the pin (subtle, not a watermark — visible but never distracting)\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
+  "product_visuals": ["one sentence per selected product describing exactly what it looks like — color, texture, finish, packaging, shape — so an AI image generator knows how to depict it"],
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products with visual context: for each selected product include its name, a one-sentence visual description (color, texture, finish, shape), why it fits this pin, and its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay context — use the product visual descriptions above to accurately depict each product's appearance, with 'auragirlessentials.com' as small clean text at the very bottom of the pin (subtle, not a watermark — visible but never distracting)\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
 }}"""
 
         try:
@@ -3767,14 +3776,16 @@ Return ONLY valid JSON:
                 messages=[{"role": "user", "content": prompt}]
             )
             raw = _parse_claude_json(msg)
-            indices = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
-            whys    = raw.get("product_whys") or []
+            indices  = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
+            whys     = raw.get("product_whys")    or []
+            visuals  = raw.get("product_visuals") or []
             products_out = []
             for rank, idx in enumerate(indices):
                 if idx >= len(amazon_hits):
                     continue
                 p = dict(amazon_hits[idx])
-                p["why"] = whys[rank] if rank < len(whys) else "Top-rated Amazon bestseller"
+                p["why"]    = whys[rank]    if rank < len(whys)    else "Top-rated Amazon bestseller"
+                p["visual"] = visuals[rank] if rank < len(visuals) else ""
                 products_out.append(p)
             ppp = _inject_keywords(raw.get("ppp_prompt", ""), keywords)
             session_id = _autosave_pin_research(title, keywords, raw.get("summary",""), products_out, ppp)
@@ -3801,11 +3812,12 @@ Return ONLY valid JSON:
     {{
       "name": "Brand + Product Name",
       "why": "one sentence on why it fits this pin",
+      "visual": "one sentence describing what it looks like — color, texture, finish, shape, packaging",
       "search_query": "exact Amazon search query",
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 all products with their Amazon search links (https://www.amazon.com/s?k=QUERY&tag=auragirlcreat-20), SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent makes viewer want to buy immediately, scroll-stopping aspirational lifestyle context, 'auragirlessentials.com' as small clean text at the very bottom of the pin — subtle, never a watermark, just visibly branded), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 each product with its visual description (color/texture/finish/shape), why it fits the pin, and its Amazon link, SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent, scroll-stopping aspirational lifestyle/flat-lay context — use each product's visual description to depict it accurately, 'auragirlessentials.com' as small clean text at the very bottom — subtle, never a watermark), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
 }}"""
 
     try:
