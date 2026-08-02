@@ -3603,27 +3603,40 @@ def _search_amazon_real(query: str, api_key: str) -> list:
         logger.warning(f"SerpAPI Amazon search failed: {e}")
         return []
 
+    import re as _re
     results = []
     for item in items:
-        import re as _re
         rating  = float(item.get("rating")  or 0)
         reviews = int(  item.get("reviews") or 0)
-        asin    = (item.get("asin") or "").strip()
         name    = (item.get("title") or "").strip()
         if not name or rating < 4.0 or reviews < 500:
             continue
         badge = (item.get("badge") or "").lower()
-        # Prefer ASIN field; fall back to extracting it from the product link
-        if not asin:
-            link = item.get("link") or item.get("url") or ""
-            m = _re.search(r'/dp/([A-Z0-9]{10})', link)
+
+        # Build the most direct product URL possible:
+        # 1. asin field  → /dp/ASIN  (cleanest)
+        # 2. link field  → strip ref junk, keep /dp/ASIN path if present
+        # 3. raw link    → use as-is with affiliate tag (still a product page)
+        # 4. name query  → search fallback (last resort)
+        asin     = (item.get("asin") or item.get("product_id") or "").strip()
+        raw_link = (item.get("link") or item.get("url") or "").strip()
+
+        if not asin and raw_link:
+            m = _re.search(r'/dp/([A-Z0-9]{10})', raw_link)
             if m:
                 asin = m.group(1)
-        amazon_url = (
-            f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
-            if asin else
-            f"https://www.amazon.com/s?k={_up.quote_plus(name)}&tag=auragirlcreat-20"
-        )
+
+        if asin:
+            amazon_url = f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+        elif raw_link and "amazon.com" in raw_link:
+            # Strip ref= cruft and add our tag — keeps it as a direct product page
+            clean = _re.sub(r'/ref=[^/?]*', '', raw_link).split("?")[0]
+            amazon_url = f"{clean}?tag=auragirlcreat-20"
+        else:
+            amazon_url = f"https://www.amazon.com/s?k={_up.quote_plus(name)}&tag=auragirlcreat-20"
+
+        logger.debug(f"SerpAPI product: {name!r} | asin={asin!r} | raw_link={raw_link!r} | final={amazon_url!r}")
+
         results.append({
             "name":             name,
             "asin":             asin,
