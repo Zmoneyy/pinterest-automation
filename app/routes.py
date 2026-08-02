@@ -3807,75 +3807,97 @@ Return ONLY valid JSON:
             logger.error(f"Pin to Products (existing) error: {e}")
             return jsonify({"ok": False, "error": str(e)})
 
-    # ── Search Amazon for real products via SerpAPI ──
-    amazon_hits = []
+    # ── Two-step: Claude identifies exact products needed → SerpAPI finds each one ──
     if Config.SERPAPI_KEY:
-        amazon_hits = _search_amazon_real(title, Config.SERPAPI_KEY)
+        try:
+            # STEP 1 — Claude reads the pin title and decides what specific products are needed
+            import re as _re
+            count_match = _re.search(r'\b(\d+)\b', title)
+            count_hint  = f"The title says {count_match.group(1)} — return EXACTLY {count_match.group(1)} product entries." if count_match else "Return 5–7 products."
+            kw_ctx = f"\nKeywords: {keywords}" if keywords else ""
 
-    if amazon_hits:
-        # Build a readable list for the Claude prompt
-        hits_lines = []
-        for i, p in enumerate(amazon_hits):
-            badge = ""
-            if p["is_best_seller"]:   badge += " 🏆 BESTSELLER"
-            if p["is_amazons_choice"]: badge += " ✅ AMAZON'S CHOICE"
-            hits_lines.append(
-                f"{i+1}. {p['name']} — ⭐{p['rating']} ({p['reviews']:,} reviews){badge} | {p['price']} | {p['amazon_url']}"
+            id_prompt = f"""You are a Pinterest product researcher for Aura Girl Essentials.
+
+Pin title: "{title}"{kw_ctx}
+
+{count_hint}
+
+For each product this pin should feature, return:
+- type: what the product is in plain terms (e.g. "peptide face serum")
+- query: a 3–5 word Amazon search query that will find it (product-focused only — no lifestyle words, no "dupe", no brand names unless the pin IS about that brand)
+
+For "dupe" pins: search the product TYPE not the word "dupe" (e.g. for a Rhode dupe → "peptide glazing serum hydrating")
+For outfit pins: one search per clothing/accessory piece
+For "finds under $X" pins: include "affordable" in the query
+
+Return ONLY valid JSON: {{"products": [{{"type": "...", "query": "..."}}]}}"""
+
+            id_msg = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                messages=[{"role": "user", "content": id_prompt}]
             )
-        hits_text = "\n".join(hits_lines)
-        prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness).
+            product_specs = _parse_claude_json(id_msg).get("products", [])[:10]
+            logger.info(f"Two-step: identified {len(product_specs)} product types for {title!r}")
 
-Pinterest pin title: "{title}"{kw_line}
+            # STEP 2 — SerpAPI finds the best real Amazon match for each product type
+            products_out = []
+            for spec in product_specs:
+                hits = _search_amazon_real(spec.get("query", ""), Config.SERPAPI_KEY)
+                if hits:
+                    best = dict(hits[0])
+                    best["product_type"] = spec.get("type", "")
+                    best["why"]     = f"Top Amazon match for {spec['type']}"
+                    best["context"] = ""
+                    products_out.append(best)
+                    logger.info(f"  {spec['query']!r} → {best['name'][:50]!r} ({best['amazon_url']})")
+                else:
+                    logger.warning(f"  No results for {spec['query']!r}")
 
-These are REAL Amazon search results for this pin — all have 4+ stars and 500+ reviews, sorted by bestseller status:
+            if products_out:
+                # STEP 3 — Claude writes the persuasive context + full PPP prompt
+                prod_lines = "\n".join(
+                    f"{i+1}. {p['name']} — ⭐{p['rating']} ({p['reviews']:,} reviews)"
+                    f"{' 🏆' if p['is_best_seller'] else ''}{' ✅' if p['is_amazons_choice'] else ''}"
+                    f" | {p['price']} | {p['amazon_url']}"
+                    for i, p in enumerate(products_out)
+                )
+                ppp_prompt_text = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness).
 
-{hits_text}
+Pin title: "{title}"{kw_line}
 
-IMPORTANT — read the pin title carefully:
-- If it says a specific number (e.g. "10 Best...", "5 Amazon Finds", "3 Products..."), pick EXACTLY that many products.
-- If it implies a complete look or outfit (e.g. "The Perfect Fall Outfit"), pick enough products to complete that look — no more, no less.
-- If it's open-ended, use your judgment for what feels complete (typically 4-8).
+These are the EXACT products for this pin — already matched specifically to what the pin needs:
+{prod_lines}
 
-From this list, pick the right number of products that best fit this pin's theme, vibe, and aesthetic. Prioritise bestsellers and Amazon's Choice items. Then do two more things.
+For each product write 2–3 sentences of persuasive consumer context (like a trusted friend who genuinely loves it — what problem it solves, how it improves your life, the transformation it delivers, just enough visual detail to picture it — make someone feel like they need it).
 
 Return ONLY valid JSON:
 {{
-  "summary": "2 sentences on the vibe and shopping intent of this pin",
-  "selected_indices": [0-based indices of the products you picked from the list above],
-  "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
-  "product_context": ["2-3 sentences per selected product written like a trusted friend who genuinely loves it — what problem it solves, how it improves your life or makes you feel, the result or transformation it delivers, and just enough visual detail to picture it. Goal: make someone feel like they need this in their life."],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. Include: SECTION 1 Brand context (Aura Girl Essentials — curated women's lifestyle brand). SECTION 2 Pin title{(' and keywords to weave in: ' + keywords) if keywords else ''}. SECTION 3 Products — for each selected product: name, persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, enough visual detail to picture it — written to make someone feel like they need it), why it fits this pin, and its FULL Amazon affiliate link from the list above. SECTION 4 Image context — use the product packaging color palette, lifestyle/flat-lay editorial aesthetic. SECTION 5 must be the EXACT output format block below (copy it word for word so ChatGPT knows what to return):\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 characters — START with a hook CTA like "Tap the link to grab yours →" then weave in keywords naturally\\n**Hashtags:** 5-8 keyword hashtags (description + hashtags under 500 chars total)\\n**Alt Text:** vivid description of the pin image under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product full affiliate link\\n**Image Overlay Text:** headline + benefit phrase for the pin image\\n**AI Image Prompt:** vertical 2:3 1000x1500px, luxury editorial, product as hero, product packaging color palette, overlay text in bold modern sans-serif, generous white space, mobile-first scroll-stopping, 'auragirlessentials.com' small clean text at very bottom\\n\\nEnd with: As an Amazon Associate, I may earn from qualifying purchases."
+  "summary": "2 sentences on the vibe and shopping intent",
+  "product_contexts": ["2-3 sentence persuasive context per product, same order as the list above"],
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. SECTION 1 Brand: Aura Girl Essentials. SECTION 2 Pin title{(' + keywords: ' + keywords) if keywords else ''}. SECTION 3 each product with its persuasive context, why it fits the pin, and its FULL Amazon affiliate link. SECTION 4 image instructions (vertical 2:3, luxury editorial, product as hero, packaging color palette, lifestyle flat-lay, scroll-stopping, auragirlessentials.com small text at bottom). SECTION 5 exact output format:\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 chars — START with hook CTA like 'Tap the link to grab yours →' then keywords\\n**Hashtags:** 5-8 hashtags (total with description under 500 chars)\\n**Alt Text:** vivid pin image description under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product affiliate link\\n**Image Overlay Text:** headline + benefit phrase\\n**AI Image Prompt:** 1000x1500px luxury editorial, product as hero, packaging color palette, overlay text bold sans-serif, white space, mobile-first, auragirlessentials.com small text bottom\\n\\nAs an Amazon Associate, I may earn from qualifying purchases."
 }}"""
+                final_msg = client.messages.create(
+                    model="claude-sonnet-5",
+                    max_tokens=8192,
+                    messages=[{"role": "user", "content": ppp_prompt_text}]
+                )
+                raw = _parse_claude_json(final_msg)
+                contexts = raw.get("product_contexts") or []
+                for i, p in enumerate(products_out):
+                    p["context"] = contexts[i] if i < len(contexts) else ""
 
-        try:
-            msg = client.messages.create(
-                model="claude-sonnet-5",
-                max_tokens=8192,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            raw = _parse_claude_json(msg)
-            indices  = raw.get("selected_indices") or list(range(min(7, len(amazon_hits))))
-            whys     = raw.get("product_whys")    or []
-            contexts = raw.get("product_context") or []
-            products_out = []
-            for rank, idx in enumerate(indices):
-                if idx >= len(amazon_hits):
-                    continue
-                p = dict(amazon_hits[idx])
-                p["why"]     = whys[rank]     if rank < len(whys)     else "Top-rated Amazon bestseller"
-                p["context"] = contexts[rank] if rank < len(contexts) else ""
-                products_out.append(p)
-            ppp = _inject_keywords(raw.get("ppp_prompt", ""), keywords)
-            session_id = _autosave_pin_research(title, keywords, raw.get("summary",""), products_out, ppp)
-            return jsonify({
-                "ok":         True,
-                "summary":    raw.get("summary", ""),
-                "products":   products_out,
-                "ppp_prompt": ppp,
-                "session_id": session_id,
-            })
+                ppp = _inject_keywords(raw.get("ppp_prompt", ""), keywords)
+                session_id = _autosave_pin_research(title, keywords, raw.get("summary", ""), products_out, ppp)
+                return jsonify({
+                    "ok":         True,
+                    "summary":    raw.get("summary", ""),
+                    "products":   products_out,
+                    "ppp_prompt": ppp,
+                    "session_id": session_id,
+                })
         except Exception as e:
-            logger.error(f"Pin to Products (SerpAPI path) error: {e}")
+            logger.error(f"Pin to Products (two-step) error: {e}")
             return jsonify({"ok": False, "error": str(e)})
 
     # ── Fallback: no SerpAPI key or search returned nothing — Claude guesses ──
