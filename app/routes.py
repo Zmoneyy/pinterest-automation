@@ -3583,24 +3583,71 @@ def _parse_claude_json(msg) -> dict:
         raise ValueError(f"JSON parse error: {e}. Raw (first 300 chars): {cleaned[:300]!r}")
 
 
+def _amazon_search_queries(title: str) -> list:
+    """Return progressively simpler Amazon search queries from a pin title.
+    Amazon works best with short product-category terms, not lifestyle sentences."""
+    import re as _re
+
+    # Words that mean nothing to Amazon's search engine
+    FILLER = r'\b(that|delivers?|the same|you need|i found|amazon finds?|routine|perfect|ultimate|only|every|girl|girls?|women|aesthetic|vibe|inspired|inspired by|style|era|moment|season|trend|trending|viral|hack|hacks?|steal|steals?|glazed donut|clean girl|glass skin|glow up|glow|glazed|donut)\b'
+    PRICE  = r'\bunder\s+\$?\d+\b|\$\d+\b'
+    COUNTS = r'^\d+\s+'  # leading number like "7 "
+
+    def strip(text, extras=''):
+        t = _re.sub(COUNTS, '', text, flags=_re.I)
+        t = _re.sub(PRICE,  '', t,    flags=_re.I)
+        t = _re.sub(FILLER, '', t,    flags=_re.I)
+        if extras:
+            t = _re.sub(extras, '', t, flags=_re.I)
+        return ' '.join(t.split()).strip(' -–—,')
+
+    seen = set()
+    queries = []
+    def add(q):
+        q = q.strip()
+        if q and q.lower() not in seen:
+            seen.add(q.lower())
+            queries.append(q)
+
+    # Q1: strip filler but keep product descriptors (dupe, affordable, serum, etc.)
+    add(strip(title))
+
+    # Q2: also strip lifestyle/trend descriptors — pure product category left
+    lifestyle = r'\b(dupe[s]?|affordable|budget|cheap|best|top)\b'
+    add(strip(title, lifestyle))
+
+    # Q3: first 4 meaningful words (skip articles, numbers, price symbols)
+    skip = {'the','a','an','and','or','for','with','of','to','in','on','by','from','at','that','this'}
+    words = [w for w in _re.sub(r'[^\w\s]','',title).split()
+             if w.lower() not in skip and not w.isdigit() and len(w) > 2][:4]
+    add(' '.join(words))
+
+    # Q4: original title — absolute last resort
+    add(title)
+    return queries
+
+
 def _search_amazon_real(query: str, api_key: str) -> list:
-    """Hit SerpAPI Amazon Search and return filtered, ranked product list."""
-    import requests as _req, urllib.parse as _up  # noqa: F401 (requests already in requirements)
-    try:
-        resp = _req.get(
-            "https://serpapi.com/search.json",
-            params={
-                "engine": "amazon",
-                "amazon_domain": "amazon.com",
-                "k": query,
-                "api_key": api_key,
-            },
-            timeout=15,
-        )
-        resp.raise_for_status()
-        items = resp.json().get("organic_results", [])
-    except Exception as e:
-        logger.warning(f"SerpAPI Amazon search failed: {e}")
+    """Hit SerpAPI Amazon Search and return filtered, ranked product list.
+    Tries progressively simpler queries if the full title returns no results."""
+    import requests as _req, urllib.parse as _up  # noqa: F401
+    candidates = _amazon_search_queries(query)
+    items = []
+    for q in candidates:
+        try:
+            resp = _req.get(
+                "https://serpapi.com/search.json",
+                params={"engine": "amazon", "amazon_domain": "amazon.com", "k": q, "api_key": api_key},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            items = resp.json().get("organic_results", [])
+            logger.info(f"SerpAPI query {q!r} → {len(items)} results")
+            if items:
+                break
+        except Exception as e:
+            logger.warning(f"SerpAPI Amazon search failed for {q!r}: {e}")
+    if not items:
         return []
 
     import re as _re
@@ -3609,7 +3656,7 @@ def _search_amazon_real(query: str, api_key: str) -> list:
         rating  = float(item.get("rating")  or 0)
         reviews = int(  item.get("reviews") or 0)
         name    = (item.get("title") or "").strip()
-        if not name or rating < 4.0 or reviews < 500:
+        if not name or rating < 4.0 or reviews < 200:
             continue
         badge = (item.get("badge") or "").lower()
 
