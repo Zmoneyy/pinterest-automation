@@ -81,20 +81,23 @@
 </div>
 {% endif %}
 
-{% if sess.blog_post %}
+<!-- Blog Post -->
 <div class="card" style="margin-bottom:32px;">
   <div class="card-body">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
       <div>
         <h2 style="font-size:17px;font-weight:700;">📝 Blog Post</h2>
-        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Copy and paste onto your website</div>
+        <div style="font-size:12px;color:var(--gray-400);margin-top:2px;">Buyer-intent post you can paste straight onto your website</div>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="copyText(document.getElementById('blogBox').value)">Copy</button>
+      <button class="btn btn-ghost btn-sm" id="blogCopyBtn" onclick="copyText(document.getElementById('blogBox').value)" style="{{ 'display:none' if not sess.blog_post else '' }}">Copy</button>
     </div>
-    <textarea id="blogBox" rows="16" style="width:100%;font-size:13px;line-height:1.7;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);">{{ sess.blog_post }}</textarea>
+    <textarea id="blogBox" rows="16" placeholder="Click Generate to write a buyer-intent blog post for this pin…" style="width:100%;font-size:13px;line-height:1.7;border:1px solid var(--gray-200);border-radius:8px;padding:12px;resize:vertical;font-family:inherit;color:var(--gray-800);background:var(--gray-50);">{{ sess.blog_post or '' }}</textarea>
+    <div id="blogLoading" style="display:none;text-align:center;padding:16px;font-size:13px;color:var(--gray-400);">✍️ Writing your blog post…</div>
+    <button class="btn btn-ghost btn-full" id="blogGenBtn" onclick="generateBlogPost()" style="margin-top:10px;{{ 'display:none' if sess.blog_post else '' }}">
+      📝 Generate Blog Post
+    </button>
   </div>
 </div>
-{% endif %}
 
 {% endblock %}
 
@@ -116,6 +119,35 @@ function buildProductText() {
     text += `${i+1}. ${p.name}\n   ${p.why}\n   ${p.amazon_url}\n\n`;
   });
   return text.trim();
+}
+
+async function generateBlogPost() {
+  const btn     = document.getElementById('blogGenBtn');
+  const loading = document.getElementById('blogLoading');
+  btn.style.display = 'none';
+  loading.style.display = 'block';
+
+  try {
+    const res = await fetch('/research/generate-blog-post', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        title:      {{ sess.title | tojson }},
+        keywords:   {{ (sess.keywords or '') | tojson }},
+        products:   {{ products | tojson }},
+        session_id: {{ sess.id }},
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Generation failed.');
+
+    document.getElementById('blogBox').value = data.blog_post || '';
+    document.getElementById('blogCopyBtn').style.display = 'block';
+  } catch (e) {
+    alert('Blog post failed: ' + e.message);
+    btn.style.display = 'block';
+  }
+  loading.style.display = 'none';
 }
 </script>
 {% endblock %}
