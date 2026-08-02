@@ -3682,7 +3682,7 @@ SECTION 2 — PIN TITLE & KEYWORDS
 The pin title and any keywords to use throughout the copy.
 
 SECTION 3 — PRODUCTS WITH FULL CONTEXT
-For each product include: name, full context (what it looks like — color/texture/finish/shape; what it does and how it works; its key benefits and the transformation it delivers), why it fits this pin, and its full Amazon affiliate link exactly as provided above.
+For each product include: name, persuasive consumer context (write this like a trusted friend who genuinely loves the product — what problem it solves, how it makes your life better, what result or feeling it delivers, and a brief visual so you can picture it; the goal is to make someone feel like they need this in their life), why it fits this pin, and its full Amazon affiliate link exactly as provided above.
 
 SECTION 4 — IMAGE GENERATION INSTRUCTIONS (tell ChatGPT to generate this image)
 Generate a Pinterest vertical pin image (2:3 ratio) that is:
@@ -3765,8 +3765,8 @@ Return ONLY valid JSON:
   "summary": "2 sentences on the vibe and shopping intent of this pin",
   "selected_indices": [0-based indices of the products you picked from the list above],
   "product_whys": ["one sentence per selected product: why it fits this pin perfectly"],
-  "product_context": ["2-3 sentences per selected product covering: (1) what it looks like — color, texture, finish, packaging, shape; (2) what it does and how it works; (3) its key benefits and the transformation or result it delivers to the user"],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: for each selected product include its name, full context (appearance + what it does + key benefits + transformation it delivers), why it fits this pin, and its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay context — use each product's appearance description to depict it accurately, with 'auragirlessentials.com' as small clean text at the very bottom of the pin (subtle, not a watermark — visible but never distracting)\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
+  "product_context": ["2-3 sentences per selected product written like a trusted friend who genuinely loves it — what problem it solves, how it improves your life or makes you feel, the result or transformation it delivers, and just enough visual detail to picture it. Goal: make someone feel like they need this in their life."],
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing ALL of these sections:\\nSECTION 1 — Brand: Aura Girl Essentials (curated women's lifestyle brand)\\nSECTION 2 — Pin title{(' + keywords: ' + keywords) if keywords else ''}\\nSECTION 3 — Products: for each selected product include its name, persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, visual detail — written to make someone feel like they need it), why it fits this pin, and its FULL Amazon affiliate link from the list above\\nSECTION 4 — Image instructions: generate a Pinterest vertical (2:3) image that is aesthetic/editorial/high-end, buyer-intent (makes viewer want to buy immediately), scroll-stopping and aspirational, lifestyle/flat-lay context — use each product's appearance description to depict it accurately, with 'auragirlessentials.com' as small clean text at the very bottom of the pin (subtle, not a watermark — visible but never distracting)\\nSECTION 5 — Copy: keyword-first title max 100 chars + year, 3-part description (hook → transformation → CTA), 15-20 hashtags, Money Making Pin Formula"
 }}"""
 
         try:
@@ -3812,12 +3812,12 @@ Return ONLY valid JSON:
     {{
       "name": "Brand + Product Name",
       "why": "one sentence on why it fits this pin",
-      "context": "2-3 sentences covering: what it looks like (color, texture, finish, shape, packaging); what it does and how it works; its key benefits and the transformation it delivers",
+      "context": "2-3 sentences written like a trusted friend who genuinely loves this product — what problem it solves, how it improves your life or makes you feel, the result or transformation it delivers, plus just enough visual detail to picture it. Goal: make someone feel like they need this.",
       "search_query": "exact Amazon search query",
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 each product with full context (appearance + what it does + benefits + transformation), why it fits the pin, and its Amazon link, SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent, scroll-stopping aspirational lifestyle/flat-lay — use each product's appearance to depict it accurately, 'auragirlessentials.com' as small clean text at the very bottom — subtle, never a watermark), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt with: SECTION 1 Brand context (Aura Girl Essentials), SECTION 2 pin title{(' + keywords: ' + keywords) if keywords else ''}, SECTION 3 each product with persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, visual detail — written to make someone feel like they need it), why it fits the pin, and its Amazon link, SECTION 4 image instructions (Pinterest vertical 2:3, aesthetic/editorial/high-end, buyer-intent, scroll-stopping aspirational lifestyle/flat-lay — use each product's appearance to depict it accurately, 'auragirlessentials.com' as small clean text at the very bottom — subtle, never a watermark), SECTION 5 copy (keyword-first title max 100 chars + year, 3-part description hook→transformation→CTA, 15-20 hashtags)"
 }}"""
 
     try:
