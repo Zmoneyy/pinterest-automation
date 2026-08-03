@@ -4037,6 +4037,76 @@ Return ONLY the blog post. No JSON. No commentary."""
         return jsonify({"ok": False, "error": str(e)})
 
 
+@bp.route("/research/download-product-images", methods=["POST"])
+@login_required
+def download_product_images():
+    """Package all product images into a single ZIP and return it for download.
+    Uses the thumbnail URL from SerpAPI, stripping size constraints to get full-res.
+    Falls back to Amazon CDN ASIN pattern when available."""
+    import io, re as _re, zipfile
+    import requests as _req
+
+    data     = request.get_json()
+    products = data.get("products") or []
+    if not products:
+        return jsonify({"ok": False, "error": "No products provided."})
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.amazon.com/",
+        "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+    }
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, p in enumerate(products, 1):
+            name     = (p.get("name") or f"product_{i}")[:50]
+            asin     = (p.get("asin") or "").strip()
+            img_url  = (p.get("image_url") or "").strip()
+
+            # Upgrade thumbnail to full-res: strip Amazon size/crop suffix (._AC_SR525,789_. etc.)
+            if img_url:
+                img_url = _re.sub(r'\._[A-Z_0-9,]+_\.', '.', img_url)
+
+            # ASIN-based CDN fallback (reliable full-size hero)
+            if not img_url and asin:
+                img_url = f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+
+            if not img_url:
+                logger.warning(f"No image URL for product {i}: {name!r}")
+                continue
+
+            try:
+                resp = _req.get(img_url, headers=headers, timeout=12)
+                is_jpg = resp.content[:3] == b"\xff\xd8\xff"
+                is_png = resp.content[:8] == b"\x89PNG\r\n\x1a\n"
+                if resp.status_code == 200 and len(resp.content) > 2000 and (is_jpg or is_png):
+                    safe_name = _re.sub(r'[^\w\s\-]', '', name).strip()[:40].replace(' ', '_')
+                    filename  = f"{i:02d}_{safe_name}.jpg"
+                    zf.writestr(filename, resp.content)
+                    logger.info(f"Zipped image {i}: {filename} ({len(resp.content)//1024}KB)")
+                elif asin and img_url != f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg":
+                    # Try ASIN pattern if stripped URL failed
+                    r2 = _req.get(f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg", headers=headers, timeout=12)
+                    if r2.status_code == 200 and len(r2.content) > 2000:
+                        safe_name = _re.sub(r'[^\w\s\-]', '', name).strip()[:40].replace(' ', '_')
+                        zf.writestr(f"{i:02d}_{safe_name}.jpg", r2.content)
+            except Exception as e:
+                logger.warning(f"Could not download image for product {i} ({name!r}): {e}")
+
+        if len(zf.namelist()) == 0:
+            return jsonify({"ok": False, "error": "Could not download any product images. Amazon may have blocked the request."})
+
+    buf.seek(0)
+    from flask import send_file
+    return send_file(
+        buf,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name="product-images.zip",
+    )
+
+
 @bp.route("/pin-library/bulk")
 @login_required
 def pin_library_bulk():

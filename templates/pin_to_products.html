@@ -56,7 +56,10 @@
     <div class="card-body">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
         <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
-        <button class="btn btn-ghost btn-sm" onclick="copySection('productsCopy')">Copy</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost btn-sm" onclick="copySection('productsCopy')">Copy</button>
+          <button class="btn btn-red btn-sm" id="dlImgBtn" onclick="downloadProductImages()" style="display:none;">⬇️ Download Images</button>
+        </div>
       </div>
       <div id="p2pSummary" style="font-size:14px;color:var(--gray-600);margin-bottom:16px;line-height:1.6;"></div>
       <div id="p2pProductList"></div>
@@ -339,6 +342,42 @@ function renderResult(data) {
   document.getElementById('productsCopy').value = copyText.trim();
 
   document.getElementById('pppPromptBox').value = data.ppp_prompt || '';
+
+  // Show download button once we have products with images
+  const dlBtn = document.getElementById('dlImgBtn');
+  if (dlBtn) dlBtn.style.display = prods.length ? '' : 'none';
+}
+
+async function downloadProductImages() {
+  if (!lastResult || !(lastResult.products || []).length) return;
+  const btn = document.getElementById('dlImgBtn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ Packaging…';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/research/download-product-images', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({products: lastResult.products})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({error: 'Download failed.'}));
+      throw new Error(err.error || 'Download failed.');
+    }
+    // Trigger browser ZIP download
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'product-images.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Image download failed: ' + e.message);
+  }
+  btn.textContent = orig;
+  btn.disabled = false;
 }
 
 function copySection(elemId) {
