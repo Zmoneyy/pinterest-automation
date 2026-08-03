@@ -142,7 +142,8 @@ function buildProductText() {
   const products = {{ products | tojson }};
   let text = 'Products\n\n';
   products.forEach((p, i) => {
-    text += `${i+1}. ${p.name}\n   ${p.why}\n   ${p.amazon_url}\n\n`;
+    const cleanUrl = (p.amazon_url || '').replace(/[?&]tag=[^&]+/, '').replace(/\?$/, '');
+    text += `${i+1}. ${p.name}\n   ${p.why}\n   ${cleanUrl}\n\n`;
   });
   return text.trim();
 }

@@ -337,7 +337,8 @@ function renderResult(data) {
           <a href="${p.amazon_url}" target="_blank" rel="noopener" class="btn btn-gray btn-sm">Search on Amazon →</a>
         </div>
       </div>`;
-    copyText += `${i+1}. ${p.name}\n   ${p.why}\n   ${p.amazon_url}\n\n`;
+    const cleanUrl = (p.amazon_url || '').replace(/[?&]tag=[^&]+/, '').replace(/\?$/, '');
+    copyText += `${i+1}. ${p.name}\n   ${p.why}\n   ${cleanUrl}\n\n`;
   });
   document.getElementById('productsCopy').value = copyText.trim();
 
