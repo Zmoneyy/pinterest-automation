@@ -138,17 +138,8 @@ function openAllLinks() {
   const products = {{ products | tojson }};
   const urls = products.map(p => p.amazon_url).filter(Boolean);
   if (!urls.length) return;
-
-  // Open first tab immediately (inside the click handler so browser allows it)
-  window.open(urls[0], '_blank');
-  // Open the rest with staggered delays — browsers block rapid multi-opens
-  urls.slice(1).forEach((url, i) => {
-    setTimeout(() => window.open(url, '_blank'), (i + 1) * 600);
-  });
-
-  const btn = document.getElementById('openAllBtn');
-  btn.textContent = `↗ Opening ${urls.length}…`;
-  setTimeout(() => { btn.textContent = '↗ Open All Products'; }, urls.length * 600 + 500);
+  // All opens must be synchronous inside the click handler — setTimeout loses the user gesture
+  urls.forEach(url => window.open(url, '_blank'));
 }
 
 {% if has_search_links %}
