@@ -3623,7 +3623,22 @@ Your job is to write a rich, marketing-focused product research brief. Do NOT wr
 **Raw product data from Amazon:**
 {products_section}
 
-Write the brief in this exact structure:
+Write the brief in this exact structure, starting with the instruction block:
+
+---
+Using the product research brief below, create a complete Pinterest pin package. I need:
+- SEO-optimized Pinterest title
+- SEO-optimized Pinterest description (under 500 characters)
+- 5–8 hashtags
+- Alt text
+- Recommended Pinterest board name
+- On-pin headline + supporting text
+- Visual layout concept (colors, mood, composition)
+- AI image prompt optimized for Canva AI or Ideogram (vertical 2:3, 1000×1500px, mobile-first, scroll-stopping, "auragirlessentials.com" small text at the bottom)
+
+Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
+Affiliate disclaimer to include: *As an Amazon Associate, I earn from qualifying purchases.*
+---
 
 ## Pin Concept Overview
 2 sentences: what this pin is about and who it's for.
