@@ -42,7 +42,6 @@
       <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
-        {% set has_search_links = products | selectattr('amazon_url', 'contains', '/s?k=') | list %}
         {% if has_search_links %}
         <button class="btn btn-ghost btn-sm" id="fixLinksBtn" onclick="fixLinks()" style="color:var(--red);border-color:var(--red);">🔗 Fix Links</button>
         {% endif %}
@@ -63,7 +62,7 @@
       <div style="flex:1;">
         <div style="font-weight:700;font-size:15px;margin-bottom:3px;">{{ p.name }}</div>
         <div style="font-size:13px;color:var(--gray-500);margin-bottom:8px;line-height:1.5;">{{ p.why }}</div>
-        {% if '/s?k=' in p.amazon_url %}
+        {% if '/s?k=' in (p.amazon_url or '') %}
         <a href="{{ p.amazon_url }}" target="_blank" rel="noopener" class="btn btn-gray btn-sm" style="color:var(--gray-400);">
           View on Amazon ↗ <span style="font-size:10px;opacity:0.6;">(search)</span>
         </a>

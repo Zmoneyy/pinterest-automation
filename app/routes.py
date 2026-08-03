@@ -3961,7 +3961,8 @@ def pin_library():
 def pin_folder(session_id):
     sess = PinResearch.query.get_or_404(session_id)
     products = sess.products_list()
-    return render_template("pin_folder.html", sess=sess, products=products)
+    has_search_links = any('/s?k=' in (p.get('amazon_url') or '') for p in products)
+    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links)
 
 
 @bp.route("/research/generate-blog-post", methods=["POST"])
