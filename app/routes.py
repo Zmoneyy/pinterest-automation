@@ -3539,6 +3539,123 @@ def _clean_amazon_url(url: str) -> str:
     return _re.sub(r'[?&]tag=[^&]+', '', url or '').rstrip('?&')
 
 
+def _scrape_amazon_product(url: str) -> dict:
+    """Fetch an Amazon product page and extract title, bullets, and description.
+    Returns a dict with keys: title, bullets (list), description.
+    Returns empty dict on failure — callers should fall back to Claude's knowledge."""
+    import requests as _req
+    from bs4 import BeautifulSoup as _BS
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Connection": "keep-alive",
+    }
+    try:
+        resp = _req.get(url, headers=headers, timeout=8)
+        if resp.status_code != 200 or "captcha" in resp.text.lower()[:2000]:
+            return {}
+        soup = _BS(resp.text, "html.parser")
+
+        # Title
+        title_el = soup.find("span", id="productTitle")
+        title = title_el.get_text().strip() if title_el else ""
+
+        # Bullet points (feature-bullets section)
+        bullets = []
+        bullets_el = soup.find(id="feature-bullets")
+        if bullets_el:
+            for li in bullets_el.find_all("li"):
+                t = li.get_text().strip()
+                if t and "make sure this fits" not in t.lower() and len(t) > 10:
+                    bullets.append(t)
+
+        # Product description / A+ content
+        desc = ""
+        for desc_id in ("productDescription", "aplus", "aplus-feature-div"):
+            el = soup.find(id=desc_id)
+            if el:
+                desc = el.get_text(" ", strip=True)[:800]
+                break
+
+        return {"title": title, "bullets": bullets[:10], "description": desc}
+    except Exception as e:
+        logger.debug(f"Amazon scrape failed for {url}: {e}")
+        return {}
+
+
+def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client) -> str:
+    """Generate a structured ChatGPT-ready pin creation brief for a set of products.
+    Products should each have: name, amazon_url, why, and optionally scraped details."""
+    kw_section = f"\n**Target Keywords:** {keywords}" if keywords else ""
+
+    prod_blocks = []
+    for i, p in enumerate(products, 1):
+        lines = [f"## Product {i}: {p['name']}"]
+        lines.append(f"**Amazon URL:** {p.get('amazon_url', '')}")
+        if p.get("price"):
+            lines.append(f"**Price:** {p['price']}")
+        if p.get("rating"):
+            lines.append(f"**Rating:** ⭐{p['rating']} ({p.get('reviews', 0):,} reviews)")
+        # Scraped details
+        if p.get("bullets"):
+            lines.append("**Product Features:**")
+            for b in p["bullets"][:6]:
+                lines.append(f"  - {b}")
+        if p.get("description"):
+            lines.append(f"**Product Description:** {p['description'][:400]}")
+        if p.get("why"):
+            lines.append(f"**Why it fits this pin:** {p['why']}")
+        prod_blocks.append("\n".join(lines))
+
+    products_section = "\n\n".join(prod_blocks)
+
+    prompt = f"""You are creating a ChatGPT Pinterest Pin Creation Brief for Aura Girl Essentials — a curated women's lifestyle brand.
+
+Pin concept: "{title}"{kw_section}
+
+Products:
+{products_section}
+
+Write a complete, structured brief that someone can paste directly into ChatGPT to generate high-converting Pinterest pins. The brief must include:
+
+1. **Pin Concept Summary** — 2 sentences on the angle and who it's for
+2. **Target Customer** — who is searching for this, their lifestyle and pain points
+3. **Top Benefits** (10 bullet points) — outcomes, not features. Focus on transformation and feeling.
+4. **Emotional Triggers** — why someone would feel compelled to buy (confidence, convenience, aspiration, FOMO, etc.)
+5. **Pinterest Keywords** — 5 primary + 15 long-tail buyer-intent keywords someone would search on Pinterest
+6. **10 Pin Angles** — e.g. "Problem → Solution", "Budget Find", "TikTok Made Me Buy It", "Before & After", etc. One line each.
+7. **5 Strong CTAs** — short scroll-stopping calls to action for pin copy
+8. **Products** — for each product: name, clean Amazon URL (no tag), 2-sentence persuasive description (problem it solves + transformation), and price if known
+9. **ChatGPT Instruction** — end with this exact block:
+
+---
+Using everything above, create 5 high-converting buyer-intent Pinterest pins. For each pin:
+- SEO title (60–100 characters, keyword-first)
+- Pin description (under 500 characters, start with a hook CTA)
+- 5–8 hashtags
+- On-pin headline + supporting text
+- Alt text (under 200 words, vivid image description)
+- Pinterest board name
+- AI image prompt: vertical 2:3 (1000×1500px), luxury editorial, product as hero, {title.split()[0] if title else 'product'} packaging color palette, bold sans-serif overlay text, generous white space, mobile-first, "auragirlessentials.com" small at the bottom
+---
+
+Return only the formatted brief. No preamble."""
+
+    try:
+        msg = client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=4000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return _extract_text(msg)
+    except Exception as e:
+        logger.error(f"ChatGPT package generation failed: {e}")
+        return ""
+
+
 def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
     """Guarantee the user's keywords are literally present in the PPP prompt."""
     if not keywords or not ppp_prompt:
@@ -3747,68 +3864,42 @@ def pin_to_products_api():
     client = anthropic.Anthropic(api_key=Config.ANTHROPIC_API_KEY)
     kw_line = f"\nKeywords to use: {keywords}" if keywords else ""
 
-    # ── When real products are already known, skip guessing and only generate prompts ──
+    # ── When real products are already known, scrape their pages + build ChatGPT package ──
     if existing_products:
-        prod_lines = "\n".join(
-            f"- {p['name']}" + (f" ({p['amazon_url']})" if p.get("amazon_url") else "")
-            for p in existing_products
-        )
-        prompt = f"""You are a Pinterest content expert for Aura Girl Essentials — a curated women's lifestyle brand.
+        import concurrent.futures as _cf
 
-Pinterest pin title: "{title}"{kw_line}
+        def _enrich_existing(p):
+            url = p.get("amazon_url", "")
+            if not p.get("asin") and "/dp/" in url:
+                import re as _re2
+                m = _re2.search(r'/dp/([A-Z0-9]{10})', url)
+                if m:
+                    p["asin"] = m.group(1)
+            details = _scrape_amazon_product(url) if url else {}
+            p["bullets"]     = details.get("bullets", [])
+            p["description"] = details.get("description", "")
+            if details.get("bullets") and not p.get("why"):
+                p["why"] = details["bullets"][0]
+            p.setdefault("why", "Featured in this pin")
+            return p
 
-These are the EXACT products already featured in this pin (do NOT change or add to them):
-{prod_lines}
-
-Generate ONE comprehensive Pin Perfect Pro prompt I can paste directly into ChatGPT. The prompt must contain ALL of the following sections:
-
-SECTION 1 — BRAND CONTEXT
-Brand: Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds)
-
-SECTION 2 — PIN TITLE & KEYWORDS
-The pin title and any keywords to use throughout the copy.
-
-SECTION 3 — PRODUCTS WITH FULL CONTEXT
-For each product include: name, persuasive consumer context (write this like a trusted friend who genuinely loves the product — what problem it solves, how it makes your life better, what result or feeling it delivers, and a brief visual so you can picture it; the goal is to make someone feel like they need this in their life), why it fits this pin, and its full Amazon affiliate link exactly as provided above.
-
-SECTION 4 — IMAGE GENERATION INSTRUCTIONS (tell ChatGPT to generate this image)
-Generate a Pinterest vertical pin image (2:3 ratio) that is:
-- Aesthetic and editorial — high-end lifestyle magazine spread feel
-- Buyer-intent: makes the viewer IMMEDIATELY want to purchase
-- Scroll-stopping and aspirational — visually hooks the viewer in an instant
-- Shows the products in a lifestyle/flat-lay context — use each product's appearance description so it looks accurate (right color, finish, shape, packaging)
-- Has "auragirlessentials.com" as small, clean text placed at the very bottom of the pin — subtle, not a watermark, just enough to be seen without drawing attention away from the products
-
-{"SECTION 2b — KEYWORDS TO WEAVE IN: " + keywords if keywords else ""}
-{_PPP_OUTPUT_FORMAT}
-
-Return ONLY valid JSON:
-{{
-  "summary": "2 sentences on the vibe and shopping intent",
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt containing all sections above — the prompt must end with the EXACT output format from Section 5 so ChatGPT knows precisely what to return"
-}}"""
         try:
-            msg = client.messages.create(
-                model="claude-sonnet-5",
-                max_tokens=8192,
-                messages=[{"role": "user", "content": prompt}]
+            with _cf.ThreadPoolExecutor(max_workers=6) as pool:
+                enriched = list(pool.map(_enrich_existing, existing_products))
+
+            sum_msg = client.messages.create(
+                model="claude-haiku-4-5-20251001", max_tokens=120,
+                messages=[{"role": "user", "content":
+                    f'Write exactly 2 sentences on the shopping vibe and intent of this Pinterest pin: "{title}". Return only the 2 sentences.'}]
             )
-            result = _parse_claude_json(msg)
-            # Attach the real products (with amazon_url from DB) directly
-            for p in existing_products:
-                if p.get("amazon_url") and "tag=" not in p["amazon_url"]:
-                    q = urllib.parse.quote_plus(p["name"])
-                    p["amazon_url"] = f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
-                elif not p.get("amazon_url"):
-                    q = urllib.parse.quote_plus(p["name"])
-                    p["amazon_url"] = f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
-                p.setdefault("why", "Featured in this pin")
-            result["products"] = existing_products
-            result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
-            session_id = _autosave_pin_research(title, keywords, result.get("summary",""), existing_products, result["ppp_prompt"])
-            result["ok"] = True
-            result["session_id"] = session_id
-            return jsonify(result)
+            summary = _extract_text(sum_msg)
+            package = _build_chatgpt_pin_package(title, keywords, enriched, client)
+            session_id = _autosave_pin_research(title, keywords, summary, enriched, package)
+            return jsonify({
+                "ok": True, "summary": summary,
+                "products": enriched, "ppp_prompt": package,
+                "session_id": session_id,
+            })
         except Exception as e:
             logger.error(f"Pin to Products (existing) error: {e}")
             return jsonify({"ok": False, "error": str(e)})
@@ -3861,95 +3952,81 @@ Return ONLY valid JSON: {{"products": [{{"type": "...", "query": "..."}}]}}"""
                     logger.warning(f"  No results for {spec['query']!r}")
 
             if products_out:
-                # STEP 3 — Claude writes the persuasive context + full PPP prompt
-                prod_lines = "\n".join(
-                    f"{i+1}. {p['name']} — ⭐{p['rating']} ({p['reviews']:,} reviews)"
-                    f"{' 🏆' if p['is_best_seller'] else ''}{' ✅' if p['is_amazons_choice'] else ''}"
-                    f" | {p['price']} | {p['amazon_url']}"
-                    for i, p in enumerate(products_out)
+                # STEP 3 — Scrape each Amazon page in parallel, then build ChatGPT package
+                import concurrent.futures as _cf
+
+                def _enrich(p):
+                    details = _scrape_amazon_product(p.get("amazon_url", ""))
+                    p["bullets"]     = details.get("bullets", [])
+                    p["description"] = details.get("description", "")
+                    if details.get("bullets"):
+                        p["why"] = details["bullets"][0]
+                    return p
+
+                with _cf.ThreadPoolExecutor(max_workers=6) as pool:
+                    products_out = list(pool.map(_enrich, products_out))
+
+                # Brief summary via haiku (cheap)
+                sum_msg = client.messages.create(
+                    model="claude-haiku-4-5-20251001", max_tokens=120,
+                    messages=[{"role": "user", "content":
+                        f'Write exactly 2 sentences on the shopping vibe and intent of this Pinterest pin: "{title}". Return only the 2 sentences.'}]
                 )
-                ppp_prompt_text = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness).
+                summary = _extract_text(sum_msg)
 
-Pin title: "{title}"{kw_line}
-
-These are the EXACT products for this pin — already matched specifically to what the pin needs:
-{prod_lines}
-
-For each product write 2–3 sentences of persuasive consumer context (like a trusted friend who genuinely loves it — what problem it solves, how it improves your life, the transformation it delivers, just enough visual detail to picture it — make someone feel like they need it).
-
-Return ONLY valid JSON:
-{{
-  "summary": "2 sentences on the vibe and shopping intent",
-  "product_contexts": ["2-3 sentence persuasive context per product, same order as the list above"],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. SECTION 1 Brand: Aura Girl Essentials. SECTION 2 Pin title{(' + keywords: ' + keywords) if keywords else ''}. SECTION 3 each product with its persuasive context, why it fits the pin, and its FULL Amazon affiliate link. SECTION 4 image instructions (vertical 2:3, luxury editorial, product as hero, packaging color palette, lifestyle flat-lay, scroll-stopping, auragirlessentials.com small text at bottom). SECTION 5 exact output format:\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 chars — START with hook CTA like 'Tap the link to grab yours →' then keywords\\n**Hashtags:** 5-8 hashtags (total with description under 500 chars)\\n**Alt Text:** vivid pin image description under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product affiliate link\\n**Image Overlay Text:** headline + benefit phrase\\n**AI Image Prompt:** 1000x1500px luxury editorial, product as hero, packaging color palette, overlay text bold sans-serif, white space, mobile-first, auragirlessentials.com small text bottom\\n\\nAs an Amazon Associate, I may earn from qualifying purchases."
-}}"""
-                final_msg = client.messages.create(
-                    model="claude-sonnet-5",
-                    max_tokens=8192,
-                    messages=[{"role": "user", "content": ppp_prompt_text}]
-                )
-                raw = _parse_claude_json(final_msg)
-                contexts = raw.get("product_contexts") or []
-                for i, p in enumerate(products_out):
-                    p["context"] = contexts[i] if i < len(contexts) else ""
-
-                ppp = _inject_keywords(raw.get("ppp_prompt", ""), keywords)
-                session_id = _autosave_pin_research(title, keywords, raw.get("summary", ""), products_out, ppp)
+                package = _build_chatgpt_pin_package(title, keywords, products_out, client)
+                session_id = _autosave_pin_research(title, keywords, summary, products_out, package)
                 return jsonify({
-                    "ok":         True,
-                    "summary":    raw.get("summary", ""),
-                    "products":   products_out,
-                    "ppp_prompt": ppp,
+                    "ok": True, "summary": summary,
+                    "products": products_out, "ppp_prompt": package,
                     "session_id": session_id,
                 })
         except Exception as e:
             logger.error(f"Pin to Products (two-step) error: {e}")
             return jsonify({"ok": False, "error": str(e)})
 
-    # ── Fallback: no SerpAPI key or search returned nothing — Claude guesses ──
-    prompt = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness Amazon finds).
+    # ── Fallback: no SerpAPI key — Claude identifies products from its knowledge ──
+    fallback_prompt = f"""You are a Pinterest product researcher for Aura Girl Essentials.
 
 Pinterest pin title: "{title}"{kw_line}
 
-Return ONLY valid JSON:
+Identify the best real Amazon products for this pin. Return ONLY valid JSON:
 {{
-  "summary": "2 sentences on the vibe and shopping intent of this pin",
+  "summary": "2 sentences on the vibe and shopping intent",
   "products": [
     {{
-      "name": "Brand + Product Name",
+      "name": "Brand + Product Name (specific and real)",
       "why": "one sentence on why it fits this pin",
-      "context": "2-3 sentences written like a trusted friend who genuinely loves this product — what problem it solves, how it improves your life or makes you feel, the result or transformation it delivers, plus just enough visual detail to picture it. Goal: make someone feel like they need this.",
-      "search_query": "exact Amazon search query",
-      "asin": "ASIN if known with confidence, else empty string"
+      "asin": "Amazon ASIN if you know it confidently, else empty string"
     }}
-  ],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. Include: SECTION 1 Brand context (Aura Girl Essentials — curated women's lifestyle brand). SECTION 2 Pin title{(' and keywords to weave in: ' + keywords) if keywords else ''}. SECTION 3 Products — each with persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, visual detail — written to make someone feel like they need it), why it fits the pin, and its full Amazon affiliate link. SECTION 4 Image context — use the product packaging color palette, lifestyle/flat-lay editorial aesthetic. SECTION 5 must be the EXACT output format block (copy it word for word):\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 characters — START with a hook CTA like "Tap the link to grab yours →" then weave in keywords naturally\\n**Hashtags:** 5-8 keyword hashtags (description + hashtags under 500 chars total)\\n**Alt Text:** vivid description of the pin image under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product full affiliate link\\n**Image Overlay Text:** headline + benefit phrase for the pin image\\n**AI Image Prompt:** vertical 2:3 1000x1500px, luxury editorial, product as hero, product packaging color palette, overlay text in bold modern sans-serif, generous white space, mobile-first scroll-stopping, 'auragirlessentials.com' small clean text at very bottom\\n\\nEnd with: As an Amazon Associate, I may earn from qualifying purchases."
+  ]
 }}"""
 
     try:
         msg = client.messages.create(
-            model="claude-sonnet-5",
-            max_tokens=8192,
-            messages=[{"role": "user", "content": prompt}]
+            model="claude-sonnet-5", max_tokens=2000,
+            messages=[{"role": "user", "content": fallback_prompt}]
         )
         result = _parse_claude_json(msg)
-        for p in result.get("products", []):
-            q    = urllib.parse.quote_plus(p.get("search_query") or p.get("name", ""))
+        products_fb = result.get("products", [])
+        for p in products_fb:
             asin = p.get("asin", "").strip()
+            q    = urllib.parse.quote_plus(p.get("name", ""))
             p["amazon_url"] = (
-                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
-                if asin else
-                f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
+                f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20" if asin
+                else f"https://www.amazon.com/s?k={q}&tag=auragirlcreat-20"
             )
-            p["image_url"] = (
-                f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
-                if asin else ""
-            )
-        result["ppp_prompt"] = _inject_keywords(result.get("ppp_prompt", ""), keywords)
-        session_id = _autosave_pin_research(title, keywords, result.get("summary",""), result.get("products",[]), result["ppp_prompt"])
-        result["ok"] = True
-        result["session_id"] = session_id
-        return jsonify(result)
+            p["image_url"] = f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg" if asin else ""
+            p.setdefault("rating", 0); p.setdefault("reviews", 0); p.setdefault("price", "")
+            p.setdefault("is_best_seller", False); p.setdefault("is_amazons_choice", False)
+
+        package = _build_chatgpt_pin_package(title, keywords, products_fb, client)
+        session_id = _autosave_pin_research(title, keywords, result.get("summary",""), products_fb, package)
+        return jsonify({
+            "ok": True, "summary": result.get("summary",""),
+            "products": products_fb, "ppp_prompt": package,
+            "session_id": session_id,
+        })
     except Exception as e:
         logger.error(f"Pin to Products (fallback) error: {e}")
         return jsonify({"ok": False, "error": str(e)})
