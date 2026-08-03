@@ -16,7 +16,10 @@
     </div>
 
     <div class="form-group">
-      <label>Keywords <span style="font-weight:400;color:var(--gray-400);font-size:12px;">— type one, press Enter or comma to add</span></label>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <label style="margin:0;">Keywords <span style="font-weight:400;color:var(--gray-400);font-size:12px;">— type one, press Enter or comma to add</span></label>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="copyKeywords(this)" style="flex-shrink:0;">Copy Keywords</button>
+      </div>
       <!-- Tag chip input -->
       <div id="kwBox" onclick="document.getElementById('kwTyper').focus()" style="
         display:flex;flex-wrap:wrap;gap:6px;align-items:center;
@@ -379,6 +382,15 @@ async function downloadProductImages() {
   }
   btn.textContent = orig;
   btn.disabled = false;
+}
+
+function copyKeywords(btn) {
+  const text = getKeywordsString();
+  if (!text) { btn.textContent = 'Nothing to copy'; setTimeout(() => btn.textContent = 'Copy Keywords', 1500); return; }
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy Keywords', 1500);
+  });
 }
 
 function copySection(elemId) {
