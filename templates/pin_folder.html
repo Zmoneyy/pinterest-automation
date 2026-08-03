@@ -42,7 +42,7 @@
       <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
-        <button class="btn btn-ghost btn-sm" onclick="openAllLinks()">🛒 Shop All</button>
+        <button class="btn btn-ghost btn-sm" id="openAllBtn" onclick="openAllLinks()">↗ Open All Products</button>
         {% if has_search_links %}
         <button class="btn btn-ghost btn-sm" id="fixLinksBtn" onclick="fixLinks()" style="color:var(--red);border-color:var(--red);">🔗 Fix Links</button>
         {% endif %}
@@ -137,9 +137,19 @@ function buildProductText() {
 
 function openAllLinks() {
   const products = {{ products | tojson }};
-  products.forEach(p => {
-    if (p.amazon_url) window.open(p.amazon_url, '_blank');
+  const urls = products.map(p => p.amazon_url).filter(Boolean);
+  if (!urls.length) return;
+
+  // Open first tab immediately (inside the click handler so browser allows it)
+  window.open(urls[0], '_blank');
+  // Open the rest with staggered delays — browsers block rapid multi-opens
+  urls.slice(1).forEach((url, i) => {
+    setTimeout(() => window.open(url, '_blank'), (i + 1) * 600);
   });
+
+  const btn = document.getElementById('openAllBtn');
+  btn.textContent = `↗ Opening ${urls.length}…`;
+  setTimeout(() => { btn.textContent = '↗ Open All Products'; }, urls.length * 600 + 500);
 }
 
 async function fixLinks() {
