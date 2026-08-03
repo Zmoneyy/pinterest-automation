@@ -44,12 +44,11 @@
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
         <button class="btn btn-ghost btn-sm" id="openAllBtn" onclick="openAllLinks()">↗ Open All Products</button>
         {% if has_search_links %}
-        <button class="btn btn-ghost btn-sm" id="fixLinksBtn" onclick="fixLinks()" style="color:var(--red);border-color:var(--red);">🔗 Fix Links</button>
+        <span id="fixLinksStatus" style="font-size:12px;color:var(--gray-400);align-self:center;">🔄 Updating links…</span>
         {% endif %}
         <button class="btn btn-red btn-sm" id="dlImgBtn" onclick="downloadProductImages()">⬇️ Download Images</button>
       </div>
     </div>
-    <div id="fixLinksStatus" style="display:none;font-size:12px;color:var(--gray-500);margin-bottom:8px;"></div>
     {% for p in products %}
     <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--gray-100);">
       <div style="flex-shrink:0;width:80px;height:80px;border-radius:10px;overflow:hidden;background:var(--gray-100);display:flex;align-items:center;justify-content:center;">
@@ -152,31 +151,27 @@ function openAllLinks() {
   setTimeout(() => { btn.textContent = '↗ Open All Products'; }, urls.length * 600 + 500);
 }
 
-async function fixLinks() {
-  const btn    = document.getElementById('fixLinksBtn');
-  const status = document.getElementById('fixLinksStatus');
-  if (!btn) return;
-  btn.disabled = true;
-  btn.textContent = '⏳ Fixing…';
-  status.textContent = 'Searching Amazon for direct product links…';
-  status.style.display = 'block';
-
+{% if has_search_links %}
+async function autoFixLinks() {
   try {
     const res = await fetch('/research/fix-product-links/{{ sess.id }}', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Fix failed.');
-
-    status.textContent = `✅ Fixed ${data.fixed} of ${data.total} links — reloading…`;
-    setTimeout(() => location.reload(), 1200);
+    if (data.ok && data.fixed > 0) {
+      location.reload();
+    } else {
+      const el = document.getElementById('fixLinksStatus');
+      if (el) el.textContent = '';
+    }
   } catch (e) {
-    status.textContent = '❌ ' + e.message;
-    btn.disabled = false;
-    btn.textContent = '🔗 Fix Links';
+    const el = document.getElementById('fixLinksStatus');
+    if (el) el.textContent = '';
   }
 }
+document.addEventListener('DOMContentLoaded', autoFixLinks);
+{% endif %}
 
 async function downloadProductImages() {
   const products = {{ products | tojson }};
