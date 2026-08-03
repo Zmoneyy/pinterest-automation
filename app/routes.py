@@ -3587,62 +3587,70 @@ def _scrape_amazon_product(url: str) -> dict:
 
 
 def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client) -> str:
-    """Generate a structured ChatGPT-ready pin creation brief for a set of products.
-    Products should each have: name, amazon_url, why, and optionally scraped details."""
-    kw_section = f"\n**Target Keywords:** {keywords}" if keywords else ""
+    """Generate a product research brief for Pin Perfect Pro GPT.
+    Pin Perfect Pro handles all creative output (titles, descriptions, image prompts, etc.)
+    — our job is to give it rich product intel so it doesn't need to access any links."""
+    kw_section = f"\n**Pinterest Keywords to use:** {keywords}" if keywords else ""
 
     prod_blocks = []
     for i, p in enumerate(products, 1):
-        lines = [f"## Product {i}: {p['name']}"]
+        lines = [f"### Product {i}: {p['name']}"]
         lines.append(f"**Amazon URL:** {p.get('amazon_url', '')}")
         if p.get("price"):
             lines.append(f"**Price:** {p['price']}")
-        if p.get("rating"):
-            lines.append(f"**Rating:** ⭐{p['rating']} ({p.get('reviews', 0):,} reviews)")
-        # Scraped details
+        if p.get("rating") and float(p.get("rating") or 0) > 0:
+            lines.append(f"**Rating:** ⭐{p['rating']} ({int(p.get('reviews') or 0):,} reviews)")
+        if p.get("is_best_seller"):
+            lines.append("**Badge:** 🏆 Best Seller")
+        elif p.get("is_amazons_choice"):
+            lines.append("**Badge:** ✅ Amazon's Choice")
         if p.get("bullets"):
-            lines.append("**Product Features:**")
+            lines.append("**Product Features (from Amazon listing):**")
             for b in p["bullets"][:6]:
-                lines.append(f"  - {b}")
+                lines.append(f"- {b}")
         if p.get("description"):
-            lines.append(f"**Product Description:** {p['description'][:400]}")
-        if p.get("why"):
-            lines.append(f"**Why it fits this pin:** {p['why']}")
+            lines.append(f"**Product Description:** {p['description'][:500]}")
         prod_blocks.append("\n".join(lines))
 
     products_section = "\n\n".join(prod_blocks)
 
-    prompt = f"""You are creating a ChatGPT Pinterest Pin Creation Brief for Aura Girl Essentials — a curated women's lifestyle brand.
+    prompt = f"""You are a product research analyst preparing a brief for Pin Perfect Pro — a custom GPT Pinterest marketing expert that will handle all creative output (pin titles, descriptions, keywords, alt text, image prompts, etc.).
 
-Pin concept: "{title}"{kw_section}
+Your job is to write a rich, marketing-focused product research brief. Do NOT write pin copy, titles, or image prompts — Pin Perfect Pro will do that. Focus entirely on giving it the intelligence it needs about the products and audience.
 
-Products:
+**Pin Concept:** "{title}"{kw_section}
+
+**Raw product data from Amazon:**
 {products_section}
 
-Write a complete, structured brief that someone can paste directly into ChatGPT to generate high-converting Pinterest pins. The brief must include:
+Write the brief in this exact structure:
 
-1. **Pin Concept Summary** — 2 sentences on the angle and who it's for
-2. **Target Customer** — who is searching for this, their lifestyle and pain points
-3. **Top Benefits** (10 bullet points) — outcomes, not features. Focus on transformation and feeling.
-4. **Emotional Triggers** — why someone would feel compelled to buy (confidence, convenience, aspiration, FOMO, etc.)
-5. **Pinterest Keywords** — 5 primary + 15 long-tail buyer-intent keywords someone would search on Pinterest
-6. **10 Pin Angles** — e.g. "Problem → Solution", "Budget Find", "TikTok Made Me Buy It", "Before & After", etc. One line each.
-7. **5 Strong CTAs** — short scroll-stopping calls to action for pin copy
-8. **Products** — for each product: name, clean Amazon URL (no tag), 2-sentence persuasive description (problem it solves + transformation), and price if known
-9. **ChatGPT Instruction** — end with this exact block:
+## Pin Concept Overview
+2 sentences: what this pin is about and who it's for.
 
----
-Using everything above, create 5 high-converting buyer-intent Pinterest pins. For each pin:
-- SEO title (60–100 characters, keyword-first)
-- Pin description (under 500 characters, start with a hook CTA)
-- 5–8 hashtags
-- On-pin headline + supporting text
-- Alt text (under 200 words, vivid image description)
-- Pinterest board name
-- AI image prompt: vertical 2:3 (1000×1500px), luxury editorial, product as hero, {title.split()[0] if title else 'product'} packaging color palette, bold sans-serif overlay text, generous white space, mobile-first, "auragirlessentials.com" small at the bottom
----
+## Target Customer
+Who is searching for this on Pinterest. Include: age range, lifestyle, mindset, what they're trying to achieve, and why they'd stop and click this pin.
 
-Return only the formatted brief. No preamble."""
+## Products
+For each product write:
+- **[Product Name]** — [Amazon URL]
+  - **What it is:** 1 sentence (plain English, no jargon)
+  - **Who it's for:** specific type of person
+  - **Problem it solves:** the exact frustration or pain point it fixes
+  - **Top benefits:** 4–5 bullet points (focus on outcomes and feelings, not ingredients or specs)
+  - **Why someone buys this over alternatives:** what makes it stand out
+  - **Visual details:** describe the packaging, color, texture, finish — anything useful for designing a pin image
+
+## Buying Motivations & Emotional Triggers
+Why someone would feel compelled to buy. Include: emotions (confidence, convenience, FOMO, aspiration), social proof signals, and any urgency factors.
+
+## Objections & How to Overcome Them
+Top 3 reasons someone might hesitate to buy, and what would change their mind.
+
+## Search Language
+Words and phrases real shoppers type when looking for these products on Pinterest and Google. Include both broad and specific terms.
+
+Return only the formatted brief. No preamble, no commentary."""
 
     try:
         msg = client.messages.create(
