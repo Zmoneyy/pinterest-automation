@@ -4065,10 +4065,119 @@ def pin_library():
 @bp.route("/pin-library/<int:session_id>")
 @login_required
 def pin_folder(session_id):
+    from config import Config
     sess = PinResearch.query.get_or_404(session_id)
     products = sess.products_list()
     has_search_links = any('/s?k=' in (p.get('amazon_url') or '') for p in products)
-    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links)
+    boards = list(Config.PINTEREST_BOARDS.keys())
+    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards)
+
+
+@bp.route("/research/<int:session_id>/upload-pin-image", methods=["POST"])
+@login_required
+def upload_research_pin_image(session_id):
+    import base64
+    import uuid as _uuid
+    from google.cloud import storage as gcs
+
+    sess = PinResearch.query.get_or_404(session_id)
+    data = request.get_json()
+    image_b64 = data.get("image_b64", "")
+
+    if not image_b64:
+        return jsonify({"ok": False, "error": "No image data provided."}), 400
+
+    try:
+        raw = image_b64.split(",", 1)[1] if "," in image_b64 else image_b64
+        img_bytes = base64.b64decode(raw)
+        if not _is_valid_image_bytes(img_bytes):
+            return jsonify({"ok": False, "error": "Not a valid image file."}), 400
+
+        gcs_client = gcs.Client()
+        bucket = gcs_client.bucket("pinterest-automation-images-814656203168")
+        blob_name = f"research-pins/{_uuid.uuid4().hex}.jpg"
+        blob = bucket.blob(blob_name)
+        blob.upload_from_string(img_bytes, content_type="image/jpeg")
+        image_url = f"https://storage.googleapis.com/pinterest-automation-images-814656203168/{blob_name}"
+
+        sess.pin_image_url = image_url
+        db.session.commit()
+        return jsonify({"ok": True, "image_url": image_url})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"upload_research_pin_image failed for session {session_id}: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)[:200]}), 500
+
+
+@bp.route("/research/<int:session_id>/send-pin-to-tailwind", methods=["POST"])
+@login_required
+def research_send_to_tailwind(session_id):
+    import requests as req
+    from config import Config
+
+    sess = PinResearch.query.get_or_404(session_id)
+    data = request.get_json()
+
+    title       = (data.get("title") or "").strip()[:100]
+    description = (data.get("description") or "").strip()
+    hashtags    = (data.get("hashtags") or "").strip()
+    alt_text    = (data.get("alt_text") or "").strip()[:500]
+    board_name  = (data.get("board_name") or "").strip()
+    amazon_url  = (data.get("amazon_url") or "").strip()
+
+    if not title:
+        return jsonify({"ok": False, "error": "Title is required."})
+    if not sess.pin_image_url:
+        return jsonify({"ok": False, "error": "Upload a pin image first."})
+
+    tailwind_key = Setting.get("tailwind_api_key", "") or Config.TAILWIND_API_KEY
+    if not tailwind_key:
+        return jsonify({"ok": False, "error": "Tailwind API key not set — add it in Setup."})
+
+    try:
+        check = req.get(sess.pin_image_url, timeout=20)
+        if not _is_valid_image_bytes(check.content):
+            return jsonify({"ok": False, "error": "Pin image is corrupt — re-upload it."})
+    except Exception:
+        return jsonify({"ok": False, "error": "Could not load pin image — re-upload it."})
+
+    full_desc = description
+    if hashtags and hashtags not in full_desc:
+        full_desc = f"{full_desc}\n{hashtags}"
+    disclosure = "As an Amazon Associate, I may earn from qualifying purchases."
+    if disclosure not in full_desc:
+        full_desc = f"{full_desc}\n{disclosure}"
+
+    board_id = Config.PINTEREST_BOARDS.get(board_name) or Config.PINTEREST_BOARDS.get("Beauty Finds & Skincare")
+    link = amazon_url or "https://auragirlessentials.com"
+
+    tailwind_account_id = "1641739"
+    payload = {
+        "mediaUrl":    sess.pin_image_url,
+        "title":       title,
+        "description": full_desc[:500],
+        "url":         link,
+        "boardId":     board_id,
+    }
+    if alt_text:
+        payload["altText"] = alt_text
+
+    logger.info(f"Sending research session #{session_id} to Tailwind: title={repr(title[:40])} board={board_id}")
+
+    try:
+        resp = req.post(
+            f"https://api-v1.tailwind.ai/v1/accounts/{tailwind_account_id}/posts",
+            headers={"Authorization": f"Bearer {tailwind_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+        if not resp.ok:
+            logger.error(f"Tailwind error for session #{session_id}: {resp.text[:500]}")
+            return jsonify({"ok": False, "error": f"Tailwind error: {resp.text[:200]}"})
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"research_send_to_tailwind failed for session {session_id}: {e}", exc_info=True)
+        return jsonify({"ok": False, "error": str(e)[:200]})
 
 
 @bp.route("/research/generate-blog-post", methods=["POST"])

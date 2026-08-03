@@ -107,6 +107,125 @@
 </div>
 {% endif %}
 
+<!-- Schedule This Pin: image upload + PPP paste + Send to Tailwind -->
+<div class="card" style="margin-bottom:16px;" id="scheduleCard">
+  <div class="card-body">
+    <h2 style="font-size:17px;font-weight:700;margin-bottom:4px;">📤 Schedule This Pin</h2>
+    <div style="font-size:12px;color:var(--gray-400);margin-bottom:16px;">Upload the pin you created in ChatGPT, paste Pin Perfect Pro output to auto-fill the fields, then send straight to Tailwind.</div>
+
+    <div style="display:grid;grid-template-columns:150px 1fr;gap:20px;align-items:start;">
+
+      <!-- Image upload -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+        <div id="pinThumb" onclick="document.getElementById('pinImageFile').click()"
+          style="width:130px;aspect-ratio:2/3;border:2px dashed var(--gray-200);border-radius:10px;background:var(--gray-50);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;transition:border-color 0.15s,background 0.15s;">
+          {% if sess.pin_image_url %}
+          <img id="thumbImg" src="{{ sess.pin_image_url }}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;">
+          {% else %}
+          <span id="thumbLabel" style="font-size:11px;color:var(--gray-400);text-align:center;padding:10px;line-height:1.6;pointer-events:none;">Click to<br>upload<br>pin image</span>
+          {% endif %}
+        </div>
+        <input type="file" id="pinImageFile" accept="image/*" style="display:none" onchange="handlePinImageUpload(this)">
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('pinImageFile').click()">
+          {% if sess.pin_image_url %}↑ Replace{% else %}⬆ Upload{% endif %}
+        </button>
+        <div id="downloadPinWrap" style="{{ '' if sess.pin_image_url else 'display:none' }}">
+          <button class="btn btn-ghost btn-sm" onclick="downloadPinImage()">⬇ Download</button>
+        </div>
+        <div id="uploadStatus" style="font-size:11px;color:var(--gray-400);text-align:center;min-height:16px;"></div>
+      </div>
+
+      <!-- Fields -->
+      <div id="folderFieldsCol" style="display:flex;flex-direction:column;gap:12px;">
+
+        <!-- PPP paste -->
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;">📋 Paste Pin Perfect Pro Output</label>
+            <button type="button" onclick="parseFolderPPP()"
+              style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;border:1.5px solid #7c3aed;background:#f5f0ff;color:#7c3aed;cursor:pointer;white-space:nowrap;">↺ Re-parse</button>
+          </div>
+          <textarea id="folderPppText"
+            style="width:100%;min-height:90px;font-size:12px;font-family:monospace;border:1px dashed var(--gray-300);border-radius:6px;padding:8px;box-sizing:border-box;background:var(--gray-50);color:var(--gray-600);resize:vertical;"
+            placeholder="Paste your full Pin Perfect Pro output here — fields auto-fill instantly…"
+            onpaste="setTimeout(parseFolderPPP, 50)"></textarea>
+        </div>
+
+        <!-- Title -->
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;display:flex;justify-content:space-between;align-items:center;">
+            Title <span id="folderTitleCount" style="font-weight:400;color:var(--gray-300);font-size:11px;">0 / 100</span>
+          </label>
+          <input type="text" id="folderTitle" maxlength="100"
+            style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;font-family:inherit;"
+            placeholder="Keyword-rich pin title"
+            oninput="updateFolderCount('folderTitle','folderTitleCount',100)">
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;display:flex;justify-content:space-between;align-items:center;">
+            Description <span id="folderDescCount" style="font-weight:400;color:var(--gray-300);font-size:11px;">0 / 500</span>
+          </label>
+          <textarea id="folderDesc" maxlength="500" rows="4"
+            style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;resize:vertical;line-height:1.5;font-family:inherit;"
+            placeholder="Starts with a verb CTA…"
+            oninput="updateFolderCount('folderDesc','folderDescCount',500)"></textarea>
+        </div>
+
+        <!-- Hashtags + Alt Text -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;">Hashtags</label>
+            <textarea id="folderHashtags" rows="2"
+              style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+              placeholder="#skincare #amazonfinds"></textarea>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;display:flex;justify-content:space-between;align-items:center;">
+              Alt Text <span id="folderAltCount" style="font-weight:400;color:var(--gray-300);font-size:11px;">0 / 500</span>
+            </label>
+            <textarea id="folderAltText" rows="2" maxlength="500"
+              style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;resize:vertical;font-family:inherit;"
+              placeholder="Describe the pin image"
+              oninput="updateFolderCount('folderAltText','folderAltCount',500)"></textarea>
+          </div>
+        </div>
+
+        <!-- Board + Amazon URL -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;">Board</label>
+            <select id="folderBoard"
+              style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;font-family:inherit;">
+              <option value="">— select board —</option>
+              {% for b in boards %}
+              <option value="{{ b }}">{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:0.04em;">Amazon Affiliate URL</label>
+            <input type="url" id="folderAmazonUrl"
+              style="width:100%;font-size:13px;border:1px solid var(--gray-200);border-radius:6px;padding:7px 10px;box-sizing:border-box;font-family:inherit;"
+              placeholder="https://www.amazon.com/dp/…?tag=auragirlcreat-20">
+          </div>
+        </div>
+
+        <!-- Send to Tailwind -->
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px;">
+          <button id="sendTailwindBtn" onclick="sendFolderToTailwind()"
+            style="padding:10px 22px;background:#f97316;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">
+            📤 Send to Tailwind
+          </button>
+          <span id="tailwindStatus" style="font-size:13px;display:none;"></span>
+        </div>
+
+      </div><!-- /fields col -->
+    </div><!-- /grid -->
+  </div>
+</div>
+
 <!-- Blog Post -->
 <div class="card" style="margin-bottom:32px;">
   <div class="card-body">
@@ -128,7 +247,177 @@
 {% endblock %}
 
 {% block scripts %}
+{% include '_ppp_parser.html' %}
 <script>
+
+// ── Pin image upload ──
+let _currentPinImageUrl = {{ sess.pin_image_url | tojson }};
+
+async function handlePinImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const status = document.getElementById('uploadStatus');
+  status.textContent = '⏳ Uploading…';
+
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    const b64 = e.target.result;
+
+    // Show preview immediately
+    const thumb = document.getElementById('pinThumb');
+    let img = document.getElementById('thumbImg');
+    if (!img) {
+      img = document.createElement('img');
+      img.id = 'thumbImg';
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
+      thumb.appendChild(img);
+    }
+    img.src = b64;
+    const label = document.getElementById('thumbLabel');
+    if (label) label.style.display = 'none';
+
+    try {
+      const res = await fetch('/research/{{ sess.id }}/upload-pin-image', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({image_b64: b64})
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'Upload failed');
+      _currentPinImageUrl = data.image_url;
+      status.textContent = '✓ Saved!';
+      setTimeout(() => status.textContent = '', 2500);
+      document.getElementById('downloadPinWrap').style.display = 'block';
+    } catch(e) {
+      status.textContent = '✗ ' + e.message;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function downloadPinImage() {
+  const url = _currentPinImageUrl;
+  if (!url) return;
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = objUrl;
+    a.download = 'pin-image.jpg';
+    a.click();
+    URL.revokeObjectURL(objUrl);
+  } catch(e) {
+    window.open(url, '_blank');
+  }
+}
+
+// ── PPP paste + auto-fill ──
+function parseFolderPPP() {
+  const text = document.getElementById('folderPppText').value;
+  if (!text.trim()) return;
+  const parsed = parsePPPText(text);
+
+  if (parsed.title) {
+    document.getElementById('folderTitle').value = parsed.title.substring(0, 100);
+    updateFolderCount('folderTitle', 'folderTitleCount', 100);
+  }
+  if (parsed.description) {
+    document.getElementById('folderDesc').value = fitDescriptionToLimit(parsed.description, parsed.hashtags, 500);
+    updateFolderCount('folderDesc', 'folderDescCount', 500);
+  }
+  if (parsed.hashtags) {
+    document.getElementById('folderHashtags').value = parsed.hashtags;
+  }
+  if (parsed.alt_text) {
+    document.getElementById('folderAltText').value = parsed.alt_text.substring(0, 500);
+    updateFolderCount('folderAltText', 'folderAltCount', 500);
+  }
+  if (parsed.amazon_url) {
+    document.getElementById('folderAmazonUrl').value = parsed.amazon_url;
+  }
+
+  // Board auto-match
+  const sel = document.getElementById('folderBoard');
+  const contentText = [parsed.title, parsed.description, parsed.hashtags].join(' ').toLowerCase();
+  let board = pppMatchBoard(contentText);
+  if (!board && parsed.board_name) {
+    const pWords = parsed.board_name.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    let bestOpt = null, bestScore = 0;
+    Array.from(sel.options).forEach(o => {
+      const score = pWords.filter(w => o.value.toLowerCase().includes(w)).length;
+      if (score > bestScore) { bestScore = score; bestOpt = o; }
+    });
+    if (bestOpt) board = bestOpt.value;
+  }
+  if (board) sel.value = board;
+
+  // Flash fields green
+  const col = document.getElementById('folderFieldsCol');
+  col.style.transition = 'background 0.15s';
+  col.style.background = '#d4f4e8';
+  setTimeout(() => { col.style.background = ''; }, 900);
+}
+
+function updateFolderCount(fieldId, countId, max) {
+  const val = document.getElementById(fieldId).value.length;
+  const el  = document.getElementById(countId);
+  el.textContent = `${val} / ${max}`;
+  el.style.color = val >= max ? 'var(--red)' : val > max * 0.9 ? '#e07000' : 'var(--gray-300)';
+}
+
+// ── Send to Tailwind ──
+async function sendFolderToTailwind() {
+  const title      = document.getElementById('folderTitle').value.trim();
+  const description = document.getElementById('folderDesc').value.trim();
+  const hashtags   = document.getElementById('folderHashtags').value.trim();
+  const alt_text   = document.getElementById('folderAltText').value.trim();
+  const board_name = document.getElementById('folderBoard').value.trim();
+  const amazon_url = document.getElementById('folderAmazonUrl').value.trim();
+
+  const btn    = document.getElementById('sendTailwindBtn');
+  const status = document.getElementById('tailwindStatus');
+
+  if (!_currentPinImageUrl) {
+    status.style.display = 'inline';
+    status.style.color   = 'var(--red)';
+    status.textContent   = '✗ Upload a pin image first';
+    return;
+  }
+  if (!title) {
+    status.style.display = 'inline';
+    status.style.color   = 'var(--red)';
+    status.textContent   = '✗ Fill in the Title first';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = '⏳ Sending…';
+  status.style.display = 'none';
+
+  try {
+    const res = await fetch('/research/{{ sess.id }}/send-pin-to-tailwind', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({title, description, hashtags, alt_text, board_name, amazon_url})
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed');
+
+    btn.textContent      = '✓ Sent to Tailwind!';
+    btn.style.background = '#1a7a4a';
+    status.style.display = 'inline';
+    status.style.color   = '#1a7a4a';
+    status.textContent   = 'Open Tailwind to schedule it →';
+  } catch(e) {
+    btn.disabled    = false;
+    btn.textContent = '📤 Send to Tailwind';
+    status.style.display = 'inline';
+    status.style.color   = 'var(--red)';
+    status.textContent   = '✗ ' + e.message;
+  }
+}
+
 function copyText(text) {
   navigator.clipboard.writeText(text).then(() => {
     const btn = event.target;
