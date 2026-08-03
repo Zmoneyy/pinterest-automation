@@ -3634,7 +3634,7 @@ Using the product research brief below, create a complete Pinterest pin package.
 - Recommended Pinterest board name
 - On-pin headline + supporting text
 - Visual layout concept (colors, mood, composition)
-- AI image prompt optimized for Canva AI or Ideogram (vertical 2:3, 1000×1500px, mobile-first, scroll-stopping, "auragirlessentials.com" small text at the bottom)
+- AI image prompt optimized for Canva AI or Ideogram (vertical 2:3, 1000×1500px, mobile-first, scroll-stopping, include a CTA text overlay on the image itself such as "Shop Now →" or "Tap to Shop →" in bold readable text, "auragirlessentials.com" small text at the bottom)
 
 Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
 Affiliate disclaimer to include: *As an Amazon Associate, I earn from qualifying purchases.*
