@@ -42,13 +42,26 @@
       <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
-        <button class="btn btn-ghost btn-sm" id="openAllBtn" onclick="openAllLinks()">↗ Open All Products</button>
+        <button class="btn btn-ghost btn-sm" id="openAllBtn" onclick="toggleProductLinks()">↗ Open All Products</button>
         {% if has_search_links %}
         <span id="fixLinksStatus" style="font-size:12px;color:var(--gray-400);align-self:center;">🔄 Updating links…</span>
         {% endif %}
         <button class="btn btn-red btn-sm" id="dlImgBtn" onclick="downloadProductImages()">⬇️ Download Images</button>
       </div>
     </div>
+    <!-- Quick-open link panel (shown when Open All Products is clicked) -->
+    <div id="productLinksPanel" style="display:none;background:var(--gray-50);border-radius:10px;padding:12px 14px;margin:10px 0 4px;">
+      <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px;">Click any product to open on Amazon →</div>
+      {% for p in products %}
+      <a href="{{ p.amazon_url }}" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--gray-100);text-decoration:none;color:var(--gray-800);"
+         onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--gray-800)'">
+        <span style="font-size:13px;font-weight:600;flex:1;">{{ p.name }}</span>
+        <span style="font-size:12px;color:var(--gray-400);">↗</span>
+      </a>
+      {% endfor %}
+    </div>
+
     {% for p in products %}
     <div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--gray-100);">
       <div style="flex-shrink:0;width:80px;height:80px;border-radius:10px;overflow:hidden;background:var(--gray-100);display:flex;align-items:center;justify-content:center;">
@@ -134,12 +147,20 @@ function buildProductText() {
   return text.trim();
 }
 
-function openAllLinks() {
+function toggleProductLinks() {
   const products = {{ products | tojson }};
   const urls = products.map(p => p.amazon_url).filter(Boolean);
   if (!urls.length) return;
-  // All opens must be synchronous inside the click handler — setTimeout loses the user gesture
-  urls.forEach(url => window.open(url, '_blank'));
+
+  // Try opening all tabs synchronously — works when popups are allowed
+  const results = urls.map(url => window.open(url, '_blank'));
+  const anyBlocked = results.some(w => !w);
+
+  // If any were blocked, show the inline panel as fallback
+  if (anyBlocked) {
+    const panel = document.getElementById('productLinksPanel');
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  }
 }
 
 {% if has_search_links %}
