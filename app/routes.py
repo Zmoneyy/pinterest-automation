@@ -3628,7 +3628,7 @@ Write the brief in this exact structure, starting with the instruction block:
 ---
 Using the product research brief below, create a complete Pinterest pin package. I need:
 - SEO-optimized Pinterest title
-- SEO-optimized Pinterest description (under 500 characters)
+- SEO-optimized Pinterest description (under 500 characters, must START with a hook CTA like "Tap the link to grab yours →" or "Shop the list →" — CTA first, then keywords)
 - 5–8 hashtags
 - Alt text
 - Recommended Pinterest board name
