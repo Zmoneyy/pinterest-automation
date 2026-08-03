@@ -42,6 +42,7 @@
       <h2 style="font-size:17px;font-weight:700;">🛍️ Products</h2>
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
+        <button class="btn btn-ghost btn-sm" onclick="openAllLinks()">🛒 Shop All</button>
         {% if has_search_links %}
         <button class="btn btn-ghost btn-sm" id="fixLinksBtn" onclick="fixLinks()" style="color:var(--red);border-color:var(--red);">🔗 Fix Links</button>
         {% endif %}
@@ -134,6 +135,13 @@ function buildProductText() {
   return text.trim();
 }
 
+function openAllLinks() {
+  const products = {{ products | tojson }};
+  products.forEach(p => {
+    if (p.amazon_url) window.open(p.amazon_url, '_blank');
+  });
+}
+
 async function fixLinks() {
   const btn    = document.getElementById('fixLinksBtn');
   const status = document.getElementById('fixLinksStatus');
@@ -174,7 +182,8 @@ async function downloadProductImages() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({products})
     });
-    if (!res.ok) {
+    const ct = res.headers.get('Content-Type') || '';
+    if (!res.ok || !ct.includes('zip')) {
       const err = await res.json().catch(() => ({error: 'Download failed.'}));
       throw new Error(err.error || 'Download failed.');
     }
