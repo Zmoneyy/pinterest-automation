@@ -3750,7 +3750,7 @@ def pin_to_products_api():
     # ── When real products are already known, skip guessing and only generate prompts ──
     if existing_products:
         prod_lines = "\n".join(
-            f"- {p['name']}" + (f" ({_clean_amazon_url(p['amazon_url'])})" if p.get("amazon_url") else "")
+            f"- {p['name']}" + (f" ({p['amazon_url']})" if p.get("amazon_url") else "")
             for p in existing_products
         )
         prompt = f"""You are a Pinterest content expert for Aura Girl Essentials — a curated women's lifestyle brand.
@@ -3865,7 +3865,7 @@ Return ONLY valid JSON: {{"products": [{{"type": "...", "query": "..."}}]}}"""
                 prod_lines = "\n".join(
                     f"{i+1}. {p['name']} — ⭐{p['rating']} ({p['reviews']:,} reviews)"
                     f"{' 🏆' if p['is_best_seller'] else ''}{' ✅' if p['is_amazons_choice'] else ''}"
-                    f" | {p['price']} | {_clean_amazon_url(p['amazon_url'])}"
+                    f" | {p['price']} | {p['amazon_url']}"
                     for i, p in enumerate(products_out)
                 )
                 ppp_prompt_text = f"""You are a Pinterest affiliate marketing expert for Aura Girl Essentials — a curated women's lifestyle brand (beauty, fashion, home, wellness).
@@ -3923,7 +3923,7 @@ Return ONLY valid JSON:
       "asin": "ASIN if known with confidence, else empty string"
     }}
   ],
-  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. Include: SECTION 1 Brand context (Aura Girl Essentials — curated women's lifestyle brand). SECTION 2 Pin title{(' and keywords to weave in: ' + keywords) if keywords else ''}. SECTION 3 Products — each with persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, visual detail — written to make someone feel like they need it), why it fits the pin, and its clean Amazon product link (no affiliate tag — just https://www.amazon.com/dp/ASIN). SECTION 4 Image context — use the product packaging color palette, lifestyle/flat-lay editorial aesthetic. SECTION 5 must be the EXACT output format block (copy it word for word):\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 characters — START with a hook CTA like "Tap the link to grab yours →" then weave in keywords naturally\\n**Hashtags:** 5-8 keyword hashtags (description + hashtags under 500 chars total)\\n**Alt Text:** vivid description of the pin image under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product full affiliate link\\n**Image Overlay Text:** headline + benefit phrase for the pin image\\n**AI Image Prompt:** vertical 2:3 1000x1500px, luxury editorial, product as hero, product packaging color palette, overlay text in bold modern sans-serif, generous white space, mobile-first scroll-stopping, 'auragirlessentials.com' small clean text at very bottom\\n\\nEnd with: As an Amazon Associate, I may earn from qualifying purchases."
+  "ppp_prompt": "complete ready-to-paste Pin Perfect Pro prompt. Include: SECTION 1 Brand context (Aura Girl Essentials — curated women's lifestyle brand). SECTION 2 Pin title{(' and keywords to weave in: ' + keywords) if keywords else ''}. SECTION 3 Products — each with persuasive consumer context (problem it solves, how it improves the buyer's life, transformation it delivers, visual detail — written to make someone feel like they need it), why it fits the pin, and its full Amazon affiliate link. SECTION 4 Image context — use the product packaging color palette, lifestyle/flat-lay editorial aesthetic. SECTION 5 must be the EXACT output format block (copy it word for word):\\n\\n**Pin Title:** keyword-rich SEO buyer-intent title\\n**Pin Description:** under 300 characters — START with a hook CTA like "Tap the link to grab yours →" then weave in keywords naturally\\n**Hashtags:** 5-8 keyword hashtags (description + hashtags under 500 chars total)\\n**Alt Text:** vivid description of the pin image under 300 words\\n**Board Name:** best-fit Pinterest board\\n**Amazon URL:** primary product full affiliate link\\n**Image Overlay Text:** headline + benefit phrase for the pin image\\n**AI Image Prompt:** vertical 2:3 1000x1500px, luxury editorial, product as hero, product packaging color palette, overlay text in bold modern sans-serif, generous white space, mobile-first scroll-stopping, 'auragirlessentials.com' small clean text at very bottom\\n\\nEnd with: As an Amazon Associate, I may earn from qualifying purchases."
 }}"""
 
     try:
