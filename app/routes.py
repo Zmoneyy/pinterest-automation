@@ -4037,6 +4037,87 @@ Return ONLY the blog post. No JSON. No commentary."""
         return jsonify({"ok": False, "error": str(e)})
 
 
+@bp.route("/research/fix-product-links/<int:session_id>", methods=["POST"])
+@login_required
+def fix_product_links(session_id):
+    """Re-run SerpAPI by product name for any product with a search-page URL.
+    Updates the DB record and returns the fixed products list."""
+    import re as _re, requests as _req, json as _json, urllib.parse as _up
+    from config import Config
+
+    sess = PinResearch.query.get(session_id)
+    if not sess:
+        return jsonify({"ok": False, "error": "Session not found."})
+    if not Config.SERPAPI_KEY:
+        return jsonify({"ok": False, "error": "SerpAPI key not configured."})
+
+    products = sess.products_list()
+    fixed = 0
+
+    for p in products:
+        url = p.get("amazon_url", "")
+        if "/s?k=" not in url and "/dp/" in url:
+            continue  # already a direct link
+
+        name = p.get("name", "").strip()
+        if not name:
+            continue
+
+        try:
+            resp = _req.get(
+                "https://serpapi.com/search.json",
+                params={
+                    "engine": "amazon",
+                    "amazon_domain": "amazon.com",
+                    "k": name,
+                    "api_key": Config.SERPAPI_KEY,
+                },
+                timeout=15,
+            )
+            results = resp.json().get("organic_results", [])
+            # Find the best matching result (4★+ or just take first hit with ASIN)
+            best = None
+            for item in results:
+                asin = (item.get("asin") or item.get("product_id") or "").strip()
+                if not asin:
+                    raw = (item.get("link") or "").strip()
+                    m = _re.search(r'/dp/([A-Z0-9]{10})', raw)
+                    if m:
+                        asin = m.group(1)
+                if asin:
+                    best = {"asin": asin, "item": item}
+                    # Prefer ≥4★ but take any ASIN match rather than zero
+                    if float(item.get("rating") or 0) >= 4.0:
+                        break
+
+            if best:
+                asin = best["asin"]
+                item = best["item"]
+                p["asin"]      = asin
+                p["amazon_url"] = f"https://www.amazon.com/dp/{asin}?tag=auragirlcreat-20"
+                thumb = item.get("thumbnail") or ""
+                if thumb:
+                    p["image_url"] = _re.sub(r'\._[A-Z_0-9,]+_\.', '.', thumb)
+                elif not p.get("image_url"):
+                    p["image_url"] = f"https://m.media-amazon.com/images/P/{asin}.01.LZZZZZZZ.jpg"
+                fixed += 1
+                logger.info(f"Fixed link for {name!r} → {p['amazon_url']}")
+            else:
+                logger.warning(f"No ASIN found for {name!r}")
+        except Exception as e:
+            logger.warning(f"SerpAPI fix failed for {name!r}: {e}")
+
+    if fixed:
+        try:
+            sess.products = _json.dumps(products)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"ok": False, "error": f"DB save failed: {e}"})
+
+    return jsonify({"ok": True, "fixed": fixed, "total": len(products), "products": products})
+
+
 @bp.route("/research/download-product-images", methods=["POST"])
 @login_required
 def download_product_images():
