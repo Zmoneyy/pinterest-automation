@@ -51,7 +51,8 @@
     </div>
     <!-- Quick-open link panel (shown when Open All Products is clicked) -->
     <div id="productLinksPanel" style="display:none;background:var(--gray-50);border-radius:10px;padding:12px 14px;margin:10px 0 4px;">
-      <div style="font-size:12px;color:var(--gray-400);margin-bottom:10px;">Click any product to open on Amazon →</div>
+      <div style="font-size:12px;color:var(--gray-500);font-weight:600;margin-bottom:6px;">Click any product to open on Amazon →</div>
+      <div id="openAllMsg" style="display:none;font-size:12px;color:#c05500;background:#fff3e0;border-radius:6px;padding:6px 10px;margin-bottom:8px;"></div>
       {% for p in products %}
       <a href="{{ p.amazon_url }}" target="_blank" rel="noopener"
          style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--gray-100);text-decoration:none;color:var(--gray-800);"
@@ -442,12 +443,26 @@ function toggleProductLinks() {
   const urls = products.map(p => p.amazon_url).filter(Boolean);
   if (!urls.length) return;
 
-  // Always show the panel so links are clickable regardless of popup blocker
+  // Always show the panel
   const panel = document.getElementById('productLinksPanel');
   panel.style.display = 'block';
+  panel.style.border = '2px solid var(--red)';
+  panel.style.background = '#fff8f0';
+  setTimeout(() => { panel.style.border = ''; panel.style.background = 'var(--gray-50)'; }, 2000);
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
-  // Also try to open all tabs synchronously (works if popups are allowed)
-  urls.forEach(url => window.open(url, '_blank'));
+  // Try to open tabs — browsers typically only allow the first popup per gesture
+  const results = urls.map(url => window.open(url, '_blank'));
+  const blocked = results.filter(w => !w).length;
+  if (blocked > 0) {
+    const msg = document.getElementById('openAllMsg');
+    if (msg) {
+      msg.textContent = blocked === urls.length
+        ? '⚠️ Popups blocked — click each link below to open'
+        : `⚠️ ${blocked} tab(s) blocked — click the links below`;
+      msg.style.display = 'block';
+    }
+  }
 }
 
 {% if has_search_links %}
