@@ -442,15 +442,12 @@ function toggleProductLinks() {
   const urls = products.map(p => p.amazon_url).filter(Boolean);
   if (!urls.length) return;
 
-  // Try opening all tabs synchronously — works when popups are allowed
-  const results = urls.map(url => window.open(url, '_blank'));
-  const anyBlocked = results.some(w => !w);
+  // Always show the panel so links are clickable regardless of popup blocker
+  const panel = document.getElementById('productLinksPanel');
+  panel.style.display = 'block';
 
-  // If any were blocked, show the inline panel as fallback
-  if (anyBlocked) {
-    const panel = document.getElementById('productLinksPanel');
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  }
+  // Also try to open all tabs synchronously (works if popups are allowed)
+  urls.forEach(url => window.open(url, '_blank'));
 }
 
 {% if has_search_links %}
