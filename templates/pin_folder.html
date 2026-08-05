@@ -43,6 +43,7 @@
       <div style="display:flex;gap:8px;">
         <button class="btn btn-ghost btn-sm" onclick="copyText(buildProductText())">Copy</button>
         <button class="btn btn-ghost btn-sm" id="openAllBtn" onclick="toggleProductLinks()">↗ Open All Products</button>
+        <span style="font-size:11px;color:var(--gray-400);">(allow popups for this site)</span>
         {% if has_search_links %}
         <span id="fixLinksStatus" style="font-size:12px;color:var(--gray-400);align-self:center;">🔄 Updating links…</span>
         {% endif %}
