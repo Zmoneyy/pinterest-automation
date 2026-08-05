@@ -89,14 +89,15 @@
     Saved {{ sess.created_at.strftime('%B %d, %Y at %I:%M %p') if sess.created_at else '' }}
   </div>
   {% if sess.keywords %}
-  <div style="margin-top:10px;">
+  <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
     {% for kw in sess.keywords.split(',') %}
       {% if kw.strip() %}
-      <span style="display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;margin:3px 4px 3px 0;font-weight:600;">
+      <span style="display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;font-weight:600;">
         {{ kw.strip() }}
       </span>
       {% endif %}
     {% endfor %}
+    <button onclick="copyKeywords(this)" style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;margin-left:4px;">Copy All</button>
   </div>
   {% endif %}
 </div>
@@ -497,6 +498,14 @@ async function sendFolderToTailwind() {
     status.style.color   = 'var(--red)';
     status.textContent   = '✗ ' + e.message;
   }
+}
+
+function copyKeywords(btn) {
+  const kw = {{ sess.keywords | tojson }};
+  navigator.clipboard.writeText(kw).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy All', 1500);
+  });
 }
 
 function copyText(text) {
