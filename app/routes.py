@@ -4070,7 +4070,8 @@ def pin_folder(session_id):
     products = sess.products_list()
     has_search_links = any('/s?k=' in (p.get('amazon_url') or '') for p in products)
     boards = list(Config.PINTEREST_BOARDS.keys())
-    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards)
+    all_sessions = PinResearch.query.order_by(PinResearch.created_at.desc()).all()
+    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards, all_sessions=all_sessions)
 
 
 @bp.route("/research/<int:session_id>/upload-pin-image", methods=["POST"])

@@ -2,6 +2,82 @@
 {% block title %}{{ sess.title }} — Pin Library{% endblock %}
 
 {% block content %}
+<style>
+  .folder-layout {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 24px;
+    /* Break out of the 900px page container */
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+    padding: 0 24px;
+    max-width: 1300px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .folder-sidebar {
+    position: sticky;
+    top: 72px;
+    max-height: calc(100vh - 90px);
+    overflow-y: auto;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--gray-200) transparent;
+  }
+  .folder-sidebar::-webkit-scrollbar { width: 4px; }
+  .folder-sidebar::-webkit-scrollbar-track { background: transparent; }
+  .folder-sidebar::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 4px; }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--gray-400);
+    padding: 0 8px 8px;
+  }
+  .sidebar-item {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--gray-700);
+    text-decoration: none;
+    line-height: 1.35;
+    margin-bottom: 2px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .sidebar-item:hover { background: var(--gray-100); color: var(--gray-900); }
+  .sidebar-item.active { background: var(--red-light); color: var(--red); font-weight: 700; }
+  .sidebar-item .sidebar-date {
+    display: block;
+    font-size: 10px;
+    color: var(--gray-400);
+    margin-top: 2px;
+    font-weight: 400;
+  }
+  .sidebar-item.active .sidebar-date { color: var(--red); opacity: 0.7; }
+  @media (max-width: 700px) {
+    .folder-layout { grid-template-columns: 1fr; }
+    .folder-sidebar { position: static; max-height: none; border-bottom: 1px solid var(--gray-100); padding-bottom: 16px; margin-bottom: 8px; }
+  }
+</style>
+
+<div class="folder-layout">
+
+<!-- Sidebar -->
+<div class="folder-sidebar">
+  <div class="sidebar-label">Pin Folders</div>
+  {% for s in all_sessions %}
+  <a href="/pin-library/{{ s.id }}"
+     class="sidebar-item {% if s.id == sess.id %}active{% endif %}">
+    {{ s.title }}
+    <span class="sidebar-date">{{ s.created_at.strftime('%b %d, %Y') if s.created_at else '' }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<!-- Main content -->
+<div>
 
 <!-- Header -->
 <div style="margin-bottom:24px;">
@@ -245,6 +321,9 @@
     </button>
   </div>
 </div>
+
+</div><!-- /main content -->
+</div><!-- /folder-layout -->
 
 {% endblock %}
 
