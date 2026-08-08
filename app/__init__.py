@@ -141,6 +141,8 @@ def _run_migrations():
         "ALTER TABLE pin_research ADD COLUMN IF NOT EXISTS blog_post TEXT",
         # pin_research — uploaded pin image URL (GCS) for re-download and Tailwind
         "ALTER TABLE pin_research ADD COLUMN IF NOT EXISTS pin_image_url TEXT",
+        # pin_research — editable notes/recommendations per pin folder
+        "ALTER TABLE pin_research ADD COLUMN IF NOT EXISTS notes TEXT",
     ]
     for sql in migrations:
         try:

@@ -231,6 +231,7 @@ class PinResearch(db.Model):
     ppp_prompt   = db.Column(db.Text, nullable=True)   # Pin Perfect Pro GPT prompt
     blog_post    = db.Column(db.Text, nullable=True)   # optional blog post for website
     pin_image_url = db.Column(db.Text, nullable=True)  # uploaded pin image (GCS URL)
+    notes        = db.Column(db.Text, nullable=True)   # editable notes/recommendations
     created_at   = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def products_list(self):
