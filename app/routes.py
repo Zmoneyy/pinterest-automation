@@ -3587,95 +3587,47 @@ def _scrape_amazon_product(url: str) -> dict:
 
 
 def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client) -> str:
-    """Generate a product research brief for Pin Perfect Pro GPT.
-    Pin Perfect Pro handles all creative output (titles, descriptions, image prompts, etc.)
-    — our job is to give it rich product intel so it doesn't need to access any links."""
-    kw_section = f"\n**Pinterest Keywords to use:** {keywords}" if keywords else ""
+    """Build a compact Pin Perfect Pro brief that always pastes as text (never hits ChatGPT's file-conversion threshold)."""
+    kw_line = f"Keywords: {keywords}" if keywords else ""
 
-    prod_blocks = []
+    prod_lines = []
     for i, p in enumerate(products, 1):
-        lines = [f"### Product {i}: {p['name']}"]
-        lines.append(f"**Amazon URL:** {p.get('amazon_url', '')}")
-        if p.get("price"):
-            lines.append(f"**Price:** {p['price']}")
-        if p.get("rating") and float(p.get("rating") or 0) > 0:
-            lines.append(f"**Rating:** ⭐{p['rating']} ({int(p.get('reviews') or 0):,} reviews)")
-        if p.get("is_best_seller"):
-            lines.append("**Badge:** 🏆 Best Seller")
-        elif p.get("is_amazons_choice"):
-            lines.append("**Badge:** ✅ Amazon's Choice")
+        name  = p.get("name", "")[:100]
+        url   = p.get("amazon_url", "")
+        price = p.get("price") or ""
+        # Best 1-line description: first bullet, or scraped description snippet, or name
+        desc  = ""
         if p.get("bullets"):
-            lines.append("**Product Features (from Amazon listing):**")
-            for b in p["bullets"][:6]:
-                lines.append(f"- {b}")
-        if p.get("description"):
-            lines.append(f"**Product Description:** {p['description'][:500]}")
-        prod_blocks.append("\n".join(lines))
+            desc = p["bullets"][0][:120]
+        elif p.get("description"):
+            desc = p["description"][:120]
+        price_str = f" — {price}" if price else ""
+        prod_lines.append(f"{i}. {name}{price_str}\n   {desc}\n   {url}")
 
-    products_section = "\n\n".join(prod_blocks)
+    products_text = "\n\n".join(prod_lines)
 
-    prompt = f"""You are a product research analyst preparing a brief for Pin Perfect Pro — a custom GPT Pinterest marketing expert that will handle all creative output (pin titles, descriptions, keywords, alt text, image prompts, etc.).
-
-Your job is to write a rich, marketing-focused product research brief. Do NOT write pin copy, titles, or image prompts — Pin Perfect Pro will do that. Focus entirely on giving it the intelligence it needs about the products and audience.
-
-**Pin Concept:** "{title}"{kw_section}
-
-**Raw product data from Amazon:**
-{products_section}
-
-Write the brief in this exact structure, starting with the instruction block:
-
----
-Using the product research brief below, create a complete Pinterest pin package. I need:
-- SEO-optimized Pinterest title
-- SEO-optimized Pinterest description (under 500 characters, must START with a hook CTA like "Tap the link to grab yours →" or "Shop the list →" — CTA first, then keywords)
-- 5–8 hashtags
-- Alt text
-- Recommended Pinterest board name
-- On-pin headline + supporting text
-- Visual layout concept (colors, mood, composition)
-- AI image prompt optimized for Canva AI or Ideogram (vertical 2:3, 1000×1500px, mobile-first, scroll-stopping, include a CTA text overlay on the image itself such as "Shop Now →" or "Tap to Shop →" in bold readable text, "auragirlessentials.com" small text at the bottom)
+    brief = f"""Create a complete Pinterest pin package for Aura Girl Essentials.
 
 Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
-Affiliate disclaimer to include: *As an Amazon Associate, I earn from qualifying purchases.*
----
+Pin concept: {title}
+Audience: Budget-conscious women 18-40 who want professional results from affordable products.
+{kw_line}
 
-## Pin Concept Overview
-2 sentences: what this pin is about and who it's for.
+I need:
+- SEO-optimized Pinterest title
+- Pinterest description under 500 chars — START with a hook CTA ("Shop the list →" or "Tap to grab yours →") then keywords
+- 5-8 hashtags
+- Alt text
+- Best Pinterest board name
+- On-pin headline + supporting text
+- AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay like "Shop Now →", "auragirlessentials.com" small at bottom)
 
-## Target Customer
-Who is searching for this on Pinterest. Include: age range, lifestyle, mindset, what they're trying to achieve, and why they'd stop and click this pin.
+Products:
+{products_text}
 
-## Products
-For each product write:
-- **[Product Name]** — [Amazon URL]
-  - **What it is:** 1 sentence (plain English, no jargon)
-  - **Who it's for:** specific type of person
-  - **Problem it solves:** the exact frustration or pain point it fixes
-  - **Top benefits:** 4–5 bullet points (focus on outcomes and feelings, not ingredients or specs)
-  - **Why someone buys this over alternatives:** what makes it stand out
-  - **Visual details:** describe the packaging, color, texture, finish — anything useful for designing a pin image
+*As an Amazon Associate, I earn from qualifying purchases.*"""
 
-## Buying Motivations & Emotional Triggers
-Why someone would feel compelled to buy. Include: emotions (confidence, convenience, FOMO, aspiration), social proof signals, and any urgency factors.
-
-## Objections & How to Overcome Them
-Top 3 reasons someone might hesitate to buy, and what would change their mind.
-
-## Search Language
-Words and phrases real shoppers type when looking for these products on Pinterest and Google. Include both broad and specific terms.
-
-Return only the formatted brief. No preamble, no commentary."""
-
-    try:
-        msg = client.messages.create(
-            model="claude-sonnet-5",
-            max_tokens=4000,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return _extract_text(msg)
-    except Exception as e:
-        logger.error(f"ChatGPT package generation failed: {e}")
+    return brief
         return ""
 
 
