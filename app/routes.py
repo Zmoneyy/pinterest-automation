@@ -3628,7 +3628,6 @@ Products:
 *As an Amazon Associate, I earn from qualifying purchases.*"""
 
     return brief
-        return ""
 
 
 def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
