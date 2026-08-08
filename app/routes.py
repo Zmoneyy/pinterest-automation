@@ -3777,6 +3777,41 @@ def _amazon_search_queries(title: str) -> list:
     return queries
 
 
+def _claude_pick_best_product(product_type: str, pin_title: str, candidates: list, claude_client) -> dict:
+    """Given up to 5 Amazon candidates, ask Claude to pick the most brand-credible one.
+    Falls back to candidates[0] if Claude fails or returns an invalid index."""
+    if len(candidates) == 1:
+        return dict(candidates[0])
+
+    lines = []
+    for i, c in enumerate(candidates):
+        lines.append(f"{i}: {c['name'][:120]} | ${c.get('price','?')} | {c.get('reviews',0)} reviews | rating {c.get('rating',0)}")
+
+    prompt = (
+        f"Pin title: \"{pin_title}\"\n"
+        f"Product needed: {product_type}\n\n"
+        "Amazon candidates (index: name | price | reviews | rating):\n"
+        + "\n".join(lines)
+        + "\n\nPick the ONE product index (0-based integer) that a real makeup artist or beauty enthusiast "
+        "would actually recommend — prioritise well-known, trusted brands (e.g. NYX, Maybelline, L'Oreal, "
+        "Real Techniques, e.l.f., wet n wild, CeraVe, Neutrogena) over generic Amazon-only brands with no "
+        "social following. Reply with ONLY the integer index, nothing else."
+    )
+    try:
+        msg = claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=10,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        idx = int(msg.content[0].text.strip())
+        if 0 <= idx < len(candidates):
+            logger.info(f"  Claude picked index {idx} from {len(candidates)} candidates for {product_type!r}")
+            return dict(candidates[idx])
+    except Exception as e:
+        logger.warning(f"  _claude_pick_best_product failed ({e}), using index 0")
+    return dict(candidates[0])
+
+
 def _search_amazon_real(query: str, api_key: str) -> list:
     """Hit SerpAPI Amazon Search and return filtered, ranked product list.
     Tries progressively simpler queries if the full title returns no results."""
@@ -3960,19 +3995,24 @@ Return ONLY valid JSON: {{"products": [{{"type": "...", "query": "..."}}]}}"""
             product_specs = _parse_claude_json(id_msg).get("products", [])[:10]
             logger.info(f"Two-step: identified {len(product_specs)} product types for {title!r}")
 
-            # STEP 2 — SerpAPI finds the best real Amazon match for each product type
+            # STEP 2 — SerpAPI finds candidates, Claude picks the most credible brand
             products_out = []
             for spec in product_specs:
                 hits = _search_amazon_real(spec.get("query", ""), Config.SERPAPI_KEY)
-                if hits:
-                    best = dict(hits[0])
-                    best["product_type"] = spec.get("type", "")
-                    best["why"]     = f"Top Amazon match for {spec['type']}"
-                    best["context"] = ""
-                    products_out.append(best)
-                    logger.info(f"  {spec['query']!r} → {best['name'][:50]!r} ({best['amazon_url']})")
-                else:
+                if not hits:
                     logger.warning(f"  No results for {spec['query']!r}")
+                    continue
+                best = _claude_pick_best_product(
+                    product_type=spec.get("type", ""),
+                    pin_title=title,
+                    candidates=hits[:5],
+                    claude_client=client,
+                )
+                best["product_type"] = spec.get("type", "")
+                best["why"]     = f"Top Amazon match for {spec['type']}"
+                best["context"] = ""
+                products_out.append(best)
+                logger.info(f"  {spec['query']!r} → {best['name'][:50]!r} ({best['amazon_url']})")
 
             if products_out:
                 # STEP 3 — Scrape each Amazon page in parallel, then build ChatGPT package
