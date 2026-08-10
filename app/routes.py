@@ -2495,6 +2495,21 @@ def _suggest_boards_from_trends(trends):
     return suggestions
 
 
+@bp.route("/test-pa-api")
+@login_required
+def test_pa_api_route():
+    from app.amazon_api import test_pa_api
+    result = test_pa_api()
+    status = "✅ PA API WORKING" if result["ok"] else "❌ PA API NOT WORKING"
+    msg    = result.get("message") or result.get("error", "")
+    sample = result.get("sample", "")
+    html   = f"<h2>{status}</h2><p>{msg}</p>"
+    if sample:
+        html += f"<p>Sample result: <strong>{sample}</strong></p>"
+    html += "<p><a href='/'>← Back to app</a></p>"
+    return html
+
+
 @bp.route("/test-scrape")
 @login_required
 def test_scrape():

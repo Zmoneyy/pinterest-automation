@@ -26,8 +26,10 @@ class Config:
             "fitness":    cls.BENABLE_URL_FITNESS,
         }.get(niche, cls.BENABLE_URL_BEAUTY)
 
-    AMAZON_ASSOCIATE_TAG = os.environ.get("AMAZON_ASSOCIATE_TAG", "")  # e.g. auragirlcre-20
-    SERPAPI_KEY          = os.environ.get("SERPAPI_KEY", "")
+    AMAZON_ASSOCIATE_TAG  = os.environ.get("AMAZON_ASSOCIATE_TAG", "")
+    SERPAPI_KEY           = os.environ.get("SERPAPI_KEY", "")
+    AMAZON_CLIENT_ID      = os.environ.get("AMAZON_CLIENT_ID", "")
+    AMAZON_CLIENT_SECRET  = os.environ.get("AMAZON_CLIENT_SECRET", "")
 
     # AI APIs
     ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")

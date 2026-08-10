@@ -42,21 +42,126 @@ def _build_affiliate_url(asin: str, associate_tag: str) -> str:
     return f"https://www.amazon.com/dp/{asin}?tag={associate_tag}&linkCode=ll1&language=en_US&ref_=as_li_ss_tl"
 
 
+def _get_pa_api_token() -> Optional[str]:
+    """Get OAuth access token from Amazon using client credentials."""
+    from config import Config
+    client_id     = Config.AMAZON_CLIENT_ID
+    client_secret = Config.AMAZON_CLIENT_SECRET
+    if not client_id or not client_secret:
+        return None
+    try:
+        resp = requests.post(
+            "https://api.amazon.com/auth/o2/token",
+            data={
+                "grant_type":    "client_credentials",
+                "client_id":     client_id,
+                "client_secret": client_secret,
+                "scope":         "advertising::audiences",
+            },
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            return resp.json().get("access_token")
+        logger.warning(f"PA API token error {resp.status_code}: {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"PA API token fetch failed: {e}")
+    return None
+
+
+def _search_via_pa_api(keyword: str, associate_tag: str, max_results: int = 5) -> list[dict]:
+    """Search Amazon products via PA API v5 through Creators API OAuth."""
+    token = _get_pa_api_token()
+    if not token:
+        return []
+
+    payload = {
+        "Keywords":       keyword,
+        "Resources":      ["ItemInfo.Title", "Offers.Listings.Price", "Images.Primary.Medium"],
+        "PartnerTag":     associate_tag,
+        "PartnerType":    "Associates",
+        "Marketplace":    "www.amazon.com",
+        "ItemCount":      min(max_results, 10),
+    }
+    try:
+        resp = requests.post(
+            "https://webservices.amazon.com/paapi5/searchitems",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type":  "application/json; charset=UTF-8",
+                "x-amz-target": "com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems",
+            },
+            timeout=15,
+        )
+        if resp.status_code == 403 and "AssociateNotEligible" in resp.text:
+            logger.warning("PA API: AssociateNotEligible — need 10 sales/30 days")
+            return []
+        if resp.status_code != 200:
+            logger.warning(f"PA API search {resp.status_code}: {resp.text[:300]}")
+            return []
+
+        items = resp.json().get("SearchResult", {}).get("Items", [])
+        results = []
+        for item in items:
+            asin  = item.get("ASIN", "")
+            title = item.get("ItemInfo", {}).get("Title", {}).get("DisplayValue", "")
+            price = item.get("Offers", {}).get("Listings", [{}])[0].get("Price", {}).get("DisplayAmount", "")
+            image = item.get("Images", {}).get("Primary", {}).get("Medium", {}).get("URL", "")
+            if asin and title:
+                results.append({
+                    "name":      title,
+                    "asin":      asin,
+                    "price":     price,
+                    "image_url": image,
+                    "amazon_url": _build_affiliate_url(asin, associate_tag),
+                })
+        return results
+    except Exception as e:
+        logger.error(f"PA API search failed: {e}")
+        return []
+
+
+def test_pa_api() -> dict:
+    """Test PA API connectivity. Returns status dict for the test endpoint."""
+    from config import Config
+    associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
+
+    if not Config.AMAZON_CLIENT_ID or not Config.AMAZON_CLIENT_SECRET:
+        return {"ok": False, "error": "Credentials not configured in environment"}
+
+    token = _get_pa_api_token()
+    if not token:
+        return {"ok": False, "error": "Failed to get OAuth token — check Client ID and Secret"}
+
+    results = _search_via_pa_api("NYX setting spray", associate_tag, max_results=2)
+    if results:
+        return {"ok": True, "message": f"PA API working! Found {len(results)} results", "sample": results[0]["name"]}
+
+    return {"ok": False, "error": "Got token but product search returned no results — account may not be eligible yet (need 10 sales in 30 days)"}
+
+
 def search_products(
     keyword: str,
     category: Optional[str] = None,
     max_results: int = 5,
 ) -> list[dict]:
-    """
-    Search Amazon for products matching a keyword via SerpAPI.
-    Falls back to empty list if SerpAPI key not configured.
-    Returns list of {name, asin, amazon_url, image_url, price, category}.
-    """
+    """Search Amazon via PA API first, fall back to SerpAPI."""
     from config import Config
-
     associate_tag = Config.AMAZON_ASSOCIATE_TAG or "auragirlcreat-20"
 
-    # Try SerpAPI first (works from Cloud Run — no IP blocking)
+    # Try PA API first if credentials exist
+    if Config.AMAZON_CLIENT_ID and Config.AMAZON_CLIENT_SECRET:
+        try:
+            results = _search_via_pa_api(keyword, associate_tag, max_results=max_results)
+            if results:
+                for r in results:
+                    r["category"] = category or _guess_category(r.get("name", ""))
+                logger.info(f"PA API search '{keyword}': {len(results)} products")
+                return results
+        except Exception as e:
+            logger.error(f"PA API search failed for '{keyword}': {e}")
+
+    # Fall back to SerpAPI
     serpapi_key = _get_serpapi_key()
     if serpapi_key:
         try:
