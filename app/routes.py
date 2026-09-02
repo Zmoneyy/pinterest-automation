@@ -3636,6 +3636,7 @@ I need:
 - Best Pinterest board name
 - On-pin headline + supporting text
 - AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay like "Shop Now →", "auragirlessentials.com" small at bottom)
+- Amazon Idea List title — keyword-rich, searchable on Amazon, max 60 chars (this is for the Amazon list that the pin links to)
 
 Products:
 {products_text}
@@ -3682,7 +3683,10 @@ For each of the 6 pins give me:
 6. On-pin headline + supporting text
 7. AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay, "auragirlessentials.com" small at bottom)
 
-Format your response as: PIN 1, PIN 2, ... PIN 6 with clear headers for each section.
+After all 6 pins, add one final section:
+AMAZON IDEA LIST TITLE: One keyword-rich title (max 60 chars) for the Amazon Idea List that all 6 pins will link to. Make it searchable on Amazon — think how someone would search for this product collection.
+
+Format your response as: PIN 1, PIN 2, ... PIN 6 with clear headers for each section, then AMAZON IDEA LIST TITLE at the end.
 
 Products (same for all 6 pins):
 {products_text}
