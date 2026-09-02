@@ -3634,7 +3634,7 @@ Audience: Budget-conscious women 18-40 who want professional results from afford
 
 I need:
 - SEO-optimized Pinterest title
-- Pinterest description under 500 chars — START with a hook CTA ("Shop the list →" or "Tap to grab yours →") then keywords
+- Pinterest description — SHORT (under 200 chars), keyword-packed, no filler. START with a hook CTA ("Shop the list →" or "Tap to grab yours →") then cram in as many relevant keywords as possible. End with: "Ad: As an Amazon Associate I earn from qualifying purchases."
 - 5-8 hashtags
 - Alt text
 - Best Pinterest board name
@@ -3685,7 +3685,7 @@ IMPORTANT: The 6 pin titles must each be a different ANGLE on these specific pro
 
 For each of the 6 pins give me:
 1. Pin title (SEO-optimized, keyword-first)
-2. Pinterest description under 500 chars — START with a hook CTA then keywords
+2. Pinterest description — SHORT (under 200 chars), keyword-packed, no filler. START with a hook CTA then cram in as many relevant keywords as possible. End with: "Ad: As an Amazon Associate I earn from qualifying purchases."
 3. 5-8 hashtags
 4. Alt text
 5. Best Pinterest board name
