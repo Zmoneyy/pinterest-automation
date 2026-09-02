@@ -3601,16 +3601,18 @@ def _scrape_amazon_product(url: str) -> dict:
         return {}
 
 
-def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client) -> str:
+def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client, keywords_researched: bool = False) -> str:
     """Build a compact Pin Perfect Pro brief that always pastes as text (never hits ChatGPT's file-conversion threshold)."""
-    kw_line = f"Keywords: {keywords}" if keywords else ""
+    if keywords_researched and keywords:
+        kw_line = f"Keywords (I researched these — use them exactly as-is, do not change or replace them): {keywords}"
+    else:
+        kw_line = "Keywords: None provided. As a Pinterest SEO strategist, research and identify 8-12 high-traffic Pinterest search phrases that real users are actually searching for related to these specific products. Use long-tail, intent-driven phrases — not generic words. Weave them naturally throughout the title, description, and hashtags."
 
     prod_lines = []
     for i, p in enumerate(products, 1):
         name  = p.get("name", "")[:100]
         url   = p.get("amazon_url", "")
         price = p.get("price") or ""
-        # Best 1-line description: first bullet, or scraped description snippet, or name
         desc  = ""
         if p.get("bullets"):
             desc = p["bullets"][0][:120]
@@ -3621,7 +3623,9 @@ def _build_chatgpt_pin_package(title: str, keywords: str, products: list, client
 
     products_text = "\n\n".join(prod_lines)
 
-    brief = f"""Create a complete Pinterest pin package for Aura Girl Essentials.
+    brief = f"""You are a Pinterest SEO strategist and master pin creator who specializes in creating viral, visually irresistible pins that stop the scroll, drive clicks, and convert browsers into buyers — generating affiliate commission for Aura Girl Essentials.
+
+Create a complete Pinterest pin package for Aura Girl Essentials.
 
 Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
 Pin concept: {title}
@@ -3646,9 +3650,12 @@ Products:
     return brief
 
 
-def _build_6pin_chatgpt_package(title: str, keywords: str, products: list) -> str:
+def _build_6pin_chatgpt_package(title: str, keywords: str, products: list, keywords_researched: bool = False) -> str:
     """Build a brief that asks Pin Perfect Pro to generate 6 distinct pin variations for the same product set."""
-    kw_line = f"Keywords to draw from: {keywords}" if keywords else ""
+    if keywords_researched and keywords:
+        kw_line = f"Keywords (I researched these — use them exactly as-is across all 6 pins, do not change or replace them): {keywords}"
+    else:
+        kw_line = "Keywords: None provided. As a Pinterest SEO strategist, research and identify 8-12 high-traffic Pinterest search phrases that real users are actually searching for related to these specific products. Use long-tail, intent-driven phrases — not generic words. Apply them consistently across all 6 pins."
 
     prod_lines = []
     for i, p in enumerate(products, 1):
@@ -3665,7 +3672,9 @@ def _build_6pin_chatgpt_package(title: str, keywords: str, products: list) -> st
 
     products_text = "\n\n".join(prod_lines)
 
-    brief = f"""Create 6 distinct Pinterest pin packages for Aura Girl Essentials using the SAME product list below.
+    brief = f"""You are a Pinterest SEO strategist and master pin creator who specializes in creating viral, visually irresistible pins that stop the scroll, drive clicks, and convert browsers into buyers — generating affiliate commission for Aura Girl Essentials.
+
+Create 6 distinct Pinterest pin packages for Aura Girl Essentials using the SAME product list below.
 
 Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
 Core concept: {title}
@@ -3708,7 +3717,7 @@ def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
     return ppp_prompt
 
 
-def _autosave_pin_research(title, keywords, summary, products, ppp_prompt):
+def _autosave_pin_research(title, keywords, summary, products, ppp_prompt, keywords_researched=False):
     """Upsert a PinResearch record — create if new title, update if seen before."""
     import json as _j
     try:
@@ -3718,10 +3727,11 @@ def _autosave_pin_research(title, keywords, summary, products, ppp_prompt):
         else:
             sess = PinResearch(title=title)
             db.session.add(sess)
-        sess.keywords    = keywords or sess.keywords
-        sess.summary     = summary  or sess.summary
-        sess.products    = _j.dumps(products)  if products    else sess.products
-        sess.ppp_prompt  = ppp_prompt           if ppp_prompt  else sess.ppp_prompt
+        sess.keywords             = keywords or sess.keywords
+        sess.summary              = summary  or sess.summary
+        sess.products             = _j.dumps(products) if products   else sess.products
+        sess.ppp_prompt           = ppp_prompt          if ppp_prompt else sess.ppp_prompt
+        sess.keywords_researched  = keywords_researched
         db.session.commit()
         return sess.id
     except Exception as e:
@@ -3930,9 +3940,10 @@ def pin_to_products_api():
     import anthropic, urllib.parse, json as _json
     from config import Config
     data = request.get_json()
-    title             = (data.get("title")    or "").strip()
-    keywords          = (data.get("keywords") or "").strip()
-    existing_products = data.get("existing_products") or []  # real products from DB
+    title               = (data.get("title")    or "").strip()
+    keywords            = (data.get("keywords") or "").strip()
+    keywords_researched = bool(data.get("keywords_researched", False))
+    existing_products   = data.get("existing_products") or []  # real products from DB
     if not title:
         return jsonify({"ok": False, "error": "No pin title provided."})
 
@@ -3968,8 +3979,8 @@ def pin_to_products_api():
                     f'Write exactly 2 sentences on the shopping vibe and intent of this Pinterest pin: "{title}". Return only the 2 sentences.'}]
             )
             summary = _extract_text(sum_msg)
-            package = _build_chatgpt_pin_package(title, keywords, enriched, client)
-            session_id = _autosave_pin_research(title, keywords, summary, enriched, package)
+            package = _build_chatgpt_pin_package(title, keywords, enriched, client, keywords_researched=keywords_researched)
+            session_id = _autosave_pin_research(title, keywords, summary, enriched, package, keywords_researched=keywords_researched)
             return jsonify({
                 "ok": True, "summary": summary,
                 "products": enriched, "ppp_prompt": package,
@@ -4054,8 +4065,8 @@ Return ONLY valid JSON: {{"products": [{{"type": "...", "query": "..."}}]}}"""
                 )
                 summary = _extract_text(sum_msg)
 
-                package = _build_chatgpt_pin_package(title, keywords, products_out, client)
-                session_id = _autosave_pin_research(title, keywords, summary, products_out, package)
+                package = _build_chatgpt_pin_package(title, keywords, products_out, client, keywords_researched=keywords_researched)
+                session_id = _autosave_pin_research(title, keywords, summary, products_out, package, keywords_researched=keywords_researched)
                 return jsonify({
                     "ok": True, "summary": summary,
                     "products": products_out, "ppp_prompt": package,
@@ -4100,8 +4111,8 @@ Identify the best real Amazon products for this pin. Return ONLY valid JSON:
             p.setdefault("rating", 0); p.setdefault("reviews", 0); p.setdefault("price", "")
             p.setdefault("is_best_seller", False); p.setdefault("is_amazons_choice", False)
 
-        package = _build_chatgpt_pin_package(title, keywords, products_fb, client)
-        session_id = _autosave_pin_research(title, keywords, result.get("summary",""), products_fb, package)
+        package = _build_chatgpt_pin_package(title, keywords, products_fb, client, keywords_researched=keywords_researched)
+        session_id = _autosave_pin_research(title, keywords, result.get("summary",""), products_fb, package, keywords_researched=keywords_researched)
         return jsonify({
             "ok": True, "summary": result.get("summary",""),
             "products": products_fb, "ppp_prompt": package,
@@ -4187,6 +4198,7 @@ Products:
         summary="",
         products=products_out,
         ppp_prompt=ppp,
+        keywords_researched=False,
     )
 
     return redirect(url_for("main.pin_folder", session_id=session_id))
@@ -4208,7 +4220,8 @@ def pin_folder(session_id):
     has_search_links = any('/s?k=' in (p.get('amazon_url') or '') for p in products)
     boards = list(Config.PINTEREST_BOARDS.keys())
     all_sessions = PinResearch.query.order_by(PinResearch.created_at.desc()).all()
-    ppp_6 = _build_6pin_chatgpt_package(sess.title or "", sess.keywords or "", products) if products else ""
+    kr = bool(sess.keywords_researched)
+    ppp_6 = _build_6pin_chatgpt_package(sess.title or "", sess.keywords or "", products, keywords_researched=kr) if products else ""
     return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards, all_sessions=all_sessions, ppp_6=ppp_6)
 
 
@@ -4228,6 +4241,7 @@ def update_research_keywords(session_id):
     sess = PinResearch.query.get_or_404(session_id)
     data = request.get_json()
     sess.keywords = data.get("keywords", "")
+    sess.keywords_researched = bool(data.get("keywords_researched", False))
     db.session.commit()
     return jsonify({"ok": True})
 

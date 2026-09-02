@@ -105,6 +105,10 @@
     <div id="kwEditArea" style="display:none;margin-top:8px;">
       <textarea id="kwTextarea" placeholder="Add keywords separated by commas..." style="width:100%;min-height:80px;font-size:13px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;box-sizing:border-box;">{{ sess.keywords or '' }}</textarea>
       <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Separate keywords with commas</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+        <input type="checkbox" id="kwResearchedToggle" {% if sess.keywords_researched %}checked{% endif %} style="width:15px;height:15px;accent-color:var(--red);cursor:pointer;">
+        <span style="font-size:12px;color:var(--gray-600);">I did keyword research — use exactly as-is in PPP brief</span>
+      </label>
       <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
         <button onclick="cancelKwEdit()" style="font-size:12px;padding:4px 14px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;">Cancel</button>
         <button onclick="saveKeywords()" style="font-size:12px;padding:4px 14px;border-radius:20px;border:none;background:var(--red);color:#fff;cursor:pointer;font-weight:600;">Save</button>
@@ -597,13 +601,14 @@ function cancelKwEdit() {
 
 async function saveKeywords() {
   const text = document.getElementById('kwTextarea').value;
+  const researched = document.getElementById('kwResearchedToggle').checked;
   const btn = document.querySelector('#kwEditArea button[onclick="saveKeywords()"]');
   btn.textContent = 'Saving…';
   try {
     const resp = await fetch('/research/{{ sess.id }}/update-keywords', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({keywords: text})
+      body: JSON.stringify({keywords: text, keywords_researched: researched})
     });
     if (!resp.ok) throw new Error('server error');
     // Rebuild chips in kwDisplay

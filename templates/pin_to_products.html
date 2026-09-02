@@ -41,6 +41,11 @@
       <div style="font-size:11px;color:var(--gray-400);margin-top:5px;">Press Enter or comma after each keyword</div>
     </div>
 
+    <label style="display:flex;align-items:center;gap:10px;margin-bottom:14px;cursor:pointer;user-select:none;">
+      <input type="checkbox" id="kwResearchedCheck" style="width:16px;height:16px;accent-color:var(--red);cursor:pointer;">
+      <span style="font-size:13px;color:var(--gray-600);">I did keyword research for these keywords — use them exactly as-is</span>
+    </label>
+
     <button class="btn btn-red btn-full" id="p2pBtn" onclick="runP2P()">
       Generate Everything
     </button>
@@ -278,7 +283,7 @@ async function runP2P() {
     const res = await fetch('/research/pin-to-products', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({title, keywords})
+      body: JSON.stringify({title, keywords, keywords_researched: document.getElementById('kwResearchedCheck').checked})
     });
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'Something went wrong.');
