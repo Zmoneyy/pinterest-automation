@@ -3645,6 +3645,53 @@ Products:
     return brief
 
 
+def _build_6pin_chatgpt_package(title: str, keywords: str, products: list) -> str:
+    """Build a brief that asks Pin Perfect Pro to generate 6 distinct pin variations for the same product set."""
+    kw_line = f"Keywords to draw from: {keywords}" if keywords else ""
+
+    prod_lines = []
+    for i, p in enumerate(products, 1):
+        name  = p.get("name", "")[:100]
+        url   = p.get("amazon_url", "")
+        price = p.get("price") or ""
+        desc  = ""
+        if p.get("bullets"):
+            desc = p["bullets"][0][:120]
+        elif p.get("description"):
+            desc = p["description"][:120]
+        price_str = f" — {price}" if price else ""
+        prod_lines.append(f"{i}. {name}{price_str}\n   {desc}\n   {url}")
+
+    products_text = "\n\n".join(prod_lines)
+
+    brief = f"""Create 6 distinct Pinterest pin packages for Aura Girl Essentials using the SAME product list below.
+
+Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
+Core concept: {title}
+Audience: Budget-conscious women 18-40 who want professional results from affordable products.
+{kw_line}
+
+IMPORTANT: The 6 pin titles must each be a different ANGLE on these specific products — not random or generic. Base every title on what the products actually are. Think: different hooks (budget angle, pro tip angle, before/after angle, seasonal angle, gift angle, beginner angle) but always grounded in the product list.
+
+For each of the 6 pins give me:
+1. Pin title (SEO-optimized, keyword-first)
+2. Pinterest description under 500 chars — START with a hook CTA then keywords
+3. 5-8 hashtags
+4. Alt text
+5. Best Pinterest board name
+6. On-pin headline + supporting text
+7. AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay, "auragirlessentials.com" small at bottom)
+
+Format your response as: PIN 1, PIN 2, ... PIN 6 with clear headers for each section.
+
+Products (same for all 6 pins):
+{products_text}
+
+*As an Amazon Associate, I earn from qualifying purchases.*"""
+
+    return brief
+
+
 def _inject_keywords(ppp_prompt: str, keywords: str) -> str:
     """Guarantee the user's keywords are literally present in the PPP prompt."""
     if not keywords or not ppp_prompt:
@@ -4157,7 +4204,8 @@ def pin_folder(session_id):
     has_search_links = any('/s?k=' in (p.get('amazon_url') or '') for p in products)
     boards = list(Config.PINTEREST_BOARDS.keys())
     all_sessions = PinResearch.query.order_by(PinResearch.created_at.desc()).all()
-    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards, all_sessions=all_sessions)
+    ppp_6 = _build_6pin_chatgpt_package(sess.title or "", sess.keywords or "", products) if products else ""
+    return render_template("pin_folder.html", sess=sess, products=products, has_search_links=has_search_links, boards=boards, all_sessions=all_sessions, ppp_6=ppp_6)
 
 
 @bp.route("/research/<int:session_id>/update-notes", methods=["POST"])
