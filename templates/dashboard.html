@@ -452,6 +452,9 @@
         <form method="POST" action="{{ url_for('main.reject_pin', pin_id=pin.id) }}">
           <button type="submit" class="btn btn-ghost btn-sm btn-full" style="color:#aaa;">✕ Reject</button>
         </form>
+        <form method="POST" action="{{ url_for('main.pin_to_folder', pin_id=pin.id) }}">
+          <button type="submit" class="btn btn-ghost btn-sm btn-full" style="color:var(--red);border-color:var(--red);">📁 Send to Pin Folder</button>
+        </form>
       </div>
 
       {# ── Amazon + AI Prompts accordion ── #}

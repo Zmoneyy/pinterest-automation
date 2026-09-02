@@ -4061,6 +4061,81 @@ Identify the best real Amazon products for this pin. Return ONLY valid JSON:
         return jsonify({"ok": False, "error": str(e)})
 
 
+@bp.route("/pins/<int:pin_id>/to-pin-folder", methods=["POST"])
+@login_required
+def pin_to_folder(pin_id):
+    """Convert a dashboard pin into a pin folder (PinResearch) using its existing products."""
+    import json as _json
+    from app.models import Pin, Product
+    from app.amazon_api import _build_affiliate_url
+
+    pin = Pin.query.get_or_404(pin_id)
+
+    # Get keywords from stored hashtags
+    try:
+        hashtags = _json.loads(pin.hashtags or "[]")
+        keywords = ", ".join(hashtags) if hashtags else ""
+    except Exception:
+        keywords = ""
+
+    # Get linked products via pin_products association
+    products_out = []
+    for product in pin.products:
+        products_out.append({
+            "name":       product.name,
+            "amazon_url": product.amazon_url or "",
+            "image_url":  product.image_url or "",
+            "price":      product.price or "",
+            "asin":       "",
+            "rating":     0,
+            "reviews":    0,
+        })
+
+    # Build compact PPP prompt
+    from app.amazon_api import _build_affiliate_url as _baf
+    prod_lines = []
+    for i, p in enumerate(products_out, 1):
+        name  = (p.get("name") or "")[:100]
+        url   = p.get("amazon_url", "")
+        price = p.get("price") or ""
+        price_str = f" — ${price}" if price else ""
+        prod_lines.append(f"{i}. {name}{price_str}\n   {url}")
+
+    kw_line = f"Keywords: {keywords}" if keywords else ""
+    ppp = f"""Create a complete Pinterest pin package for Aura Girl Essentials.
+
+Brand: Aura Girl Essentials — curated women's lifestyle Amazon finds (beauty, fashion, home, wellness)
+Pin concept: {pin.title}
+Audience: Budget-conscious women 18-40 who want stylish, affordable Amazon finds.
+{kw_line}
+
+I need:
+- SEO-optimized Pinterest title
+- Pinterest description under 500 chars — START with a hook CTA ("Shop the list →" or "Tap to grab yours →") then keywords
+- 5-8 hashtags
+- Alt text
+- Best Pinterest board name
+- On-pin headline + supporting text
+- AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay like "Shop Now →", "auragirlessentials.com" small at bottom)
+
+Products:
+
+{chr(10).join(prod_lines)}
+
+*As an Amazon Associate, I earn from qualifying purchases.*"""
+
+    # Upsert pin folder
+    session_id = _autosave_pin_research(
+        title=pin.title,
+        keywords=keywords,
+        summary="",
+        products=products_out,
+        ppp_prompt=ppp,
+    )
+
+    return redirect(url_for("main.pin_folder", session_id=session_id))
+
+
 @bp.route("/pin-library")
 @login_required
 def pin_library():
