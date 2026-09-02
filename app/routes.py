@@ -4170,6 +4170,16 @@ def update_research_notes(session_id):
     return jsonify({"ok": True})
 
 
+@bp.route("/research/<int:session_id>/update-keywords", methods=["POST"])
+@login_required
+def update_research_keywords(session_id):
+    sess = PinResearch.query.get_or_404(session_id)
+    data = request.get_json()
+    sess.keywords = data.get("keywords", "")
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @bp.route("/research/<int:session_id>/upload-pin-image", methods=["POST"])
 @login_required
 def upload_research_pin_image(session_id):

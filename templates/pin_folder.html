@@ -88,18 +88,29 @@
   <div style="font-size:12px;color:var(--gray-400);margin-top:4px;">
     Saved {{ sess.created_at.strftime('%B %d, %Y at %I:%M %p') if sess.created_at else '' }}
   </div>
-  {% if sess.keywords %}
-  <div style="margin-top:10px;display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
-    {% for kw in sess.keywords.split(',') %}
-      {% if kw.strip() %}
-      <span style="display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;font-weight:600;">
-        {{ kw.strip() }}
-      </span>
+  <div style="margin-top:10px;">
+    <div id="kwDisplay" style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;">
+      {% if sess.keywords %}
+        {% for kw in sess.keywords.split(',') %}
+          {% if kw.strip() %}
+          <span style="display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;font-weight:600;">{{ kw.strip() }}</span>
+          {% endif %}
+        {% endfor %}
+      {% else %}
+        <span style="font-size:12px;color:var(--gray-400);font-style:italic;">No keywords yet</span>
       {% endif %}
-    {% endfor %}
-    <button onclick="copyKeywords(this)" style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;margin-left:4px;">Copy All</button>
+      <button onclick="copyKeywords(this)" style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;margin-left:4px;">Copy All</button>
+      <button onclick="toggleKwEdit()" id="kwEditBtn" style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;">Edit</button>
+    </div>
+    <div id="kwEditArea" style="display:none;margin-top:8px;">
+      <textarea id="kwTextarea" placeholder="Add keywords separated by commas..." style="width:100%;min-height:80px;font-size:13px;border:1px solid var(--gray-200);border-radius:8px;padding:10px;resize:vertical;font-family:inherit;box-sizing:border-box;">{{ sess.keywords or '' }}</textarea>
+      <div style="font-size:11px;color:var(--gray-400);margin-top:4px;">Separate keywords with commas</div>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:flex-end;">
+        <button onclick="cancelKwEdit()" style="font-size:12px;padding:4px 14px;border-radius:20px;border:1px solid var(--gray-200);background:#fff;color:var(--gray-500);cursor:pointer;">Cancel</button>
+        <button onclick="saveKeywords()" style="font-size:12px;padding:4px 14px;border-radius:20px;border:none;background:var(--red);color:#fff;cursor:pointer;font-weight:600;">Save</button>
+      </div>
+    </div>
   </div>
-  {% endif %}
 </div>
 
 {% if sess.summary %}
@@ -553,6 +564,55 @@ async function saveNotes() {
     document.getElementById('notesDisplay').textContent = text || '';
     if (!text) document.getElementById('notesDisplay').innerHTML = '<span style="color:var(--gray-400);font-style:italic;">No notes yet — click Edit to add recommendations or reminders.</span>';
     cancelNotesEdit();
+  } catch(e) {
+    btn.textContent = 'Error — try again';
+    setTimeout(() => btn.textContent = 'Save', 2000);
+  }
+}
+
+function toggleKwEdit() {
+  document.getElementById('kwDisplay').style.display = 'none';
+  document.getElementById('kwEditArea').style.display = 'block';
+}
+
+function cancelKwEdit() {
+  document.getElementById('kwEditArea').style.display = 'none';
+  document.getElementById('kwDisplay').style.display = 'flex';
+}
+
+async function saveKeywords() {
+  const text = document.getElementById('kwTextarea').value;
+  const btn = document.querySelector('#kwEditArea button[onclick="saveKeywords()"]');
+  btn.textContent = 'Saving…';
+  try {
+    const resp = await fetch('/research/{{ sess.id }}/update-keywords', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keywords: text})
+    });
+    if (!resp.ok) throw new Error('server error');
+    // Rebuild chips in kwDisplay
+    const kwDisplay = document.getElementById('kwDisplay');
+    const chips = kwDisplay.querySelectorAll('span[style*="border-radius:20px"]');
+    chips.forEach(c => c.remove());
+    const copyBtn = kwDisplay.querySelector('button[onclick="copyKeywords(this)"]');
+    const editBtn = document.getElementById('kwEditBtn');
+    if (text.trim()) {
+      text.split(',').forEach(kw => {
+        kw = kw.trim();
+        if (!kw) return;
+        const span = document.createElement('span');
+        span.style.cssText = 'display:inline-block;font-size:12px;background:var(--red-light);color:var(--red);border-radius:20px;padding:3px 12px;font-weight:600;';
+        span.textContent = kw;
+        kwDisplay.insertBefore(span, copyBtn);
+      });
+    } else {
+      const placeholder = document.createElement('span');
+      placeholder.style.cssText = 'font-size:12px;color:var(--gray-400);font-style:italic;';
+      placeholder.textContent = 'No keywords yet';
+      kwDisplay.insertBefore(placeholder, copyBtn);
+    }
+    cancelKwEdit();
   } catch(e) {
     btn.textContent = 'Error — try again';
     setTimeout(() => btn.textContent = 'Save', 2000);
