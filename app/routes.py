@@ -4071,12 +4071,17 @@ def pin_to_folder(pin_id):
 
     pin = Pin.query.get_or_404(pin_id)
 
-    # Get keywords from stored hashtags
+    # Use hashtags as-is for Pinterest display, but derive readable keywords from the title
+    import re as _re
     try:
         hashtags = _json.loads(pin.hashtags or "[]")
-        keywords = ", ".join(hashtags) if hashtags else ""
     except Exception:
-        keywords = ""
+        hashtags = []
+    # Strip year, punctuation and filler words from title to get clean keyword phrases
+    stop = {"the","a","an","and","or","for","to","in","on","at","by","with","your","my","our","this","that","is","are","was","were","be","been","being","have","has","had","do","does","did","will","would","could","should","may","might","can","—","–","-"}
+    title_words = [w.strip("—–-,.!?") for w in pin.title.split()]
+    title_words = [w for w in title_words if w.lower() not in stop and not w.isdigit() and len(w) > 2]
+    keywords = ", ".join(title_words[:12])
 
     # Get linked products via pin_products association
     products_out = []
