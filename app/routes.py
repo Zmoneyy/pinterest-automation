@@ -3639,7 +3639,7 @@ I need:
 - Alt text
 - Best Pinterest board name
 - On-pin headline + supporting text
-- AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay like "Shop Now →", "auragirlessentials.com" small at bottom)
+- AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px). The image must look like a REAL editorial photo — photorealistic, natural lighting, genuine textures, real imperfections. NOT AI slop, NOT Amazon product photos, NOT over-rendered glowing skin or fake-looking compositions. Recreate the product accurately from its description (exact colors, shapes, materials, finish) but generate an entirely original lifestyle scene around it — original model, hand pose, jewelry, background, and styling. Bold CTA text overlay, "auragirlessentials.com" small at bottom.
 - Amazon Idea List title — keyword-rich, searchable on Amazon, max 60 chars (this is for the Amazon list that the pin links to)
 
 Products:
@@ -3690,7 +3690,7 @@ For each of the 6 pins give me:
 4. Alt text
 5. Best Pinterest board name
 6. On-pin headline + supporting text
-7. AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px, scroll-stopping, bold CTA text overlay, "auragirlessentials.com" small at bottom)
+7. AI image prompt for Canva/Ideogram (vertical 2:3, 1000x1500px). The image must look like a REAL editorial photo — photorealistic, natural lighting, genuine textures, real imperfections. NOT AI slop, NOT Amazon product photos, NOT over-rendered glowing skin or fake-looking compositions. Recreate the product accurately from its description (exact colors, shapes, materials, finish) but generate an entirely original lifestyle scene around it — original model, hand pose, jewelry, background, and styling. Bold CTA text overlay, "auragirlessentials.com" small at bottom.
 
 After all 6 pins, add one final section:
 AMAZON IDEA LIST TITLE: One keyword-rich title (max 60 chars) for the Amazon Idea List that all 6 pins will link to. Make it searchable on Amazon — think how someone would search for this product collection.
