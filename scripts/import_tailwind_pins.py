@@ -4,8 +4,10 @@ Run from the repo root: python3 scripts/import_tailwind_pins.py
 """
 import os, sys, json, requests
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+load_dotenv()  # read keys from .env so the script works on its own
 
 TAILWIND_KEY = os.environ.get("TAILWIND_API_KEY")
 if not TAILWIND_KEY:
